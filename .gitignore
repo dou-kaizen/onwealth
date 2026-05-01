@@ -35,7 +35,9 @@ yarn-error.log*
 # package manager
 package-lock.json
 yarn.lock
-pnpm-lock.yaml
+
+# turborepo
+.turbo/
 
 # semantic-release
 .nyc_output
