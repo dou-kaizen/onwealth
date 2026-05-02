@@ -1,5 +1,6 @@
 import 'reflect-metadata'
 import { NestFactory } from '@nestjs/core'
+
 import { ApiModule } from './api.module'
 
 async function bootstrap(): Promise<void> {

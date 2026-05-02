@@ -7,9 +7,6 @@
     "outDir": "./dist",
     "rootDir": "./src"
   },
-  "references": [
-    { "path": "../contract" },
-    { "path": "../database" }
-  ],
+  "references": [{ "path": "../contract" }, { "path": "../database" }],
   "include": ["src/**/*"]
 }

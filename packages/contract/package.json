@@ -2,6 +2,9 @@
   "name": "@onwealth/contract",
   "version": "0.0.0",
   "private": true,
+  "files": [
+    "dist"
+  ],
   "type": "commonjs",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -11,12 +14,13 @@
       "default": "./dist/index.js"
     }
   },
-  "files": [
-    "dist"
-  ],
   "scripts": {
     "build": "tsc -b",
     "typecheck": "tsc -b --noEmit",
+    "lint": "oxlint -c oxlint.config.mts",
+    "lint:fix": "oxlint -c oxlint.config.mts --fix",
+    "format": "oxfmt --write .",
+    "format:check": "oxfmt --check .",
     "clean": "rm -rf dist .tsbuildinfo"
   },
   "devDependencies": {

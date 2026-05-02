@@ -11,6 +11,10 @@
     "start:debug": "nest start --debug --watch",
     "start:prod": "node dist/main.js",
     "typecheck": "tsc -b --noEmit",
+    "lint": "oxlint -c oxlint.config.mts",
+    "lint:fix": "oxlint -c oxlint.config.mts --fix",
+    "format": "oxfmt --write .",
+    "format:check": "oxfmt --check .",
     "test": "vitest run",
     "test:watch": "vitest",
     "clean": "rm -rf dist .tsbuildinfo"
