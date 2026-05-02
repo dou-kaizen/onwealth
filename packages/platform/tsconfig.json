@@ -1,0 +1,15 @@
+{
+  "extends": "@onwealth/tsconfig/nest.json",
+  "compilerOptions": {
+    "composite": true,
+    "declaration": true,
+    "declarationMap": true,
+    "outDir": "./dist",
+    "rootDir": "./src"
+  },
+  "references": [
+    { "path": "../contract" },
+    { "path": "../database" }
+  ],
+  "include": ["src/**/*"]
+}

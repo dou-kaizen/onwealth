@@ -5,3 +5,42 @@ packages:
 ignoredBuiltDependencies:
   - sharp
   - unrs-resolver
+
+catalog:
+  # NestJS core
+  '@nestjs/common': ^11.1.0
+  '@nestjs/core': ^11.1.0
+  '@nestjs/platform-express': ^11.1.0
+  '@nestjs/config': ^4.0.0
+  '@nestjs/throttler': ^6.4.0
+  '@nestjs/cli': ^11.0.0
+  '@nestjs/schematics': ^11.0.0
+  '@nestjs/testing': ^11.1.0
+  # Cross-cutting
+  nestjs-pino: ^4.4.0
+  pino: ^9.5.0
+  pino-http: ^10.4.0
+  pino-pretty: ^11.3.0
+  nestjs-cls: ^5.0.0
+  # Validation
+  class-validator: ^0.14.2
+  class-transformer: ^0.5.1
+  zod: ^4.0.0
+  # Security
+  helmet: ^8.0.0
+  # Database
+  drizzle-orm: ^0.44.7
+  pg: ^8.16.3
+  postgres: ^3.4.8
+  # Runtime util
+  reflect-metadata: ^0.2.2
+  rxjs: ^7.8.1
+  # Tooling
+  typescript: ^6.0.3
+  '@swc/core': ^1.15.0
+  '@swc/cli': ^0.8.0
+  '@types/node': ^22.0.0
+  '@types/express': ^5.0.0
+  '@types/pg': ^8.15.0
+  vitest: ^2.1.0
+  '@vitest/coverage-v8': ^2.1.0
