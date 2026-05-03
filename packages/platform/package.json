@@ -71,6 +71,7 @@
     "@nestjs/common": "catalog:",
     "@nestjs/config": "catalog:",
     "@nestjs/core": "catalog:",
+    "@nestjs/swagger": "catalog:",
     "@nestjs/throttler": "catalog:",
     "@onwealth/database": "workspace:*",
     "class-transformer": "catalog:",

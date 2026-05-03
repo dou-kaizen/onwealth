@@ -119,6 +119,24 @@ export const envSchema = z.object({
     .refine((value) => value >= 1000, {
       message: 'REQUEST_TIMEOUT_MS must be at least 1000ms',
     }),
+
+  /**
+   * Toggle Swagger UI + Scalar + /openapi.yaml route exposure.
+   *
+   * Default behavior (resolved in main.ts via `?? (NODE_ENV !== 'production')`):
+   * - production → false (closes attack surface)
+   * - non-production → true (dev/staging convenience)
+   *
+   * CI override: set explicit `ENABLE_SWAGGER=true` for codegen pipelines
+   * even on production-like envs.
+   *
+   * Strict whitelist: only literal `'true'` or `'false'` accepted.
+   * Any other value (`'1'`, `'yes'`, `'TRUE'`, etc.) → boot fails loud.
+   */
+  ENABLE_SWAGGER: z
+    .enum(['true', 'false'])
+    .optional()
+    .transform((value) => (value === undefined ? undefined : value === 'true')),
 })
 
 export type Env = z.infer<typeof envSchema>

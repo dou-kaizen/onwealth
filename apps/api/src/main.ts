@@ -19,6 +19,7 @@ import { ClsService } from 'nestjs-cls'
 import { Logger } from 'nestjs-pino'
 
 import { ApiModule } from './api.module'
+import { setupSwagger } from './config/swagger.config'
 
 import type { INestApplication } from '@nestjs/common'
 import type { Env } from '@onwealth/platform/config'
@@ -47,7 +48,33 @@ async function bootstrap(): Promise<void> {
   const reflector = app.get(Reflector)
   const cls = app.get(ClsService)
 
-  app.use(helmet())
+  // Resolve Swagger gate once: explicit env wins, else default open in non-prod.
+  // Production with no override → swaggerEnabled === false → strict CSP + no /docs|/swagger routes.
+  const swaggerExplicit = configService.get('ENABLE_SWAGGER', { infer: true })
+  const nodeEnv = configService.get('NODE_ENV', { infer: true })
+  const swaggerEnabled = swaggerExplicit ?? nodeEnv !== 'production'
+
+  // helmet must be configured before any route registration (incl. Express middleware
+  // mounted by Scalar). When swagger is on we loosen CSP for jsdelivr CDN + inline/eval
+  // (Scalar pulls bundle from jsdelivr; Swagger UI uses inline scripts + eval for spec
+  // parsing). Production path keeps strict default helmet because swagger never mounts.
+  app.use(
+    swaggerEnabled
+      ? helmet({
+          contentSecurityPolicy: {
+            directives: {
+              defaultSrc: ["'self'"],
+              scriptSrc: ["'self'", "'unsafe-inline'", "'unsafe-eval'", 'https://cdn.jsdelivr.net'],
+              styleSrc: ["'self'", "'unsafe-inline'", 'https://cdn.jsdelivr.net'],
+              imgSrc: ["'self'", 'data:', 'https://cdn.jsdelivr.net'],
+              fontSrc: ["'self'", 'data:', 'https://cdn.jsdelivr.net'],
+              workerSrc: ["'self'", 'blob:'],
+              connectSrc: ["'self'"],
+            },
+          },
+        })
+      : helmet(),
+  )
 
   app.useGlobalPipes(createValidationPipe())
 
@@ -70,6 +97,10 @@ async function bootstrap(): Promise<void> {
     origin: allowedOrigins.length > 0 ? allowedOrigins : false,
     credentials: true,
   })
+
+  if (swaggerEnabled) {
+    setupSwagger(app, configService)
+  }
 
   const port = configService.get('PORT', { infer: true })
   await app.listen(port)
