@@ -1,0 +1,97 @@
+{
+  "name": "@onwealth/platform",
+  "version": "0.0.0",
+  "private": true,
+  "files": [
+    "dist"
+  ],
+  "type": "commonjs",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./config": {
+      "types": "./dist/config/index.d.ts",
+      "default": "./dist/config/index.js"
+    },
+    "./cls": {
+      "types": "./dist/cls/index.d.ts",
+      "default": "./dist/cls/index.js"
+    },
+    "./logger": {
+      "types": "./dist/logger/index.d.ts",
+      "default": "./dist/logger/index.js"
+    },
+    "./filters": {
+      "types": "./dist/filters/index.d.ts",
+      "default": "./dist/filters/index.js"
+    },
+    "./interceptors": {
+      "types": "./dist/interceptors/index.d.ts",
+      "default": "./dist/interceptors/index.js"
+    },
+    "./decorators": {
+      "types": "./dist/decorators/index.d.ts",
+      "default": "./dist/decorators/index.js"
+    },
+    "./pipes": {
+      "types": "./dist/pipes/index.d.ts",
+      "default": "./dist/pipes/index.js"
+    },
+    "./throttler": {
+      "types": "./dist/throttler/index.d.ts",
+      "default": "./dist/throttler/index.js"
+    },
+    "./database": {
+      "types": "./dist/database/index.d.ts",
+      "default": "./dist/database/index.js"
+    },
+    "./error-codes": {
+      "types": "./dist/error-codes/index.d.ts",
+      "default": "./dist/error-codes/index.js"
+    },
+    "./problem-details": {
+      "types": "./dist/problem-details/index.d.ts",
+      "default": "./dist/problem-details/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -b",
+    "typecheck": "tsc -b --noEmit",
+    "lint": "oxlint .",
+    "lint:fix": "oxlint . --fix",
+    "format": "oxfmt --write src",
+    "format:check": "oxfmt --check src",
+    "clean": "rm -rf dist .tsbuildinfo"
+  },
+  "dependencies": {
+    "@nestjs/common": "catalog:",
+    "@nestjs/config": "catalog:",
+    "@nestjs/core": "catalog:",
+    "@nestjs/swagger": "catalog:",
+    "@nestjs/throttler": "catalog:",
+    "@onwealth/database": "workspace:*",
+    "class-transformer": "catalog:",
+    "class-validator": "catalog:",
+    "drizzle-orm": "catalog:",
+    "nestjs-cls": "catalog:",
+    "nestjs-pino": "catalog:",
+    "pg": "catalog:",
+    "pino": "catalog:",
+    "pino-http": "catalog:",
+    "postgres": "catalog:",
+    "reflect-metadata": "catalog:",
+    "rxjs": "catalog:",
+    "zod": "catalog:"
+  },
+  "devDependencies": {
+    "@onwealth/tsconfig": "workspace:*",
+    "@types/express": "catalog:",
+    "@types/node": "catalog:",
+    "@types/pg": "catalog:",
+    "typescript": "catalog:"
+  }
+}

@@ -1,0 +1,38 @@
+{
+  "name": "@onwealth/database",
+  "version": "0.0.0",
+  "private": true,
+  "files": [
+    "dist"
+  ],
+  "type": "commonjs",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -b",
+    "typecheck": "tsc -b --noEmit",
+    "lint": "oxlint .",
+    "lint:fix": "oxlint . --fix",
+    "format": "oxfmt --write src",
+    "format:check": "oxfmt --check src",
+    "clean": "rm -rf dist .tsbuildinfo"
+  },
+  "devDependencies": {
+    "@onwealth/tsconfig": "workspace:*",
+    "drizzle-orm": "catalog:",
+    "pg": "catalog:",
+    "postgres": "catalog:",
+    "typescript": "catalog:"
+  },
+  "peerDependencies": {
+    "drizzle-orm": "catalog:",
+    "pg": "catalog:",
+    "postgres": "catalog:"
+  }
+}
