@@ -40,7 +40,7 @@ onwealth/                          # pnpm + Turborepo monorepo
 | `/decorators` | `@UseEnvelope()` decorator |
 | `/pipes` | `createValidationPipe()` — whitelist, 422, transform |
 | `/throttler` | `ThrottlerModule` — env-driven TTL/limit |
-| `/database` | `DatabaseModule`, `DRIZZLE_TOKEN` injection token, `DrizzleDb` type |
+| `/database` | `DatabaseModule` (`forRoot()` / `forRootAsync(options)`), `DRIZZLE_TOKEN` injection token, `DrizzleDb` type |
 | `/error-codes` | `ErrorCode` const object + union type (opaque string literals, not enum) |
 | `/problem-details` | `ProblemDetailsDto` (RFC 9457), `FieldError`, `ValidationErrorItem` |
 
@@ -73,6 +73,7 @@ onwealth/                          # pnpm + Turborepo monorepo
 | nestjs-cls | ^5.0.0 | Request-scoped storage |
 | drizzle-orm | ^0.44.7 | ORM |
 | pg | ^8.16.3 | PostgreSQL driver (node-postgres pool) |
+| postgres | ^3.4.8 | Catalog-pinned; not currently imported in source |
 | zod | ^4.0.0 | Env validation |
 | helmet | ^8.0.0 | Security headers |
 | @nestjs/throttler | ^6.4.0 | Rate limiting |
@@ -85,7 +86,7 @@ onwealth/                          # pnpm + Turborepo monorepo
 | Turborepo ^2.9.7 | Task orchestration |
 | TypeScript ^6.0.3 | Language |
 | SWC | Compilation emit for `apps/api` (`.swcrc` `module.type=commonjs`) |
-| oxlint ^1.59.0 | Linting |
-| oxfmt ^0.44.0 | Formatting |
-| dependency-cruiser ^16 | Architectural boundary enforcement |
+| oxlint ^1.59.0 | Linting (root devDep — not in catalog) |
+| oxfmt ^0.44.0 | Formatting (root devDep — not in catalog) |
+| dependency-cruiser ^16 | Architectural boundary enforcement (root devDep — not in catalog) |
 | vitest ^2.1.0 | Testing |

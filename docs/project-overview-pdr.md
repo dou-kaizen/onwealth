@@ -98,7 +98,7 @@ _Last updated: 2026-05-03 | Branch: init-infrastructure_
 **Status:** Shipped (init-infrastructure)
 
 **Requirements:**
-- `DatabaseModule.forRoot()` wires Drizzle + node-postgres pool from env
+- `DatabaseModule.forRoot()` and `forRootAsync(options)` wire Drizzle + node-postgres pool from env
 - Pool configuration via `DB_POOL_*` env vars
 - Schema barrel in `@onwealth/database` — typed even when empty
 - `@onwealth/database` has no NestJS dependency

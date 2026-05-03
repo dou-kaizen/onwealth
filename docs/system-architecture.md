@@ -124,7 +124,21 @@ Collection handlers should return `{ object: 'list', data: [...] }` — `Transfo
 - ORM: `drizzle-orm/node-postgres`
 - Schema: `@onwealth/database` barrel — empty in foundation phase, typed as `typeof schema`
 - Connection config from env: `DATABASE_URL`, `DB_POOL_MAX` (default 20), `DB_POOL_MIN` (default 5), `DB_POOL_IDLE_TIMEOUT` (default 30 000 ms), `DB_POOL_CONNECTION_TIMEOUT` (default 10 000 ms)
-- Injected via `DatabaseModule.forRoot()` using `DRIZZLE_TOKEN` (Symbol, exported from `@onwealth/platform/database`)
+- Injected via `DatabaseModule.forRoot()` or `DatabaseModule.forRootAsync(options)` using `DRIZZLE_TOKEN` (Symbol, exported from `@onwealth/platform/database`)
+
+## Database Error Mapping (`mapDatabaseError`)
+
+`AllExceptionsFilter` unwraps `DrizzleQueryError` → `pg.DatabaseError` and calls `mapDatabaseError`. SQLSTATE → HTTP mapping:
+
+| SQLSTATE | Class | HTTP | ErrorCode |
+|---|---|---|---|
+| `23505` | unique violation | 409 | `RESOURCE_CONFLICT` |
+| `23503` | FK violation | 422 | `RESOURCE_CONFLICT` |
+| `23502` | not-null violation | 422 | `REQUIRED_FIELD` |
+| `23514` | check violation | 422 | `RESOURCE_CONFLICT` |
+| `08000`, `08001`, `08003`, `08004`, `08006` | connection errors | 503 | `SERVICE_UNAVAILABLE` |
+| `57014` | statement_timeout | 503 | `SERVICE_UNAVAILABLE` |
+| (default) | all other codes | 500 | `INTERNAL_SERVER_ERROR` |
 
 ## TypeScript Compile Strategy
 
@@ -153,7 +167,7 @@ Framework-agnostic, no runtime deps. Provides:
 
 - `DomainEvent` — abstract base; `eventId` (UUID v4), `occurredOn` (Date), `eventName` (string)
 - `IntegrationEvent extends DomainEvent` — adds `source` (string) and `version` (number)
-- `BaseAggregateRoot` — private domain-event queue with `addDomainEvent()`, `drainDomainEvents()`, `clearDomainEvents()`
+- `BaseAggregateRoot` — private domain-event queue with `addDomainEvent()`, `getDomainEvents()`, `clearDomainEvents()`
 
 Not yet wired to an event bus — reserved for Phase 3.
 

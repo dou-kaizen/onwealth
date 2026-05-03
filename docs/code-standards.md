@@ -91,12 +91,12 @@ Defined and validated in `packages/platform/src/config/env.schema.ts` via Zod.
 | `DB_POOL_MIN` | `5` | 0–50 |
 | `DB_POOL_IDLE_TIMEOUT` | `30000` | ms, min 1000 |
 | `DB_POOL_CONNECTION_TIMEOUT` | `10000` | ms, min 1000 |
-| `JWT_SECRET` | — | min 32 chars; change in production |
-| `JWT_EXPIRES_IN` | `15m` | format: `\d+[smhd]` |
-| `JWT_REFRESH_EXPIRES_IN` | `7d` | format: `\d+[smhd]` |
+| `JWT_SECRET` | — | min 32 chars; change in production (schema only — auth phase pending) |
+| `JWT_EXPIRES_IN` | `15m` | format: `\d+[smhd]` (schema only — auth phase pending) |
+| `JWT_REFRESH_EXPIRES_IN` | `7d` | format: `\d+[smhd]` (schema only — auth phase pending) |
 | `ALLOWED_ORIGINS` | — | comma-separated; empty → CORS disabled |
-| `REDIS_URL` | `redis://localhost:6379` | `redis://` or `rediss://` |
-| `REDIS_TTL` | `3600` | seconds |
+| `REDIS_URL` | `redis://localhost:6379` | `redis://` or `rediss://` (schema only — cache phase pending) |
+| `REDIS_TTL` | `3600` | seconds (schema only — cache phase pending) |
 | `API_BASE_URL` | `https://api.example.com` | used in problem+json `type` URIs |
 | `THROTTLE_TTL` | `60000` | ms window |
 | `THROTTLE_LIMIT` | `100000` | requests per window |
