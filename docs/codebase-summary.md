@@ -36,7 +36,7 @@ onwealth/                          # pnpm + Turborepo monorepo
 | `/cls` | `ClsModule` — W3C traceparent + request/correlation IDs |
 | `/logger` | `LoggerModule` — nestjs-pino, pino-pretty in dev, JSON in prod |
 | `/filters` | `FiltersModule` — `AllExceptionsFilter`, `ProblemDetailsFilter`, `ThrottlerExceptionFilter` |
-| `/interceptors` | `InterceptorsModule` — `TransformInterceptor` (Google AIP-193 envelope) |
+| `/interceptors` | `InterceptorsModule` — `TimeoutInterceptor`, `RequestContextInterceptor`, `CorrelationIdInterceptor`, `TraceContextInterceptor`, `TransformInterceptor` |
 | `/decorators` | `@UseEnvelope()` decorator |
 | `/pipes` | `createValidationPipe()` — whitelist, 422, transform |
 | `/throttler` | `ThrottlerModule` — env-driven TTL/limit |
@@ -50,7 +50,7 @@ onwealth/                          # pnpm + Turborepo monorepo
 2. Swap logger → `nestjs-pino`
 3. `helmet()` (security headers)
 4. `createValidationPipe()` (whitelist + 422 + transform)
-5. `TransformInterceptor` (AIP-193 envelope when `@UseEnvelope()`)
+5. 5 global interceptors (bind order): `TimeoutInterceptor` → `RequestContextInterceptor` → `CorrelationIdInterceptor` → `TraceContextInterceptor` → `TransformInterceptor`; first 4 via `app.get(...)` DI, `TransformInterceptor` via `new` (needs `reflector` + `cls`)
 6. Global filters (registered LIFO — last registered runs first on exception):
    - registered 1st: `AllExceptionsFilter` → runs last (catch-all)
    - registered 2nd: `ProblemDetailsFilter` → runs middle

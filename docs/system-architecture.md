@@ -59,10 +59,18 @@ HTTP Request
   │
   ├─ Route Handler
   │
-  ├─ TransformInterceptor (Google AIP-193)
-  │    @UseEnvelope() → { data, meta: { request_id, correlation_id, trace_id, timestamp } }
-  │    { object: 'list', data: [...] } → returned as-is
-  │    everything else → returned naked
+  ├─ Interceptor chain (bind order = execution order on the way out):
+  │    TimeoutInterceptor       — aborts at TIMEOUT_MS (default 30 s)
+  │    RequestContextInterceptor — stamps X-Request-Id response header from CLS requestId
+  │    CorrelationIdInterceptor  — stamps X-Correlation-Id from CLS correlationId
+  │    TraceContextInterceptor   — stamps Trace-Id from CLS traceId (W3C traceparent)
+  │    TransformInterceptor      — Google AIP-193 envelope when @UseEnvelope()
+  │         @UseEnvelope() → { data, meta: { request_id, correlation_id, trace_id, timestamp } }
+  │         { object: 'list', data: [...] } → returned as-is
+  │         everything else → returned naked
+  │
+  │  Note: interceptors fire only on matched routes. Unmatched-route 404s bypass
+  │  the chain; trace/correlation IDs flow via RFC 9457 body only on that path.
   │
   └─ Exception Filters (LIFO: ThrottlerExceptionFilter → ProblemDetailsFilter → AllExceptionsFilter)
        ThrottlerExceptionFilter: 429 + Retry-After / X-RateLimit-* headers
