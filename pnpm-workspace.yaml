@@ -44,3 +44,5 @@ catalog:
   '@types/pg': ^8.15.0
   vitest: ^2.1.0
   '@vitest/coverage-v8': ^2.1.0
+  # Architectural lint
+  dependency-cruiser: ^16.0.0

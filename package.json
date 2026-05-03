@@ -5,17 +5,19 @@
   "scripts": {
     "dev": "turbo run dev",
     "build": "turbo run build",
-    "lint": "turbo run lint",
+    "lint": "turbo run lint && pnpm depcruise:check",
     "lint:fix": "turbo run lint:fix",
     "format": "turbo run format",
     "format:check": "turbo run format:check",
     "typecheck": "turbo run typecheck",
     "test": "turbo run test",
     "deps": "turbo run deps",
-    "clean": "turbo run clean"
+    "clean": "turbo run clean",
+    "depcruise:check": "depcruise packages apps --config .dependency-cruiser.cjs"
   },
   "devDependencies": {
     "@infra-x/code-quality": "^0.6.2",
+    "dependency-cruiser": "catalog:",
     "oxfmt": "^0.44.0",
     "oxlint": "^1.59.0",
     "turbo": "^2.9.7",
