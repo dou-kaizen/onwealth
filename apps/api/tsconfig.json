@@ -4,6 +4,8 @@
     "outDir": "dist",
     "tsBuildInfoFile": "./node_modules/.cache/tsconfig.tsbuildinfo",
     "noEmit": true,
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
     "types": ["node"]
   },
   "include": ["src/**/*"],
