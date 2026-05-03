@@ -1,6 +1,6 @@
 # Codebase Summary
 
-_Last updated: 2026-05-03 | Branch: init-infrastructure_
+_Last updated: 2026-05-04 | Branch: init-infrastructure_
 
 ## Repository Layout
 
@@ -48,21 +48,36 @@ onwealth/                          # pnpm + Turborepo monorepo
 
 1. `NestFactory.create(ApiModule, { bufferLogs: true })`
 2. Swap logger → `nestjs-pino`
-3. `helmet()` (security headers)
-4. `createValidationPipe()` (whitelist + 422 + transform)
-5. 5 global interceptors (bind order): `TimeoutInterceptor` → `RequestContextInterceptor` → `CorrelationIdInterceptor` → `TraceContextInterceptor` → `TransformInterceptor`; first 4 via `app.get(...)` DI, `TransformInterceptor` via `new` (needs `reflector` + `cls`)
-6. Global filters (registered LIFO — last registered runs first on exception):
+3. Resolve `swaggerEnabled = ENABLE_SWAGGER ?? (NODE_ENV !== 'production')`
+4. `helmet()` — strict CSP when swagger disabled; permissive CSP (jsdelivr + unsafe-inline/eval) when enabled; **must run before route registration**
+5. `createValidationPipe()` (whitelist + 422 + transform)
+6. 5 global interceptors (bind order): `TimeoutInterceptor` → `RequestContextInterceptor` → `CorrelationIdInterceptor` → `TraceContextInterceptor` → `TransformInterceptor`; first 4 via `app.get(...)` DI, `TransformInterceptor` via `new` (needs `reflector` + `cls`)
+7. Global filters (registered LIFO — last registered runs first on exception):
    - registered 1st: `AllExceptionsFilter` → runs last (catch-all)
    - registered 2nd: `ProblemDetailsFilter` → runs middle
    - registered 3rd: `ThrottlerExceptionFilter` → runs first (catches 429)
-7. CORS from `ALLOWED_ORIGINS` env
-8. `app.listen(PORT)`
+8. CORS from `ALLOWED_ORIGINS` env
+9. `setupSwagger(app, configService)` — mounts `/docs`, `/swagger`, `/swagger-json`, `/openapi.yaml` (only when `swaggerEnabled`)
+10. `app.listen(PORT)`
 
 ## API Modules (foundation)
 
 | Module | Route | Notes |
 |---|---|---|
 | `HealthModule` | `GET /health` | Returns `{ status, uptime, timestamp }` wrapped in `{ data, meta }` via `@UseEnvelope()` |
+
+## API Documentation Routes (env-gated)
+
+Mounted only when `swaggerEnabled` is true:
+
+| Route | Description |
+|---|---|
+| `GET /docs` | Scalar API Reference (interactive UI) |
+| `GET /swagger` | Swagger UI |
+| `GET /swagger-json` | OpenAPI JSON spec |
+| `GET /openapi.yaml` | OpenAPI YAML spec |
+
+Source: `apps/api/src/config/swagger.config.ts`
 
 ## Runtime Dependencies (catalog-pinned)
 
@@ -77,6 +92,8 @@ onwealth/                          # pnpm + Turborepo monorepo
 | zod | ^4.0.0 | Env validation |
 | helmet | ^8.0.0 | Security headers |
 | @nestjs/throttler | ^6.4.0 | Rate limiting |
+| @nestjs/swagger | catalog | OpenAPI spec generation + Swagger UI |
+| @scalar/nestjs-api-reference | catalog | Scalar API Reference UI (`/docs`) |
 
 ## Toolchain
 

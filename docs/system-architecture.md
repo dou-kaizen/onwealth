@@ -1,6 +1,6 @@
 # System Architecture
 
-_Last updated: 2026-05-03 | Branch: init-infrastructure_
+_Last updated: 2026-05-04 | Branch: init-infrastructure_
 
 ## Overview
 
@@ -34,6 +34,34 @@ Dependency direction is strictly downward. `@onwealth/core` has zero runtime dep
 
 Run: `pnpm depcruise:check` (included in `pnpm lint`).
 
+## API Documentation Surface
+
+Routes are only mounted when `swaggerEnabled` is true (see env `ENABLE_SWAGGER`).
+
+| Route | UI / Format | Notes |
+|---|---|---|
+| `/docs` | Scalar API Reference | Default interactive UI; pulls bundle from `cdn.jsdelivr.net` |
+| `/swagger` | Swagger UI | Fallback UI; `persistAuthorization: true` |
+| `/swagger-json` | OpenAPI JSON | Machine-readable spec (auto-mounted by `SwaggerModule.setup`) |
+| `/openapi.yaml` | OpenAPI YAML | Codegen-friendly; registered via `yamlDocumentUrl` option |
+
+### Default error response injection
+
+`setupSwagger` calls `addDefaultErrorResponses(document)` post-build: every operation that lacks a `default` response key gets one added, referencing `#/components/schemas/ProblemDetailsDto` with content-type `application/problem+json`. This lets FE codegen (orval, openapi-typescript) emit a single error type per operation instead of N status-keyed branches.
+
+### OpenAPI server URL
+
+`DocumentBuilder.addServer(API_BASE_URL, NODE_ENV)` — `API_BASE_URL` env (default `https://api.example.com`) is used so codegen tools always target the correct base regardless of which host serves the spec.
+
+### CSP trade-off
+
+helmet is configured before any route registration. When swagger is enabled, CSP is relaxed to allow `cdn.jsdelivr.net` (Scalar bundle), `unsafe-inline`, and `unsafe-eval` (Swagger UI spec parsing). Production with `ENABLE_SWAGGER` unset defaults to `false` → strict helmet with no route exposure.
+
+```
+swaggerExplicit = ENABLE_SWAGGER env (boolean | undefined after Zod transform)
+swaggerEnabled  = swaggerExplicit ?? (NODE_ENV !== 'production')
+```
+
 ## Request Lifecycle
 
 ```
@@ -51,6 +79,8 @@ HTTP Request
   │    customProps: correlationId, traceId on every log line
   │
   ├─ helmet (security headers)
+  │    strict default OR permissive CSP (jsdelivr + unsafe-inline/eval)
+  │    depending on swaggerEnabled — configured before route registration
   │
   ├─ ThrottlerGuard (APP_GUARD — global)
   │    config: THROTTLE_TTL / THROTTLE_LIMIT from env
@@ -193,3 +223,4 @@ The `code` field in `ProblemDetailsDto` is typed `string` so feature modules may
 - Redis-backed throttler store
 - Authentication (JWT / OAuth)
 - DDD layer rules in dependency-cruiser (presentation-no-database, etc.)
+- `@ApiResponse` / `@ApiOperation` decorators on individual route handlers (currently only the global default error response is injected)

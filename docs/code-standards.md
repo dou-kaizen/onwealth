@@ -1,6 +1,6 @@
 # Code Standards
 
-_Last updated: 2026-05-03 | Branch: init-infrastructure_
+_Last updated: 2026-05-04 | Branch: init-infrastructure_
 
 ## General Principles
 
@@ -57,7 +57,8 @@ Do not re-import in feature modules: `ConfigModule`, `ClsModule`, `LoggerModule`
 
 - `class-validator` decorators for validation
 - `class-transformer` `@Transform` / `@Type` for coercion
-- Use `@ApiProperty` only when Swagger is added
+- Use `@ApiProperty` on all DTOs that appear in the OpenAPI spec (registered via `extraModels` or decorated handlers)
+- Platform DTOs (`ProblemDetailsDto`, `FieldError`) are classes (not interfaces) so `@nestjs/swagger` can emit schema metadata at runtime
 - Validation errors produce 422 (not 400) via `createValidationPipe()`
 
 ### Error handling
@@ -97,9 +98,10 @@ Defined and validated in `packages/platform/src/config/env.schema.ts` via Zod.
 | `ALLOWED_ORIGINS` | — | comma-separated; empty → CORS disabled |
 | `REDIS_URL` | `redis://localhost:6379` | `redis://` or `rediss://` (schema only — cache phase pending) |
 | `REDIS_TTL` | `3600` | seconds (schema only — cache phase pending) |
-| `API_BASE_URL` | `https://api.example.com` | used in problem+json `type` URIs |
+| `API_BASE_URL` | `https://api.example.com` | used in problem+json `type` URIs and as OpenAPI server URL |
 | `THROTTLE_TTL` | `60000` | ms window |
 | `THROTTLE_LIMIT` | `100000` | requests per window |
+| `ENABLE_SWAGGER` | _(unset)_ | Strict enum: `'true'` or `'false'` only. Unset → resolved in `main.ts` as `NODE_ENV !== 'production'`. Controls `/docs`, `/swagger`, `/swagger-json`, `/openapi.yaml` routes and helmet CSP mode. |
 
 Add new feature-tier env keys in the feature module's own Zod schema extension — do not add to `env.schema.ts` in `@onwealth/platform`.
 
