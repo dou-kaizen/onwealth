@@ -4,9 +4,11 @@ import { ThrottlerException } from '@nestjs/throttler'
 import { ClsService } from 'nestjs-cls'
 import { PinoLogger } from 'nestjs-pino'
 
+import { ErrorCode } from '../error-codes'
+
 import type { Env } from '../config/env.schema'
+import type { ProblemDetailsDto } from '../problem-details'
 import type { ArgumentsHost, ExceptionFilter } from '@nestjs/common'
-import type { ProblemDetailsDto } from '@onwealth/contract'
 import type { Request, Response } from 'express'
 
 /**
@@ -56,7 +58,7 @@ export class ThrottlerExceptionFilter implements ExceptionFilter {
       timestamp: new Date().toISOString(),
       errors: [
         {
-          code: 'RATE_LIMIT_EXCEEDED',
+          code: ErrorCode.RATE_LIMIT_EXCEEDED,
           message: `You have sent ${limit} requests within ${ttl} seconds. Please try again later.`,
           constraints: {
             limit,

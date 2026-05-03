@@ -1,8 +1,8 @@
 /**
  * class-validator ValidationError shape (subset used by filters).
  *
- * Captured in @onwealth/contract so platform filters can typecheck against
- * the shape without depending on class-validator at the contract layer.
+ * Filters typecheck against this shape without importing class-validator
+ * directly — keeps the runtime dep encapsulated to consumers that need it.
  */
 export interface ValidationErrorItem {
   property: string

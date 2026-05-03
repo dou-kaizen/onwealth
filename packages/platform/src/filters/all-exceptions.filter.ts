@@ -5,12 +5,13 @@ import { ClsService } from 'nestjs-cls'
 import { PinoLogger } from 'nestjs-pino'
 import { DatabaseError } from 'pg'
 
+import { ErrorCode } from '../error-codes'
 import { mapDatabaseError } from './postgres-error-mapper'
 import { ProblemDetailsFilter } from './problem-details.filter'
 
 import type { Env } from '../config/env.schema'
+import type { ProblemDetailsDto } from '../problem-details'
 import type { ArgumentsHost, ExceptionFilter } from '@nestjs/common'
-import type { ProblemDetailsDto } from '@onwealth/contract'
 import type { Request, Response } from 'express'
 
 /**
@@ -82,7 +83,7 @@ export class AllExceptionsFilter implements ExceptionFilter {
       correlation_id: correlationId,
       trace_id: traceId,
       timestamp: new Date().toISOString(),
-      code: 'INTERNAL_SERVER_ERROR',
+      code: ErrorCode.INTERNAL_SERVER_ERROR,
       detail: message,
     }
 

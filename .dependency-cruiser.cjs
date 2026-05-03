@@ -39,13 +39,6 @@ module.exports = {
       },
     },
     {
-      name: 'contract-no-nestjs',
-      severity: 'error',
-      comment: '@onwealth/contract holds wire-level types only — no Nest, no runtime libs',
-      from: { path: '^packages/contract/' },
-      to: { path: '(^|/)(@nestjs/|nestjs-|pino|ioredis)', dependencyTypes: ['npm', 'npm-dev', 'npm-optional', 'npm-peer', 'unknown'] },
-    },
-    {
       name: 'database-no-nestjs',
       severity: 'error',
       comment: '@onwealth/database schemas/migrations MUST stay framework-agnostic',

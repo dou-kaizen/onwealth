@@ -3,9 +3,11 @@ import { ConfigService } from '@nestjs/config'
 import { ClsService } from 'nestjs-cls'
 import { PinoLogger } from 'nestjs-pino'
 
+import { ErrorCode } from '../error-codes'
+
 import type { Env } from '../config/env.schema'
+import type { FieldError, ProblemDetailsDto, ValidationErrorItem } from '../problem-details'
 import type { ArgumentsHost, ExceptionFilter } from '@nestjs/common'
-import type { FieldError, ProblemDetailsDto, ValidationErrorItem } from '@onwealth/contract'
 import type { Request, Response } from 'express'
 
 /**
@@ -86,6 +88,7 @@ export class ProblemDetailsFilter implements ExceptionFilter {
       401: 'unauthorized',
       403: 'forbidden',
       404: 'not-found',
+      408: 'request-timeout',
       409: 'conflict',
       422: 'validation-failed',
       429: 'rate-limit-exceeded',
@@ -103,6 +106,7 @@ export class ProblemDetailsFilter implements ExceptionFilter {
       401: 'Unauthorized',
       403: 'Forbidden',
       404: 'Not Found',
+      408: 'Request Timeout',
       409: 'Conflict',
       422: 'Unprocessable Entity',
       429: 'Too Many Requests',
@@ -126,12 +130,12 @@ export class ProblemDetailsFilter implements ExceptionFilter {
     exceptionResponse: string | Record<string, unknown>,
     exception: HttpException,
     status: number,
-  ): Pick<ProblemDetailsDto, 'code' | 'detail' | 'errors'> {
+  ): { code: string; detail: string; errors?: FieldError[] } {
     if (status === 400 || status === 422) {
       const validationErrors = this.extractValidationErrors(exceptionResponse)
       if (validationErrors && validationErrors.length > 0) {
         return {
-          code: 'VALIDATION_FAILED',
+          code: ErrorCode.VALIDATION_FAILED,
           detail: 'Request validation failed',
           errors: validationErrors,
         }
@@ -146,15 +150,18 @@ export class ProblemDetailsFilter implements ExceptionFilter {
     }
 
     const detail = typeof exceptionResponse === 'string' ? exceptionResponse : exception.message
-    const fallbackCodeMap: Record<number, string> = {
-      401: 'UNAUTHORIZED',
-      403: 'FORBIDDEN',
-      404: 'RESOURCE_NOT_FOUND',
-      409: 'RESOURCE_CONFLICT',
-      429: 'RATE_LIMIT_EXCEEDED',
+    const fallbackCodeMap: Record<number, ErrorCode> = {
+      401: ErrorCode.UNAUTHORIZED,
+      403: ErrorCode.FORBIDDEN,
+      404: ErrorCode.RESOURCE_NOT_FOUND,
+      408: ErrorCode.REQUEST_TIMEOUT,
+      409: ErrorCode.RESOURCE_CONFLICT,
+      429: ErrorCode.RATE_LIMIT_EXCEEDED,
     }
     const code =
-      status >= 500 ? 'INTERNAL_SERVER_ERROR' : (fallbackCodeMap[status] ?? 'BAD_REQUEST')
+      status >= 500
+        ? ErrorCode.INTERNAL_SERVER_ERROR
+        : (fallbackCodeMap[status] ?? ErrorCode.BAD_REQUEST)
     return { code, detail }
   }
 
@@ -176,7 +183,7 @@ export class ProblemDetailsFilter implements ExceptionFilter {
           errors.push({
             field,
             pointer: `/${field}`,
-            code: 'VALIDATION_ERROR',
+            code: ErrorCode.VALIDATION_ERROR,
             message: item,
           })
         } else if (this.isValidationErrorItem(item)) {
@@ -190,7 +197,7 @@ export class ProblemDetailsFilter implements ExceptionFilter {
             errors.push({
               field,
               pointer: `/${field}`,
-              code: contextCode ?? 'VALIDATION_ERROR',
+              code: contextCode ?? ErrorCode.VALIDATION_ERROR,
               message,
             })
           }

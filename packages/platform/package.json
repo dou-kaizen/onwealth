@@ -48,6 +48,14 @@
     "./database": {
       "types": "./dist/database/index.d.ts",
       "default": "./dist/database/index.js"
+    },
+    "./error-codes": {
+      "types": "./dist/error-codes/index.d.ts",
+      "default": "./dist/error-codes/index.js"
+    },
+    "./problem-details": {
+      "types": "./dist/problem-details/index.d.ts",
+      "default": "./dist/problem-details/index.js"
     }
   },
   "scripts": {
@@ -64,7 +72,6 @@
     "@nestjs/config": "catalog:",
     "@nestjs/core": "catalog:",
     "@nestjs/throttler": "catalog:",
-    "@onwealth/contract": "workspace:*",
     "@onwealth/database": "workspace:*",
     "class-transformer": "catalog:",
     "class-validator": "catalog:",
