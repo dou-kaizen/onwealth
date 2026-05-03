@@ -6,7 +6,7 @@ import {
   ProblemDetailsFilter,
   ThrottlerExceptionFilter,
 } from '@onwealth/platform/filters'
-import { TransformInterceptor } from '@onwealth/platform/interceptors'
+import { TimeoutInterceptor, TransformInterceptor } from '@onwealth/platform/interceptors'
 import { createValidationPipe } from '@onwealth/platform/pipes'
 import helmet from 'helmet'
 import { ClsService } from 'nestjs-cls'
@@ -45,7 +45,7 @@ async function bootstrap(): Promise<void> {
 
   app.useGlobalPipes(createValidationPipe())
 
-  app.useGlobalInterceptors(new TransformInterceptor(reflector, cls))
+  app.useGlobalInterceptors(app.get(TimeoutInterceptor), new TransformInterceptor(reflector, cls))
 
   app.useGlobalFilters(
     app.get(AllExceptionsFilter),

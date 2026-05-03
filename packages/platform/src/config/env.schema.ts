@@ -111,6 +111,14 @@ export const envSchema = z.object({
     .default('100000')
     .transform((value) => Number.parseInt(value, 10))
     .refine((value) => value > 0, { message: 'THROTTLE_LIMIT must be greater than 0' }),
+
+  REQUEST_TIMEOUT_MS: z
+    .string()
+    .default('30000')
+    .transform((value) => Number.parseInt(value, 10))
+    .refine((value) => value >= 1000, {
+      message: 'REQUEST_TIMEOUT_MS must be at least 1000ms',
+    }),
 })
 
 export type Env = z.infer<typeof envSchema>

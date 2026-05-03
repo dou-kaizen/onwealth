@@ -6,6 +6,8 @@ import {
   UnprocessableEntityException,
 } from '@nestjs/common'
 
+import { ErrorCode } from '../error-codes'
+
 import type { DatabaseError } from 'pg'
 
 /**
@@ -22,25 +24,25 @@ export function mapDatabaseError(error: DatabaseError): HttpException {
     // Class 23 — Integrity Constraint Violation
     case '23505': {
       return new ConflictException({
-        code: 'RESOURCE_CONFLICT',
+        code: ErrorCode.RESOURCE_CONFLICT,
         message: 'A resource with the same unique field already exists',
       })
     }
     case '23503': {
       return new UnprocessableEntityException({
-        code: 'RESOURCE_CONFLICT',
+        code: ErrorCode.RESOURCE_CONFLICT,
         message: 'Referenced resource does not exist',
       })
     }
     case '23502': {
       return new UnprocessableEntityException({
-        code: 'RESOURCE_CONFLICT',
+        code: ErrorCode.REQUIRED_FIELD,
         message: 'A required field is missing',
       })
     }
     case '23514': {
       return new UnprocessableEntityException({
-        code: 'RESOURCE_CONFLICT',
+        code: ErrorCode.RESOURCE_CONFLICT,
         message: 'Data failed a database constraint check',
       })
     }
@@ -51,20 +53,20 @@ export function mapDatabaseError(error: DatabaseError): HttpException {
     case '08001':
     case '08004': {
       return new ServiceUnavailableException({
-        code: 'INTERNAL_SERVER_ERROR',
+        code: ErrorCode.INTERNAL_SERVER_ERROR,
         message: 'Database connection error',
       })
     }
     // Class 57 — Operator Intervention (e.g. statement_timeout)
     case '57014': {
       return new ServiceUnavailableException({
-        code: 'INTERNAL_SERVER_ERROR',
+        code: ErrorCode.INTERNAL_SERVER_ERROR,
         message: 'Database query timed out',
       })
     }
     default: {
       return new InternalServerErrorException({
-        code: 'INTERNAL_SERVER_ERROR',
+        code: ErrorCode.INTERNAL_SERVER_ERROR,
         message: 'An unexpected database error occurred',
       })
     }

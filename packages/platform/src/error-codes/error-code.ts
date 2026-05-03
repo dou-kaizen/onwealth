@@ -1,0 +1,49 @@
+/**
+ * Centralized error code catalog. Keep codes opaque + stable — clients
+ * key off the literal value. Use `as const` so callers get the literal
+ * union type for autocomplete and exhaustive switch checks.
+ *
+ * Feature modules MAY extend with their own codes; ProblemDetailsDto.code
+ * is intentionally typed `string` (not `ErrorCode`) to keep the contract
+ * open.
+ */
+export const ErrorCode = {
+  // Validation
+  INVALID_EMAIL: 'INVALID_EMAIL',
+  INVALID_URL: 'INVALID_URL',
+  INVALID_UUID: 'INVALID_UUID',
+  INVALID_FORMAT: 'INVALID_FORMAT',
+  INVALID_LENGTH: 'INVALID_LENGTH',
+  OUT_OF_RANGE: 'OUT_OF_RANGE',
+  REQUIRED_FIELD: 'REQUIRED_FIELD',
+  VALIDATION_ERROR: 'VALIDATION_ERROR',
+  VALIDATION_FAILED: 'VALIDATION_FAILED',
+  // Resource
+  USER_NOT_FOUND: 'USER_NOT_FOUND',
+  RESOURCE_NOT_FOUND: 'RESOURCE_NOT_FOUND',
+  // Conflict
+  EMAIL_EXISTS: 'EMAIL_EXISTS',
+  USERNAME_EXISTS: 'USERNAME_EXISTS',
+  USER_EXISTS: 'USER_EXISTS',
+  RESOURCE_CONFLICT: 'RESOURCE_CONFLICT',
+  IDEMPOTENCY_KEY_REUSE_CONFLICT: 'IDEMPOTENCY_KEY_REUSE_CONFLICT',
+  PRECONDITION_REQUIRED: 'PRECONDITION_REQUIRED',
+  // Authentication
+  TOKEN_MISSING: 'TOKEN_MISSING',
+  TOKEN_EXPIRED: 'TOKEN_EXPIRED',
+  TOKEN_INVALID: 'TOKEN_INVALID',
+  REFRESH_TOKEN_EXPIRED: 'REFRESH_TOKEN_EXPIRED',
+  INVALID_CREDENTIALS: 'INVALID_CREDENTIALS',
+  UNAUTHORIZED: 'UNAUTHORIZED',
+  // Authorization
+  FORBIDDEN: 'FORBIDDEN',
+  INSUFFICIENT_SCOPE: 'INSUFFICIENT_SCOPE',
+  ACCOUNT_BANNED: 'ACCOUNT_BANNED',
+  // General
+  BAD_REQUEST: 'BAD_REQUEST',
+  RATE_LIMIT_EXCEEDED: 'RATE_LIMIT_EXCEEDED',
+  REQUEST_TIMEOUT: 'REQUEST_TIMEOUT',
+  INTERNAL_SERVER_ERROR: 'INTERNAL_SERVER_ERROR',
+} as const
+
+export type ErrorCode = (typeof ErrorCode)[keyof typeof ErrorCode]

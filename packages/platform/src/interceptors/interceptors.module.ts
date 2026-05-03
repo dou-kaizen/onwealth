@@ -1,15 +1,17 @@
 import { Module } from '@nestjs/common'
 
+import { TimeoutInterceptor } from './timeout.interceptor'
 import { TransformInterceptor } from './transform.interceptor'
 
 /**
  * Interceptors module.
  *
  * Registers the foundation interceptors as providers (DI-resolved
- * Reflector + ClsService). Global binding happens in `apps/api/main.ts`.
+ * Reflector + ClsService + ConfigService). Global binding happens in
+ * `apps/api/main.ts`.
  */
 @Module({
-  providers: [TransformInterceptor],
-  exports: [TransformInterceptor],
+  providers: [TransformInterceptor, TimeoutInterceptor],
+  exports: [TransformInterceptor, TimeoutInterceptor],
 })
 export class InterceptorsModule {}
