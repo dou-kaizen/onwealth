@@ -7,7 +7,7 @@ _Last updated: 2026-05-03 | Branch: init-infrastructure_
 **Status: Complete**
 
 - [x] pnpm + Turborepo monorepo scaffold
-- [x] 4 workspace packages: `@onwealth/contract`, `@onwealth/core`, `@onwealth/database`, `@onwealth/platform`
+- [x] 4 workspace packages + 1 app: `@onwealth/core`, `@onwealth/database`, `@onwealth/platform`, `@onwealth/tsconfig` + `apps/api`
 - [x] `@onwealth/api` app with full middleware chain
 - [x] Zod env validation (`env.schema.ts`)
 - [x] Pino structured logging with W3C trace propagation
@@ -15,7 +15,7 @@ _Last updated: 2026-05-03 | Branch: init-infrastructure_
 - [x] Google AIP-193 response envelope (`@UseEnvelope()`)
 - [x] Rate limiting (`@nestjs/throttler` + env-driven config)
 - [x] Drizzle + node-postgres `DatabaseModule`
-- [x] `dependency-cruiser` 16 architectural boundary rules (7 rules)
+- [x] `dependency-cruiser` 16 architectural boundary enforcement (6 error-severity rules)
 - [x] oxlint + oxfmt via `@infra-x/code-quality` presets
 - [x] `GET /health` smoke endpoint
 

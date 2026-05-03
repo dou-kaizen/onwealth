@@ -114,7 +114,7 @@ _Last updated: 2026-05-03 | Branch: init-infrastructure_
 **Status:** Shipped (init-infrastructure)
 
 **Requirements:**
-- `dependency-cruiser` 16 with 7 rules covering circular deps, framework isolation, feature isolation
+- `dependency-cruiser` 16 with 6 error-severity rules covering circular deps, framework isolation, feature isolation
 - Runs as part of `pnpm lint` pipeline
 
 **Acceptance criteria:**

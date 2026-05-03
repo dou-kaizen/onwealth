@@ -10,14 +10,14 @@ onwealth is a NestJS monorepo structured around strict layer separation. The fou
 
 ```
 apps/api
-  └── @onwealth/platform/{config,cls,logger,filters,interceptors,decorators,pipes,throttler,database}
-        ├── @onwealth/contract   (types: ProblemDetailsDto, FieldError)
+  └── @onwealth/platform/{config,cls,logger,filters,interceptors,decorators,pipes,
+                          throttler,database,error-codes,problem-details,.}
         └── @onwealth/database   (Drizzle schemas barrel)
 
 @onwealth/core                   (no dependencies on other workspace packages)
 ```
 
-Dependency direction is strictly downward. `@onwealth/core` and `@onwealth/contract` have zero runtime dependencies on NestJS or infrastructure libs — enforced by `dependency-cruiser` rules `core-no-nestjs`, `core-no-runtime-libs`, `contract-no-nestjs`.
+Dependency direction is strictly downward. `@onwealth/core` has zero runtime dependencies on NestJS or infrastructure libs — enforced by `dependency-cruiser` rules `core-no-nestjs` and `core-no-runtime-libs`. `ProblemDetailsDto`, `FieldError`, and `ValidationErrorItem` live in `@onwealth/platform/problem-details` (collapsed from the former `@onwealth/contract` package). `ErrorCode` const object and union type live in `@onwealth/platform/error-codes`.
 
 ## Architectural Boundaries (dependency-cruiser rules)
 
@@ -26,10 +26,11 @@ Dependency direction is strictly downward. `@onwealth/core` and `@onwealth/contr
 | `no-circular` | No circular deps anywhere |
 | `core-no-nestjs` | `packages/core/` cannot import `@nestjs/*` |
 | `core-no-runtime-libs` | `packages/core/` cannot import ioredis, pino, bcrypt, drizzle-orm, pg |
-| `contract-no-nestjs` | `packages/contract/` cannot import `@nestjs/*` or nestjs-* |
 | `database-no-nestjs` | `packages/database/` cannot import `@nestjs/*` |
 | `platform-no-feature` | `packages/platform/` cannot import feature symbols (auth/user/telegram/bot) |
 | `api-no-platform-internal` | `apps/api/` must use `@onwealth/platform/*` subpath, never `packages/platform/src/` relative path |
+
+6 error-severity rules total. DDD layer rules (presentation-no-database, etc.) deferred until first feature module exists.
 
 Run: `pnpm depcruise:check` (included in `pnpm lint`).
 
@@ -115,7 +116,7 @@ Collection handlers should return `{ object: 'list', data: [...] }` — `Transfo
 - ORM: `drizzle-orm/node-postgres`
 - Schema: `@onwealth/database` barrel — empty in foundation phase, typed as `typeof schema`
 - Connection config from env: `DATABASE_URL`, `DB_POOL_MAX` (default 20), `DB_POOL_MIN` (default 5), `DB_POOL_IDLE_TIMEOUT` (default 30 000 ms), `DB_POOL_CONNECTION_TIMEOUT` (default 10 000 ms)
-- Injected via `DatabaseModule.forRoot()` using `DRIZZLE_CLIENT` token
+- Injected via `DatabaseModule.forRoot()` using `DRIZZLE_TOKEN` (Symbol, exported from `@onwealth/platform/database`)
 
 ## TypeScript Compile Strategy
 
@@ -137,6 +138,31 @@ Base `tsconfig` (all packages): `target: ES2023`, `strict: true`, `noUncheckedIn
 | Correlation | `x-correlation-id` header → CLS → log `correlationId` + error response `correlation_id` |
 | Request ID | `x-request-id` header or UUID → `cls.getId()` → error response `request_id` |
 | Secrets redaction | `redaction.config.ts` path list applied by pino-http |
+
+## DDD Primitives (`@onwealth/core`)
+
+Framework-agnostic, no runtime deps. Provides:
+
+- `DomainEvent` — abstract base; `eventId` (UUID v4), `occurredOn` (Date), `eventName` (string)
+- `IntegrationEvent extends DomainEvent` — adds `source` (string) and `version` (number)
+- `BaseAggregateRoot` — private domain-event queue with `addDomainEvent()`, `drainDomainEvents()`, `clearDomainEvents()`
+
+Not yet wired to an event bus — reserved for Phase 3.
+
+## ErrorCode (`@onwealth/platform/error-codes`)
+
+`ErrorCode` is a `const` object (not a TypeScript enum) of opaque string literals grouped by category:
+
+| Category | Examples |
+|---|---|
+| validation | `VALIDATION_ERROR`, `INVALID_INPUT` |
+| resource | `RESOURCE_NOT_FOUND`, `RESOURCE_ALREADY_EXISTS` |
+| conflict | `CONFLICT` |
+| auth | `UNAUTHORIZED`, `TOKEN_EXPIRED`, `TOKEN_INVALID` |
+| authz | `FORBIDDEN`, `INSUFFICIENT_PERMISSIONS` |
+| general | `INTERNAL_SERVER_ERROR`, `SERVICE_UNAVAILABLE` |
+
+The `code` field in `ProblemDetailsDto` is typed `string` so feature modules may register domain-specific codes alongside the platform constants.
 
 ## Planned (not yet implemented)
 

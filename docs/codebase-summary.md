@@ -9,12 +9,11 @@ onwealth/                          # pnpm + Turborepo monorepo
 ├── apps/
 │   └── api/                       # @onwealth/api — NestJS HTTP entrypoint
 ├── packages/
-│   ├── contract/                  # @onwealth/contract — wire-level types only
 │   ├── core/                      # @onwealth/core — framework-agnostic DDD primitives
 │   ├── database/                  # @onwealth/database — Drizzle schemas only
 │   ├── platform/                  # @onwealth/platform — NestJS foundation layer
 │   └── tsconfig/                  # shared TypeScript presets
-├── .dependency-cruiser.cjs        # 7 architectural boundary rules
+├── .dependency-cruiser.cjs        # 6 error-severity architectural boundary rules
 ├── pnpm-workspace.yaml            # catalog pins all dependency versions
 └── turbo.json                     # task pipeline (build → lint → test → dev)
 ```
@@ -23,16 +22,16 @@ onwealth/                          # pnpm + Turborepo monorepo
 
 | Package | Purpose | Key constraint |
 |---|---|---|
-| `@onwealth/contract` | RFC 9457 `ProblemDetailsDto`, `FieldError`, `ValidationErrorItem` types | No `@nestjs/*`, no runtime libs |
-| `@onwealth/core` | `BaseAggregateRoot`, `DomainEvent`, `IntegrationEvent` | No `@nestjs/*`, no ioredis/pino/drizzle/pg |
+| `@onwealth/core` | DDD primitives: `BaseAggregateRoot`, `DomainEvent`, `IntegrationEvent` | No `@nestjs/*`, no ioredis/pino/drizzle/pg |
 | `@onwealth/database` | Drizzle schema barrel (`packages/database/src/schemas/index.ts`) | No `@nestjs/*`; empty in foundation phase |
-| `@onwealth/platform` | NestJS modules exported via 9 subpath exports | No feature symbols (auth/user/bot) |
+| `@onwealth/platform` | NestJS modules + `ErrorCode` + `ProblemDetailsDto` — 12 subpath exports | No feature symbols (auth/user/bot) |
 | `@onwealth/api` | Boots NestJS app, wires middleware chain | Consumes `@onwealth/platform/*` via subpath only — never relative |
 
 ## `@onwealth/platform` Subpath Exports
 
 | Subpath | Contents |
 |---|---|
+| `.` | Root barrel re-export |
 | `/config` | `ConfigModule` (Zod `envSchema`, `validateEnv`, `Env` type) |
 | `/cls` | `ClsModule` — W3C traceparent + request/correlation IDs |
 | `/logger` | `LoggerModule` — nestjs-pino, pino-pretty in dev, JSON in prod |
@@ -41,7 +40,9 @@ onwealth/                          # pnpm + Turborepo monorepo
 | `/decorators` | `@UseEnvelope()` decorator |
 | `/pipes` | `createValidationPipe()` — whitelist, 422, transform |
 | `/throttler` | `ThrottlerModule` — env-driven TTL/limit |
-| `/database` | `DatabaseModule`, `DrizzleFactory`, injection tokens |
+| `/database` | `DatabaseModule`, `DRIZZLE_TOKEN` injection token, `DrizzleDb` type |
+| `/error-codes` | `ErrorCode` const object + union type (opaque string literals, not enum) |
+| `/problem-details` | `ProblemDetailsDto` (RFC 9457), `FieldError`, `ValidationErrorItem` |
 
 ## `apps/api` Bootstrap Order
 
@@ -50,7 +51,10 @@ onwealth/                          # pnpm + Turborepo monorepo
 3. `helmet()` (security headers)
 4. `createValidationPipe()` (whitelist + 422 + transform)
 5. `TransformInterceptor` (AIP-193 envelope when `@UseEnvelope()`)
-6. Global filters LIFO: `AllExceptionsFilter` first, then `ProblemDetailsFilter`, then `ThrottlerExceptionFilter`
+6. Global filters (registered LIFO — last registered runs first on exception):
+   - registered 1st: `AllExceptionsFilter` → runs last (catch-all)
+   - registered 2nd: `ProblemDetailsFilter` → runs middle
+   - registered 3rd: `ThrottlerExceptionFilter` → runs first (catches 429)
 7. CORS from `ALLOWED_ORIGINS` env
 8. `app.listen(PORT)`
 
