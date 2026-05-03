@@ -1,1 +1,1 @@
-export {}
+export { ThrottlerModule } from './throttler.module'
