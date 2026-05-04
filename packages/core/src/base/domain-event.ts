@@ -9,6 +9,7 @@ import { randomUUID } from 'crypto'
  * @example
  * ```ts
  * export class ArticlePublishedEvent extends DomainEvent {
+ *   override readonly eventName = 'article.published'
  *   constructor(
  *     public readonly articleId: string,
  *     public readonly title: string,
@@ -28,10 +29,13 @@ export abstract class DomainEvent {
   }
 
   /**
-   * Event name used for routing on the event bus.
-   * Defaults to the constructor name; subclasses may override.
+   * Stable wire identifier for routing on the event bus.
+   *
+   * Declared abstract so subclasses MUST provide an explicit literal —
+   * relying on `this.constructor.name` is unsafe under SWC/Terser, which
+   * mangle class names by default and would silently break consumers
+   * that key off the event name (subscriptions, routing, replay logs).
+   * Use a dotted string like `'article.published'`.
    */
-  get eventName(): string {
-    return this.constructor.name
-  }
+  abstract readonly eventName: string
 }

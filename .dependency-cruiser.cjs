@@ -31,10 +31,11 @@ module.exports = {
     {
       name: 'core-no-runtime-libs',
       severity: 'error',
-      comment: '@onwealth/core MUST NOT depend on runtime infrastructure libs',
+      comment:
+        '@onwealth/core MUST NOT depend on runtime infrastructure libs (transport, persistence, validation, serialization)',
       from: { path: '^packages/core/' },
       to: {
-        path: '(^|/)(ioredis|pino|bcrypt|date-fns|drizzle-orm|pg|postgres)(/|$)',
+        path: '(^|/)(ioredis|pino|bcrypt|date-fns|drizzle-orm|pg|postgres|zod|class-validator|class-transformer)(/|$)',
         dependencyTypes: ['npm', 'npm-dev', 'npm-optional', 'npm-peer', 'unknown'],
       },
     },
