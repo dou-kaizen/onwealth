@@ -22,6 +22,20 @@ import type { Request, Response } from 'express'
  */
 @Catch(HttpException)
 export class ProblemDetailsFilter implements ExceptionFilter {
+  /**
+   * Cap on total field errors emitted per response. Bounds payload size
+   * for adversarial DTOs (e.g. arrays of 10k invalid items) — exceeding
+   * the cap silently truncates rather than failing the response.
+   */
+  private static readonly MAX_TOTAL_ERRORS = 100
+
+  /**
+   * Cap on `children` recursion depth. class-validator nests one level
+   * per `@ValidateNested()` boundary; 5 covers realistic DTO trees while
+   * preventing stack abuse from pathological self-referential payloads.
+   */
+  private static readonly MAX_DEPTH = 5
+
   constructor(
     private readonly cls: ClsService,
     private readonly configService: ConfigService<Env, true>,
@@ -169,45 +183,74 @@ export class ProblemDetailsFilter implements ExceptionFilter {
     exceptionResponse: string | Record<string, unknown>,
   ): FieldError[] | undefined {
     if (
-      typeof exceptionResponse === 'object' &&
-      'message' in exceptionResponse &&
-      Array.isArray(exceptionResponse.message)
+      typeof exceptionResponse !== 'object' ||
+      !('message' in exceptionResponse) ||
+      !Array.isArray(exceptionResponse.message)
     ) {
-      const errors: FieldError[] = []
-
-      for (const item of exceptionResponse.message) {
-        if (typeof item === 'string') {
-          // Legacy string form: "<field> <message...>"
-          const parts = item.split(' ')
-          const field = parts[0] ?? 'unknown'
-          errors.push({
-            field,
-            pointer: `/${field}`,
-            code: ErrorCode.VALIDATION_ERROR,
-            message: item,
-          })
-        } else if (this.isValidationErrorItem(item)) {
-          // Structured class-validator form
-          const field = item.property
-          const constraints = item.constraints ?? {}
-          const contexts = item.contexts ?? {}
-
-          for (const [constraintName, message] of Object.entries(constraints)) {
-            const contextCode = contexts[constraintName]?.code
-            errors.push({
-              field,
-              pointer: `/${field}`,
-              code: contextCode ?? ErrorCode.VALIDATION_ERROR,
-              message,
-            })
-          }
-        }
-      }
-
-      return errors.length > 0 ? errors : undefined
+      return undefined
     }
 
-    return undefined
+    const acc: FieldError[] = []
+    this.collectValidationErrors(exceptionResponse.message, '', 0, acc)
+    return acc.length > 0 ? acc : undefined
+  }
+
+  /**
+   * Recursive collector with shared accumulator and depth/total caps.
+   *
+   * - `parentPath` threads the JSON Pointer prefix through nested DTOs
+   *   so children produce e.g. `/address/city` rather than just `/city`.
+   * - `acc` is shared across recursive calls; once it hits MAX_TOTAL_ERRORS
+   *   every subsequent call short-circuits, bounding response size.
+   * - `depth` guards stack abuse from cyclic / pathological payloads.
+   *
+   * Constraint codes still resolve via `contexts[name].code` so domain
+   * codes injected with `{ context: { code: 'EMAIL_EXISTS' } }` survive.
+   */
+  private collectValidationErrors(
+    items: readonly unknown[],
+    parentPath: string,
+    depth: number,
+    acc: FieldError[],
+  ): void {
+    for (const item of items) {
+      if (acc.length >= ProblemDetailsFilter.MAX_TOTAL_ERRORS) return
+
+      if (typeof item === 'string') {
+        // Legacy string form: "<field> <message...>"
+        const parts = item.split(' ')
+        const field = parts[0] ?? 'unknown'
+        const fieldPath = parentPath ? `${parentPath}/${field}` : field
+        acc.push({
+          field: fieldPath,
+          pointer: `/${fieldPath}`,
+          code: ErrorCode.VALIDATION_ERROR,
+          message: item,
+        })
+        continue
+      }
+
+      if (!this.isValidationErrorItem(item)) continue
+
+      const fieldPath = parentPath ? `${parentPath}/${item.property}` : item.property
+      const constraints = item.constraints ?? {}
+      const contexts = item.contexts ?? {}
+
+      for (const [constraintName, message] of Object.entries(constraints)) {
+        if (acc.length >= ProblemDetailsFilter.MAX_TOTAL_ERRORS) return
+        const contextCode = contexts[constraintName]?.code
+        acc.push({
+          field: fieldPath,
+          pointer: `/${fieldPath}`,
+          code: contextCode ?? ErrorCode.VALIDATION_ERROR,
+          message,
+        })
+      }
+
+      if (item.children?.length && depth < ProblemDetailsFilter.MAX_DEPTH) {
+        this.collectValidationErrors(item.children, fieldPath, depth + 1, acc)
+      }
+    }
   }
 
   private isValidationErrorItem(item: unknown): item is ValidationErrorItem {

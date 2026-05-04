@@ -29,9 +29,18 @@ export function mapDatabaseError(error: DatabaseError): HttpException {
       })
     }
     case '23503': {
+      // FK violation: the REFERENCED row is missing — semantically a not-found,
+      // not a conflict. Status remains 422 (the request itself is well-formed).
+      //
+      // NOTE on the (RESOURCE_NOT_FOUND, 422) pairing: client SDKs that key
+      // off `code` alone may assume 404 semantics. The pairing is intentional
+      // — see docs/code-standards.md "DB error mapping" — and clients MUST
+      // branch on `status` first, `code` second. If a future feature module
+      // needs an unambiguous symbol it should introduce a domain-specific
+      // code (e.g. `REFERENCE_NOT_FOUND`) rather than overload this one.
       return new UnprocessableEntityException({
-        code: ErrorCode.RESOURCE_CONFLICT,
-        message: 'Referenced resource does not exist',
+        code: ErrorCode.RESOURCE_NOT_FOUND,
+        message: 'The referenced resource does not exist',
       })
     }
     case '23502': {
@@ -41,8 +50,11 @@ export function mapDatabaseError(error: DatabaseError): HttpException {
       })
     }
     case '23514': {
+      // Check constraint failure — distinct from RESOURCE_CONFLICT (which is
+      // unique-violation territory). Use a dedicated code so clients can
+      // surface "value violates a domain rule" UX.
       return new UnprocessableEntityException({
-        code: ErrorCode.RESOURCE_CONFLICT,
+        code: ErrorCode.CONSTRAINT_VIOLATION,
         message: 'Data failed a database constraint check',
       })
     }
