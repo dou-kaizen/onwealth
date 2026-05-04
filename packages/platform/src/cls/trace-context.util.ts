@@ -1,3 +1,5 @@
+import { randomBytes } from 'crypto'
+
 /**
  * W3C Trace Context utility functions.
  *
@@ -9,6 +11,10 @@
  *   │  └─ trace-id (32 hex)              │                └─ trace-flags
  *   │                                   └─ parent-id (16 hex)
  *   └─ version
+ *
+ * IDs MUST be generated with a CSPRNG — `Math.random()` is non-uniform
+ * and predictable, which breaks distributed-tracing collision guarantees
+ * and (worse) lets an attacker forge plausible parent spans.
  */
 
 export interface TraceContext {
@@ -20,6 +26,11 @@ export interface TraceContext {
 
 /**
  * Parse a traceparent header. Returns null on malformed input.
+ *
+ * Per spec §3.2.2.1, version `ff` is reserved as an invalid sentinel —
+ * any traceparent advertising it MUST be rejected and a new context
+ * started. We treat unknown future versions (>00) as parseable but the
+ * caller should still treat traceId as untrusted.
  */
 export function parseTraceparent(traceparent: string): TraceContext | null {
   if (!traceparent || typeof traceparent !== 'string') {
@@ -52,7 +63,25 @@ export function parseTraceparent(traceparent: string): TraceContext | null {
     return null
   }
 
-  return { version, traceId, parentId, traceFlags }
+  // Reserved invalid version (W3C Trace Context §3.2.2.1).
+  if (version.toLowerCase() === 'ff') {
+    return null
+  }
+
+  // All-zero trace-id / parent-id are invalid per spec (§3.2.2.2/§3.2.2.3).
+  if (/^0+$/.test(traceId) || /^0+$/.test(parentId)) {
+    return null
+  }
+
+  // Spec mandates lowercase hex on the wire; we accept mixed case on
+  // ingest (regex /i) but normalise here so any later forwarding via
+  // generateTraceparent() emits a spec-compliant header.
+  return {
+    version: version.toLowerCase(),
+    traceId: traceId.toLowerCase(),
+    parentId: parentId.toLowerCase(),
+    traceFlags: traceFlags.toLowerCase(),
+  }
 }
 
 /**
@@ -64,11 +93,11 @@ export function generateTraceparent(traceId: string, parentId?: string): string 
 }
 
 export function generateSpanId(): string {
-  return Array.from({ length: 16 }, () => Math.floor(Math.random() * 16).toString(16)).join('')
+  return randomBytes(8).toString('hex')
 }
 
 export function generateTraceId(): string {
-  return Array.from({ length: 32 }, () => Math.floor(Math.random() * 16).toString(16)).join('')
+  return randomBytes(16).toString('hex')
 }
 
 export function isValidTraceparent(traceparent: string): boolean {
