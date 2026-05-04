@@ -2,22 +2,35 @@ import * as schema from '@onwealth/database'
 import { drizzle } from 'drizzle-orm/node-postgres'
 import { Pool } from 'pg'
 
-import type { DrizzleModuleOptions } from './database.tokens'
+import type { DrizzleInstance, DrizzleModuleOptions } from './database.tokens'
 
 /**
  * Build a Drizzle instance backed by a node-postgres pool.
  *
- * Pool defaults are intentionally conservative; production deployments
- * should set `DB_POOL_*` env vars to tune.
+ * Returns BOTH the Drizzle client AND the underlying pool so the caller
+ * (DatabaseModule) can drain the pool on shutdown via OnModuleDestroy.
+ *
+ * Pool sizing comes exclusively from the env schema — no factory-level
+ * fallbacks, so a misconfigured caller fails loudly rather than silently
+ * accepting a min/max that diverges from the documented contract.
+ *
+ * `pool.on('error')` is wired immediately to prevent Node's
+ * uncaught-event default from killing the process when an idle client
+ * disconnects (TCP RST, pg restart, etc.). The handler writes to stderr
+ * because no Logger is available inside a non-NestJS factory function.
  */
-export function createDrizzleInstance(options: DrizzleModuleOptions) {
+export function createDrizzleInstance(options: DrizzleModuleOptions): DrizzleInstance {
   const pool = new Pool({
     connectionString: options.connectionString,
-    max: options.pool?.max ?? 10,
-    min: options.pool?.min ?? 2,
-    idleTimeoutMillis: options.pool?.idleTimeoutMillis ?? 30_000,
-    connectionTimeoutMillis: options.pool?.connectionTimeoutMillis ?? 5000,
+    max: options.pool.max,
+    min: options.pool.min,
+    idleTimeoutMillis: options.pool.idleTimeoutMillis,
+    connectionTimeoutMillis: options.pool.connectionTimeoutMillis,
   })
 
-  return drizzle({ client: pool, schema })
+  pool.on('error', (err: Error) => {
+    process.stderr.write(`[pg-pool] idle client error: ${err.message}\n`)
+  })
+
+  return { db: drizzle({ client: pool, schema }), pool }
 }
