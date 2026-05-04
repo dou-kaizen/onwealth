@@ -1,6 +1,6 @@
 # Project Roadmap
 
-_Last updated: 2026-05-03 | Branch: init-infrastructure_
+_Last updated: 2026-05-04 | Branch: init-infrastructure_
 
 ## Phase 1 — Infrastructure Foundation
 
@@ -18,6 +18,7 @@ _Last updated: 2026-05-03 | Branch: init-infrastructure_
 - [x] `dependency-cruiser` 16 architectural boundary enforcement (6 error-severity rules)
 - [x] oxlint + oxfmt via `@infra-x/code-quality` presets
 - [x] `GET /health` smoke endpoint
+- [x] **Foundation Hardening** (2026-05-04): graceful shutdown, security defaults, operational tuning, error contract refinement, trace hardening, tooling correctness (6-phase pass)
 
 ## Phase 2 — Authentication (planned)
 
