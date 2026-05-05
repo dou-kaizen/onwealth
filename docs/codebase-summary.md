@@ -1,6 +1,6 @@
 # Codebase Summary
 
-_Last updated: 2026-05-04 | Branch: init-infrastructure_
+_Last updated: 2026-05-04 | Branch: init-infrastructure (Foundation Hardening)_
 
 ## Repository Layout
 
@@ -40,7 +40,7 @@ onwealth/                          # pnpm + Turborepo monorepo
 | `/decorators` | `@UseEnvelope()` decorator |
 | `/pipes` | `createValidationPipe()` — whitelist, 422, transform |
 | `/throttler` | `ThrottlerModule` — env-driven TTL/limit |
-| `/database` | `DatabaseModule` (`forRoot()` / `forRootAsync(options)`), `DRIZZLE_TOKEN` injection token, `DrizzleDb` type |
+| `/database` | `DatabaseModule` (`forRoot()` / `forRootAsync(options)`), `DRIZZLE_TOKEN` + `POOL_TOKEN` injection tokens, `DrizzleDb` + `DrizzleInstance` types |
 | `/error-codes` | `ErrorCode` const object + union type (opaque string literals, not enum) |
 | `/problem-details` | `ProblemDetailsDto` (RFC 9457), `FieldError`, `ValidationErrorItem` |
 
@@ -48,23 +48,27 @@ onwealth/                          # pnpm + Turborepo monorepo
 
 1. `NestFactory.create(ApiModule, { bufferLogs: true })`
 2. Swap logger → `nestjs-pino`
-3. Resolve `swaggerEnabled = ENABLE_SWAGGER ?? (NODE_ENV !== 'production')`
-4. `helmet()` — strict CSP when swagger disabled; permissive CSP (jsdelivr + unsafe-inline/eval) when enabled; **must run before route registration**
-5. `createValidationPipe()` (whitelist + 422 + transform)
-6. 5 global interceptors (bind order): `TimeoutInterceptor` → `RequestContextInterceptor` → `CorrelationIdInterceptor` → `TraceContextInterceptor` → `TransformInterceptor`; first 4 via `app.get(...)` DI, `TransformInterceptor` via `new` (needs `reflector` + `cls`)
-7. Global filters (registered LIFO — last registered runs first on exception):
-   - registered 1st: `AllExceptionsFilter` → runs last (catch-all)
-   - registered 2nd: `ProblemDetailsFilter` → runs middle
-   - registered 3rd: `ThrottlerExceptionFilter` → runs first (catches 429)
-8. CORS from `ALLOWED_ORIGINS` env
-9. `setupSwagger(app, configService)` — mounts `/docs`, `/swagger`, `/swagger-json`, `/openapi.yaml` (only when `swaggerEnabled`)
-10. `app.listen(PORT)`
+3. Body parsers — 10kb limit (JSON + urlencoded) before any route registration
+4. Resolve `swaggerEnabled = ENABLE_SWAGGER ?? (NODE_ENV !== 'production')`
+5. `helmet()` — strict CSP global; loose CSP path-mounted on `/swagger` + `/docs` only when swagger enabled
+6. `trust proxy = 1` (single LB hop)
+7. Cluster-safety check: logs WARN if `WORKERS > 1` (in-memory throttler not safe for multi-process)
+8. `createValidationPipe()` (whitelist + 422 + transform + `enableImplicitConversion: false`)
+9. 5 global interceptors (bind order): `TimeoutInterceptor` → `RequestContextInterceptor` → `CorrelationIdInterceptor` → `TraceContextInterceptor` → `TransformInterceptor`; first 4 via `app.get(...)` DI, `TransformInterceptor` via `new` (needs `reflector` + `cls`)
+10. Global filters (registered LIFO — last registered runs first on exception):
+    - registered 1st: `AllExceptionsFilter` → runs last (catch-all)
+    - registered 2nd: `ProblemDetailsFilter` → runs middle
+    - registered 3rd: `ThrottlerExceptionFilter` → runs first (catches 429)
+11. `app.enableShutdownHooks()` — **must precede `app.listen()`** (SIGTERM → http drain → OnModuleDestroy)
+12. CORS from `ALLOWED_ORIGINS` env; logs WARN if empty in non-test
+13. `setupSwagger(app, configService)` — mounts `/docs`, `/swagger`, `/swagger-json`, `/openapi.yaml` (only when `swaggerEnabled`)
+14. `app.listen(PORT)`
 
 ## API Modules (foundation)
 
 | Module | Route | Notes |
 |---|---|---|
-| `HealthModule` | `GET /health` | Returns `{ status, uptime, timestamp }` wrapped in `{ data, meta }` via `@UseEnvelope()` |
+| `HealthModule` | `GET /health` | `@SkipThrottle()` class-level; returns `{ status, uptime, timestamp }` in `{ data, meta }` via `@UseEnvelope()` |
 
 ## API Documentation Routes (env-gated)
 

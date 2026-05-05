@@ -21,7 +21,9 @@ export const swaggerConfig = {
  */
 export const swaggerCustomOptions: SwaggerCustomOptions = {
   swaggerOptions: {
-    persistAuthorization: true,
+    // Disabled: shared staging browsers expose every user's JWT via
+    // localStorage. Operators MUST re-authenticate per session.
+    persistAuthorization: false,
   },
 }
 

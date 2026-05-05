@@ -1,4 +1,5 @@
 import { RequestMethod } from '@nestjs/common'
+import { ClsServiceManager } from 'nestjs-cls'
 
 import { redactCensor, redactPaths } from './redaction.config'
 
@@ -13,7 +14,12 @@ import type { Params } from 'nestjs-pino'
  * - JSON output in production; pino-pretty single-line in dev/test
  * - allowlist autoLogging: only `/api/*` paths emit per-request logs
  * - health-check routes excluded entirely (high frequency, low signal)
- * - traceId/correlationId injected as customProps so they appear on every line
+ * - traceId/correlationId/requestId injected via pino `mixin` so they
+ *   appear on every line. `mixin` runs *per log call* inside the CLS
+ *   async-hook scope; `customProps` runs in the Express middleware
+ *   scope (outside CLS) and would only see header-derived values.
+ *   We pull from CLS so any regenerated trace-id (see cls.config) and
+ *   any in-flight correlation update are reflected.
  */
 export function createLoggerConfig(config: ConfigService<Env, true>): Params {
   const nodeEnv: 'development' | 'production' | 'test' = config.get('NODE_ENV')
@@ -56,10 +62,15 @@ export function createLoggerConfig(config: ConfigService<Env, true>): Params {
         }),
       },
 
-      customProps: (req: IncomingMessage) => ({
-        correlationId: req.headers['x-correlation-id'],
-        traceId: extractTraceId(req.headers.traceparent as string | undefined),
-      }),
+      mixin: () => {
+        const cls = ClsServiceManager.getClsService()
+        if (!cls.isActive()) return {}
+        return {
+          requestId: cls.getId(),
+          correlationId: cls.get('correlationId'),
+          traceId: cls.get('traceId'),
+        }
+      },
 
       customSuccessMessage: (req: IncomingMessage, res: ServerResponse) => {
         return `${req.method} ${req.url} ${res.statusCode}`
@@ -105,17 +116,4 @@ function getLogLevel(nodeEnv: 'development' | 'production' | 'test'): string {
       return 'debug'
     }
   }
-}
-
-/**
- * Extract trace-id (second segment) from a W3C traceparent header.
- *
- * Format: `version-trace_id-parent_id-trace_flags`
- */
-function extractTraceId(traceparent: string | undefined): string | undefined {
-  if (!traceparent) {
-    return undefined
-  }
-  const parts = traceparent.split('-')
-  return parts[1]
 }

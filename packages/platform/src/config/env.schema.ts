@@ -1,24 +1,44 @@
 import { z } from 'zod'
 
 /**
+ * Sentinel placeholder values — IF a deployment ships with these literal
+ * values AND `NODE_ENV === 'production'`, boot fails loud. Catches the
+ * "forgot to set the secret" footgun before the API ever serves traffic.
+ *
+ * Keys MUST match envSchema field names exactly; the production guard
+ * iterates this map.
+ */
+const PROD_FORBIDDEN_DEFAULTS = {
+  JWT_SECRET: 'your-secret-key-change-me-in-production-min-32-chars',
+  DATABASE_URL: 'postgres://postgres:postgres@localhost:5432/onwealth',
+  API_BASE_URL: 'https://api.example.com',
+} as const
+
+/**
  * Foundation env schema.
  *
  * Transport-agnostic only — feature-tier keys (OAuth client IDs, bot
  * tokens, etc.) MUST stay out of the foundation. Add them in feature
  * modules' own env extensions when they arrive.
+ *
+ * Required-in-production vars (`JWT_SECRET`, `DATABASE_URL`,
+ * `API_BASE_URL`) intentionally have NO `.default()`. Supply them via
+ * `.env.example` for local dev. Production guard below rejects placeholder
+ * values from leaking to prod.
  */
-export const envSchema = z.object({
-  NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
+export const envSchema = z
+  .object({
+    NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
 
-  PORT: z
-    .string()
-    .default('3000')
-    .transform((value) => Number.parseInt(value, 10))
-    .refine((value) => value > 0 && value < 65_536, {
-      message: 'PORT must be between 1 and 65535',
-    }),
+    PORT: z
+      .string()
+      .default('3000')
+      .transform((value) => Number.parseInt(value, 10))
+      .refine((value) => value > 0 && value < 65_536, {
+        message: 'PORT must be between 1 and 65535',
+      }),
 
-  DATABASE_URL: z.url().default('postgres://postgres:postgres@localhost:5432/onwealth'),
+    DATABASE_URL: z.url(),
 
   DB_POOL_MAX: z
     .string()
@@ -52,12 +72,9 @@ export const envSchema = z.object({
       message: 'DB_POOL_CONNECTION_TIMEOUT must be at least 1000ms',
     }),
 
-  JWT_SECRET: z
-    .string()
-    .min(32, {
-      message: 'JWT_SECRET must be at least 32 characters long (use a randomly generated key)',
-    })
-    .default('your-secret-key-change-me-in-production-min-32-chars'),
+  JWT_SECRET: z.string().min(32, {
+    message: 'JWT_SECRET must be at least 32 characters long (use a randomly generated key)',
+  }),
 
   JWT_EXPIRES_IN: z
     .string()
@@ -98,7 +115,7 @@ export const envSchema = z.object({
       message: 'REDIS_TTL must be greater than 0',
     }),
 
-  API_BASE_URL: z.url().default('https://api.example.com'),
+  API_BASE_URL: z.url(),
 
   THROTTLE_TTL: z
     .string()
@@ -108,7 +125,7 @@ export const envSchema = z.object({
 
   THROTTLE_LIMIT: z
     .string()
-    .default('100000')
+    .default('300')
     .transform((value) => Number.parseInt(value, 10))
     .refine((value) => value > 0, { message: 'THROTTLE_LIMIT must be greater than 0' }),
 
@@ -137,7 +154,21 @@ export const envSchema = z.object({
     .enum(['true', 'false'])
     .optional()
     .transform((value) => (value === undefined ? undefined : value === 'true')),
-})
+  })
+  .check((ctx) => {
+    if (ctx.value.NODE_ENV !== 'production') return
+    for (const [key, forbidden] of Object.entries(PROD_FORBIDDEN_DEFAULTS)) {
+      const value = ctx.value[key as keyof typeof PROD_FORBIDDEN_DEFAULTS]
+      if (value === forbidden) {
+        ctx.issues.push({
+          code: 'custom',
+          path: [key],
+          message: `${key} must not use the placeholder default value in production`,
+          input: value,
+        })
+      }
+    }
+  })
 
 export type Env = z.infer<typeof envSchema>
 
