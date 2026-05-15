@@ -46,7 +46,11 @@ export function createLoggerConfig(config: ConfigService<Env, true>): Params {
         req: (req: IncomingMessage & { id?: string; query?: unknown; params?: unknown }) => ({
           id: req.id,
           method: req.method,
-          url: req.url,
+          // Strip `?query` so URL-borne tokens (OAuth `code`, `access_token`,
+          // password reset tokens, etc.) never land in the structured `url`
+          // field. The structured `query` field is still emitted and is
+          // covered by `redact.paths` (req.query.*).
+          url: req.url?.split('?')[0] ?? '',
           query: req.query,
           params: req.params,
           remoteAddress: req.socket?.remoteAddress,
@@ -73,11 +77,13 @@ export function createLoggerConfig(config: ConfigService<Env, true>): Params {
       },
 
       customSuccessMessage: (req: IncomingMessage, res: ServerResponse) => {
-        return `${req.method} ${req.url} ${res.statusCode}`
+        const path = req.url?.split('?')[0] ?? ''
+        return `${req.method} ${path} ${res.statusCode}`
       },
 
       customErrorMessage: (req: IncomingMessage, res: ServerResponse, error: Error) => {
-        return `${req.method} ${req.url} ${res.statusCode} - ${error.message}`
+        const path = req.url?.split('?')[0] ?? ''
+        return `${req.method} ${path} ${res.statusCode} - ${error.message}`
       },
 
       ...(isProduction

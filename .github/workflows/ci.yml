@@ -1,0 +1,73 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  TURBO_TELEMETRY_DISABLED: 1
+  FORCE_COLOR: 1
+  SCARF_ANALYTICS: false
+  DO_NOT_TRACK: 1
+
+jobs:
+  verify:
+    name: verify
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.32.1
+          run_install: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install
+        run: pnpm install --frozen-lockfile
+
+      - name: Audit (prod deps — high+)
+        run: pnpm audit --audit-level=high --prod
+
+      - name: Audit (dev deps — critical only)
+        run: pnpm audit --audit-level=critical --dev
+
+      - name: Typecheck
+        run: pnpm typecheck
+
+      - name: Lint (oxlint + depcruise)
+        run: pnpm lint
+
+      - name: Format check
+        run: pnpm format:check
+
+      - name: Test (with coverage)
+        run: pnpm turbo run test:coverage
+        env:
+          CI: true
+
+      - name: Upload coverage
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-${{ github.run_id }}
+          path: apps/*/coverage/
+          retention-days: 14
+
+      - name: Build
+        run: pnpm build

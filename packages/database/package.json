@@ -16,7 +16,7 @@
   },
   "scripts": {
     "build": "tsc -b",
-    "typecheck": "tsc -b --noEmit",
+    "typecheck": "tsc -b",
     "lint": "oxlint .",
     "lint:fix": "oxlint . --fix",
     "format": "oxfmt --write src",
@@ -27,12 +27,10 @@
     "@onwealth/tsconfig": "workspace:*",
     "drizzle-orm": "catalog:",
     "pg": "catalog:",
-    "postgres": "catalog:",
     "typescript": "catalog:"
   },
   "peerDependencies": {
     "drizzle-orm": "catalog:",
-    "pg": "catalog:",
-    "postgres": "catalog:"
+    "pg": "catalog:"
   }
 }

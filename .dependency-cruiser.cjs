@@ -26,7 +26,10 @@ module.exports = {
       severity: 'error',
       comment: '@onwealth/core MUST be framework-agnostic (no @nestjs/*)',
       from: { path: '^packages/core/' },
-      to: { path: '(^|/)@nestjs/', dependencyTypes: ['npm', 'npm-dev', 'npm-optional', 'npm-peer', 'unknown'] },
+      to: {
+        path: '(^|/)@nestjs/',
+        dependencyTypes: ['npm', 'npm-dev', 'npm-optional', 'npm-peer', 'unknown'],
+      },
     },
     {
       name: 'core-no-runtime-libs',
@@ -35,7 +38,7 @@ module.exports = {
         '@onwealth/core MUST NOT depend on runtime infrastructure libs (transport, persistence, validation, serialization)',
       from: { path: '^packages/core/' },
       to: {
-        path: '(^|/)(ioredis|pino|bcrypt|date-fns|drizzle-orm|pg|postgres|zod|class-validator|class-transformer)(/|$)',
+        path: '(^|/)(ioredis|pino|bcrypt|date-fns|drizzle-orm|pg|zod|class-validator|class-transformer)(/|$)',
         dependencyTypes: ['npm', 'npm-dev', 'npm-optional', 'npm-peer', 'unknown'],
       },
     },
@@ -44,7 +47,10 @@ module.exports = {
       severity: 'error',
       comment: '@onwealth/database schemas/migrations MUST stay framework-agnostic',
       from: { path: '^packages/database/' },
-      to: { path: '(^|/)@nestjs/', dependencyTypes: ['npm', 'npm-dev', 'npm-optional', 'npm-peer', 'unknown'] },
+      to: {
+        path: '(^|/)@nestjs/',
+        dependencyTypes: ['npm', 'npm-dev', 'npm-optional', 'npm-peer', 'unknown'],
+      },
     },
     {
       name: 'platform-no-feature',

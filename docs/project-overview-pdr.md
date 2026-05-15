@@ -1,6 +1,6 @@
 # Project Overview & PDR
 
-_Last updated: 2026-05-03 | Branch: init-infrastructure_
+_Last updated: 2026-05-15 | Branch: init-infrastructure_
 
 ## Project Overview
 
@@ -81,15 +81,17 @@ _Last updated: 2026-05-03 | Branch: init-infrastructure_
 
 **Requirements:**
 - RFC 9457 `application/problem+json` for all HTTP errors
-- `AllExceptionsFilter` catches `DrizzleQueryError` and maps pg error codes to HTTP exceptions
+- `AllExceptionsFilter` catches `DrizzleQueryError` and maps pg SQLSTATE codes to HTTP exceptions (23505→409 CONFLICT, 23503→422 CONSTRAINT_VIOLATION FK, 23502→422 VALIDATION_ERROR NOT NULL, 23514→422 CONSTRAINT_VIOLATION check, 08xxx/57014→503)
 - `ThrottlerExceptionFilter` produces 429 with `Retry-After` + `X-RateLimit-*` headers
 - Error responses carry `request_id`, `correlation_id`, `trace_id`
 - Production 500s hide raw error message from response body
+- Validation recursion depth bounded; max 100 errors per response
 
 **Acceptance criteria:**
 - All 4xx/5xx responses have `Content-Type: application/problem+json`
 - `Cache-Control: no-store` on all error responses
-- Validation errors include `errors[]` with field pointers
+- Validation errors include `errors[]` with JSON Pointer field references
+- FK / check / NOT NULL violations surfaced with stable `ErrorCode` instead of raw 500
 
 ---
 
@@ -125,14 +127,16 @@ _Last updated: 2026-05-03 | Branch: init-infrastructure_
 
 ### PDR-007 — Feature Modules (planned)
 
-**Status:** Not started
+**Status:** Partially shipped
 
 **Requirements (TBD):**
 - Feature modules under `apps/api/src/modules/{context}/`
 - DDD layer rules added to `.dependency-cruiser.cjs`
 - `@nestjs/terminus` health indicators (readiness/liveness)
 - Authentication (JWT + refresh tokens)
-- Redis-backed throttler store
+
+**Shipped ahead of feature work (init-infrastructure):**
+- Redis-backed throttler store (`@nest-lab/throttler-storage-redis` + `ioredis`; `REDIS_URL` required at boot)
 
 ## Non-Functional Requirements
 
@@ -141,5 +145,5 @@ _Last updated: 2026-05-03 | Branch: init-infrastructure_
 | Startup time | <5 s in dev |
 | Log latency | Pino async transport (non-blocking) |
 | DB pool | max 20 connections per instance |
-| Rate limit default | 100 000 req / 60 s (env-tunable) |
+| Rate limit default | 300 req / 60 s (env-tunable via `THROTTLE_LIMIT` / `THROTTLE_TTL`) |
 | Node.js version | >=22 (enforced via `engines` field) |

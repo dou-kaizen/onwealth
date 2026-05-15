@@ -29,7 +29,17 @@ export function createDrizzleInstance(options: DrizzleModuleOptions): DrizzleIns
   })
 
   pool.on('error', (err: Error) => {
-    process.stderr.write(`[pg-pool] idle client error: ${err.message}\n`)
+    // NDJSON-shaped line so log aggregators (Datadog, Loki, Vector) parse
+    // it the same way they parse Pino output. Stays on stderr because no
+    // NestJS DI is available inside this non-NestJS factory.
+    const line = JSON.stringify({
+      level: 'error',
+      context: 'pg-pool',
+      msg: err.message,
+      stack: err.stack,
+      time: Date.now(),
+    })
+    process.stderr.write(`${line}\n`)
   })
 
   return { db: drizzle({ client: pool, schema }), pool }

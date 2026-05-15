@@ -85,6 +85,7 @@ function setupClsContext(cls: ClsService, request: Request): void {
  */
 function sanitizeHeaderId(raw: string | string[] | undefined): string {
   if (typeof raw !== 'string') return randomUUID()
-  if (raw.length === 0 || raw.length > MAX_HEADER_ID_LENGTH) return randomUUID()
-  return raw
+  const stripped = raw.replaceAll(/[\r\n]/g, '')
+  if (stripped.length === 0 || stripped.length > MAX_HEADER_ID_LENGTH) return randomUUID()
+  return stripped
 }

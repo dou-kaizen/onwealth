@@ -12,7 +12,7 @@ Backend platform for wealth management. Currently in the infrastructure-foundati
 | Database | PostgreSQL via Drizzle ORM + node-postgres pool |
 | Logging | Pino / nestjs-pino (JSON in prod, pino-pretty in dev) |
 | Validation | class-validator + class-transformer + Zod (env) |
-| Rate limiting | @nestjs/throttler |
+| Rate limiting | @nestjs/throttler + @nest-lab/throttler-storage-redis + ioredis (Redis-backed, cluster-safe) |
 | Build | Turborepo + pnpm 10 workspaces |
 | Linting | oxlint (single root config) + dependency-cruiser |
 | Formatting | oxfmt |
@@ -44,6 +44,7 @@ onwealth/
 - Node.js 22 (`nvm use` or `fnm use`)
 - pnpm 10.32.1 (`corepack enable && corepack prepare pnpm@10.32.1 --activate`)
 - PostgreSQL instance accessible at `DATABASE_URL`
+- Redis instance accessible at `REDIS_URL` (required at boot — throttler storage fails fast if unreachable)
 
 ### Install
 
@@ -108,6 +109,19 @@ Rules enforced: no circular deps; `@onwealth/core` is NestJS-free; `@onwealth/da
 
 `GET /health` — returns `{ data: { status, uptime, timestamp }, meta: { request_id, correlation_id, trace_id, timestamp } }`
 
+### API Documentation (env-gated via `ENABLE_SWAGGER`)
+
+Enabled by default outside production. Set `ENABLE_SWAGGER=true` to force-enable in production, `ENABLE_SWAGGER=false` to disable everywhere.
+
+| Route | Purpose |
+|---|---|
+| `GET /swagger` | Swagger UI |
+| `GET /docs` | Scalar API reference |
+| `GET /swagger-json` | OpenAPI 3 JSON |
+| `GET /openapi.yaml` | OpenAPI 3 YAML |
+
+A loose CSP is path-mounted on `/swagger` and `/docs` to allow inline assets; the rest of the app retains strict helmet defaults.
+
 All error responses use RFC 9457 `application/problem+json`. See [docs/system-architecture.md](./docs/system-architecture.md#error-response-shape-rfc-9457).
 
 ## Documentation
@@ -119,6 +133,7 @@ All error responses use RFC 9457 `application/problem+json`. See [docs/system-ar
 | [docs/code-standards.md](./docs/code-standards.md) | TypeScript rules, NestJS conventions, env vars, logging, testing |
 | [docs/codebase-summary.md](./docs/codebase-summary.md) | Package purposes, subpath exports, runtime deps, toolchain |
 | [docs/project-roadmap.md](./docs/project-roadmap.md) | Phase status and planned work |
+| [docs/project-changelog.md](./docs/project-changelog.md) | Significant changes by date |
 
 ## Branch Convention
 

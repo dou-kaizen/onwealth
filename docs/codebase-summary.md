@@ -1,6 +1,6 @@
 # Codebase Summary
 
-_Last updated: 2026-05-04 | Branch: init-infrastructure (Foundation Hardening)_
+_Last updated: 2026-05-15 | Branch: init-infrastructure (Foundation Hardening)_
 
 ## Repository Layout
 
@@ -27,6 +27,15 @@ onwealth/                          # pnpm + Turborepo monorepo
 | `@onwealth/platform` | NestJS modules + `ErrorCode` + `ProblemDetailsDto` — 12 subpath exports | No feature symbols (auth/user/bot) |
 | `@onwealth/api` | Boots NestJS app, wires middleware chain | Consumes `@onwealth/platform/*` via subpath only — never relative |
 
+## Source LOC (foundation snapshot)
+
+| Path | LOC |
+|---|---|
+| `apps/api/src` | 584 |
+| `packages/core/src` | 94 |
+| `packages/database/src` | 9 (intentionally empty schema barrel) |
+| `packages/platform/src` | 2115 |
+
 ## `@onwealth/platform` Subpath Exports
 
 | Subpath | Contents |
@@ -39,7 +48,7 @@ onwealth/                          # pnpm + Turborepo monorepo
 | `/interceptors` | `InterceptorsModule` — `TimeoutInterceptor`, `RequestContextInterceptor`, `CorrelationIdInterceptor`, `TraceContextInterceptor`, `TransformInterceptor` |
 | `/decorators` | `@UseEnvelope()` decorator |
 | `/pipes` | `createValidationPipe()` — whitelist, 422, transform |
-| `/throttler` | `ThrottlerModule` — env-driven TTL/limit |
+| `/throttler` | `ThrottlerModule` — Redis-backed (`@nest-lab/throttler-storage-redis` + `ioredis`), env-driven TTL/limit; fail-fast on boot if `REDIS_URL` unreachable |
 | `/database` | `DatabaseModule` (`forRoot()` / `forRootAsync(options)`), `DRIZZLE_TOKEN` + `POOL_TOKEN` injection tokens, `DrizzleDb` + `DrizzleInstance` types |
 | `/error-codes` | `ErrorCode` const object + union type (opaque string literals, not enum) |
 | `/problem-details` | `ProblemDetailsDto` (RFC 9457), `FieldError`, `ValidationErrorItem` |
@@ -52,7 +61,7 @@ onwealth/                          # pnpm + Turborepo monorepo
 4. Resolve `swaggerEnabled = ENABLE_SWAGGER ?? (NODE_ENV !== 'production')`
 5. `helmet()` — strict CSP global; loose CSP path-mounted on `/swagger` + `/docs` only when swagger enabled
 6. `trust proxy = 1` (single LB hop)
-7. Cluster-safety check: logs WARN if `WORKERS > 1` (in-memory throttler not safe for multi-process)
+7. Throttler uses Redis-backed storage (`REDIS_URL` required at boot; process exits if unreachable — no silent fallback to in-memory)
 8. `createValidationPipe()` (whitelist + 422 + transform + `enableImplicitConversion: false`)
 9. 5 global interceptors (bind order): `TimeoutInterceptor` → `RequestContextInterceptor` → `CorrelationIdInterceptor` → `TraceContextInterceptor` → `TransformInterceptor`; first 4 via `app.get(...)` DI, `TransformInterceptor` via `new` (needs `reflector` + `cls`)
 10. Global filters (registered LIFO — last registered runs first on exception):
@@ -92,12 +101,13 @@ Source: `apps/api/src/config/swagger.config.ts`
 | nestjs-cls | ^5.0.0 | Request-scoped storage |
 | drizzle-orm | ^0.44.7 | ORM |
 | pg | ^8.16.3 | PostgreSQL driver (node-postgres pool) |
-| postgres | ^3.4.8 | Catalog-pinned; not currently imported in source |
 | zod | ^4.0.0 | Env validation |
 | helmet | ^8.0.0 | Security headers |
 | @nestjs/throttler | ^6.4.0 | Rate limiting |
-| @nestjs/swagger | catalog | OpenAPI spec generation + Swagger UI |
-| @scalar/nestjs-api-reference | catalog | Scalar API Reference UI (`/docs`) |
+| @nest-lab/throttler-storage-redis | ^1.1.0 | Redis-backed throttler storage (cluster-safe) |
+| ioredis | ^5.4.0 | Redis client (`REDIS_URL` required at boot; fail-fast if unreachable) |
+| @nestjs/swagger | ^11.2.1 | OpenAPI spec generation + Swagger UI |
+| @scalar/nestjs-api-reference | ^1.1.4 | Scalar API Reference UI (`/docs`) |
 
 ## Toolchain
 

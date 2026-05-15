@@ -13,27 +13,31 @@
     "test": "turbo run test",
     "deps": "turbo run deps",
     "clean": "turbo run clean",
-    "depcruise:check": "depcruise packages apps --config .dependency-cruiser.cjs"
+    "depcruise:check": "depcruise packages apps --config .dependency-cruiser.cjs",
+    "prepare": "lefthook install"
   },
   "devDependencies": {
-    "@infra-x/code-quality": "^0.6.2",
+    "@infra-x/code-quality": "0.6.2",
     "dependency-cruiser": "catalog:",
+    "lefthook": "^2.1.6",
     "oxfmt": "^0.44.0",
     "oxlint": "^1.59.0",
     "turbo": "^2.9.7",
     "typescript": "^6.0.3"
   },
-  "packageManager": "pnpm@10.32.1",
   "engines": {
     "node": ">=22"
   },
+  "packageManager": "pnpm@10.32.1",
   "pnpm": {
+    "overrides": {
+      "@infra-x/code-quality": "0.6.2"
+    },
     "onlyBuiltDependencies": [
       "@nestjs/core",
-      "@scarf/scarf",
       "@swc/core",
-      "bcrypt",
-      "esbuild"
+      "esbuild",
+      "lefthook"
     ]
   }
 }

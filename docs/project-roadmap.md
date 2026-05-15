@@ -1,6 +1,6 @@
 # Project Roadmap
 
-_Last updated: 2026-05-04 | Branch: init-infrastructure_
+_Last updated: 2026-05-15 | Branch: init-infrastructure_
 
 ## Phase 1 — Infrastructure Foundation
 
@@ -19,6 +19,7 @@ _Last updated: 2026-05-04 | Branch: init-infrastructure_
 - [x] oxlint + oxfmt via `@infra-x/code-quality` presets
 - [x] `GET /health` smoke endpoint
 - [x] **Foundation Hardening** (2026-05-04): graceful shutdown, security defaults, operational tuning, error contract refinement, trace hardening, tooling correctness (6-phase pass)
+- [x] OpenAPI / Swagger documentation (Swagger UI `/swagger`, Scalar `/docs`, JSON `/swagger-json`, YAML `/openapi.yaml`; env-gated via `ENABLE_SWAGGER`)
 
 ## Phase 2 — Authentication (planned)
 
@@ -33,14 +34,18 @@ _Last updated: 2026-05-04 | Branch: init-infrastructure_
 
 - [ ] First bounded context module under `apps/api/src/modules/{context}/`
 - [ ] `@nestjs/terminus` health indicators (readiness + liveness probes)
-- [ ] Redis-backed throttler store (`REDIS_URL` env already defined)
+- [x] Redis-backed throttler store (`REDIS_URL` required at boot — shipped in init-infrastructure)
 - [ ] Event bus wiring for `DomainEvent` / `IntegrationEvent` (`@onwealth/core`)
 
-## Phase 4 — Production Readiness (planned)
+## Phase 4 — Production Readiness (partially complete)
 
 - [ ] Drizzle migrations pipeline
-- [ ] OpenAPI / Swagger documentation
-- [ ] CI/CD pipeline (GitHub Actions)
+- [x] CI `verify` job (GitHub Actions): typecheck, lint, format, test+coverage, build, split audit (prod high+ / dev critical) — landed `d848254`
+- [x] Supply chain hardening: exact-version pin `@infra-x/code-quality`, `.npmrc scarf-js=false`, `SCARF_ANALYTICS=false` + `DO_NOT_TRACK=1` env — landed `d848254`
+- [x] Coverage artifact upload in CI (no numeric threshold gate yet)
+- [ ] Numeric coverage threshold gate (deferred)
+- [ ] GitHub Actions SHA pinning (currently @v4 tags — deferred)
+- [ ] Deploy stages (staging / production)
 - [ ] Docker + docker-compose for local dev
 - [ ] Deployment guide (`docs/deployment-guide.md`)
 - [ ] Design system / API design guidelines (`docs/design-guidelines.md`)

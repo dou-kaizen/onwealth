@@ -28,13 +28,7 @@ export default defineConfig({
     }),
     vitest({ files: ['**/*.{test,spec}.ts', '**/__tests__/**/*.ts'] }),
   ],
-  ignorePatterns: [
-    '**/node_modules',
-    '**/dist',
-    '**/.turbo',
-    '**/coverage',
-    '**/*.tsbuildinfo',
-  ],
+  ignorePatterns: ['**/node_modules', '**/dist', '**/.turbo', '**/coverage', '**/*.tsbuildinfo'],
   rules: {
     // NestJS exception filter `.catch()` is not Promise.catch()
     'promise/valid-params': 'off',
@@ -69,10 +63,7 @@ export default defineConfig({
       // Platform internals cross-reference sibling subpaths (filters →
       // config, interceptors → decorators) which can't import via the
       // package's own subpath exports without circular resolution.
-      files: [
-        'packages/database/src/schemas/**/*.ts',
-        'packages/platform/src/**/*.ts',
-      ],
+      files: ['packages/database/src/schemas/**/*.ts', 'packages/platform/src/**/*.ts'],
       rules: {
         'import/no-relative-parent-imports': 'off',
       },
