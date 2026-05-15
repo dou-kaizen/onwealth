@@ -1,5 +1,5 @@
 import type { InjectionToken, ModuleMetadata } from '@nestjs/common'
-import type * as schema from '@workspace/database'
+import type * as schema from '@onwealth/database'
 import type { NodePgDatabase } from 'drizzle-orm/node-postgres'
 
 // DIP: abstract token for the Drizzle instance

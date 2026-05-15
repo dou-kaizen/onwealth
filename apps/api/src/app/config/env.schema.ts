@@ -54,28 +54,6 @@ export const envSchema = z.object({
       message: 'DB_POOL_CONNECTION_TIMEOUT must be at least 1000ms',
     }),
 
-  // JWT configuration
-  JWT_SECRET: z
-    .string()
-    .min(32, {
-      message: 'JWT_SECRET must be at least 32 characters long (use a randomly generated key)',
-    })
-    .default('your-secret-key-change-me-in-production-min-32-chars'),
-
-  JWT_EXPIRES_IN: z
-    .string()
-    .default('15m')
-    .refine((value) => /^\d+[smhd]$/.test(value), {
-      message: 'JWT_EXPIRES_IN format is invalid (e.g. 60s, 15m, 2h, 7d)',
-    }),
-
-  JWT_REFRESH_EXPIRES_IN: z
-    .string()
-    .default('7d')
-    .refine((value) => /^\d+[smhd]$/.test(value), {
-      message: 'JWT_REFRESH_EXPIRES_IN format is invalid (e.g. 60s, 15m, 2h, 7d)',
-    }),
-
   // CORS configuration
   ALLOWED_ORIGINS: z
     .string()
@@ -105,14 +83,6 @@ export const envSchema = z.object({
 
   // API base URL (used as the type URI for RFC 9457 Problem Details)
   API_BASE_URL: z.url().default('https://api.example.com'),
-
-  // OAuth configuration (optional; OAuth login is disabled when not set)
-  GOOGLE_CLIENT_ID: z.string().optional(),
-  GOOGLE_CLIENT_SECRET: z.string().optional(),
-  GITHUB_CLIENT_ID: z.string().optional(),
-  GITHUB_CLIENT_SECRET: z.string().optional(),
-  OAUTH_CALLBACK_BASE_URL: z.url().default('http://localhost:3000/api/auth/oauth'),
-  FRONTEND_URL: z.url().default('http://localhost:3001'),
 
   // Rate limiting configuration (tighten in production; no limit if unset in local/CI)
   THROTTLE_TTL: z

@@ -30,9 +30,6 @@ async function bootstrap() {
   // Use nestjs-pino Logger
   app.useLogger(app.get(Logger))
 
-  // Static file serving for uploaded files
-  app.useStaticAssets('./uploads', { prefix: '/uploads' })
-
   // CORS configuration
   const configService = app.get<ConfigService<Env, true>>(ConfigService)
   const allowedOrigins = configService.get('ALLOWED_ORIGINS', { infer: true })

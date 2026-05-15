@@ -17,9 +17,6 @@ const APPROVED_GLOBAL_MODULES = new Set([
   'src/app/database/db.module.ts',
   'src/app/events/domain-events.module.ts',
   'src/modules/cache/cache.module.ts',
-  'src/modules/audit-log/audit-log.module.ts',
-  'src/modules/auth/auth.module.ts',
-  'src/modules/identity/identity.module.ts',
 ])
 
 const SRC_ROOT = path.resolve(import.meta.dirname, '../../../')

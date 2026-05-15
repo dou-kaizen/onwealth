@@ -44,10 +44,10 @@ export default {
       name: 'service-no-database-runtime',
       severity: 'error',
       comment:
-        'Services must not runtime-import @workspace/database. Go through repository ports instead. Type-only imports are allowed.',
+        'Services must not runtime-import @onwealth/database. Go through repository ports instead. Type-only imports are allowed.',
       from: { path: '^src/modules/[^/]+/application/services/' },
       to: {
-        path: '^@workspace/database',
+        path: '^@onwealth/database',
         dependencyTypesNot: ['type-only'],
       },
     },
@@ -68,7 +68,7 @@ export default {
       comment:
         'Presentation layer must not access the database directly. Go through application services.',
       from: { path: '^src/modules/[^/]+/presentation/' },
-      to: { path: '^(@workspace/database|drizzle-orm|pg|postgres)($|/)' },
+      to: { path: '^(@onwealth/database|drizzle-orm|pg|postgres)($|/)' },
     },
   ],
   options: {

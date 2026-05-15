@@ -1,4 +1,4 @@
-import * as schema from '@workspace/database'
+import * as schema from '@onwealth/database'
 import { drizzle } from 'drizzle-orm/node-postgres'
 import { Pool } from 'pg'
 
