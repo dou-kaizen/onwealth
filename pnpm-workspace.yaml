@@ -33,7 +33,7 @@ catalog:
   ioredis: ^5.4.0
   '@nest-lab/throttler-storage-redis': ^1.1.0
   # Database
-  drizzle-orm: ^0.44.7
+  drizzle-orm: ^0.45.2
   pg: ^8.16.3
   # Runtime util
   reflect-metadata: ^0.2.2
