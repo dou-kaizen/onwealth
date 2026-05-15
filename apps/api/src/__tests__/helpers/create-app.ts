@@ -2,6 +2,7 @@ import type { INestApplication, Type } from '@nestjs/common'
 import { RequestMethod } from '@nestjs/common'
 import { Reflector } from '@nestjs/core'
 import { Test } from '@nestjs/testing'
+import { createCorsConfig } from '@/app/config/security.config'
 import { createValidationPipe } from '@/app/config/validation.config'
 import { AllExceptionsFilter } from '@/app/filters/all-exceptions.filter'
 import { ProblemDetailsFilter } from '@/app/filters/problem-details.filter'
@@ -29,12 +30,16 @@ export async function createTestApp(options: CreateTestAppOptions = {}): Promise
   const moduleFixture = await builder.compile()
   const app = moduleFixture.createNestApplication()
 
+  app.enableCors(createCorsConfig(['http://localhost:3000']))
+
   app.setGlobalPrefix('api', {
     exclude: [
       { path: '.well-known', method: RequestMethod.ALL },
       { path: '.well-known/{*path}', method: RequestMethod.ALL },
       { path: 'health', method: RequestMethod.ALL },
       { path: 'health/{*path}', method: RequestMethod.ALL },
+      { path: 'livez', method: RequestMethod.ALL },
+      { path: 'readyz', method: RequestMethod.ALL },
     ],
   })
 
