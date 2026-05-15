@@ -85,7 +85,7 @@ export class ETagMiddleware implements NestMiddleware {
 
     // Set Cache-Control header (adjust as needed)
     if (!res.getHeader('Cache-Control')) {
-      res.setHeader('Cache-Control', 'max-age=3600') // 1 hour
+      res.setHeader('Cache-Control', 'private, max-age=3600') // private: CDN must not cache user-specific responses
     }
 
     // Check If-None-Match header

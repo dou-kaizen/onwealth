@@ -1,6 +1,7 @@
-import { Controller, Get, ServiceUnavailableException } from '@nestjs/common'
+import { Controller, Get, Header, ServiceUnavailableException } from '@nestjs/common'
 import { ConfigService } from '@nestjs/config'
 import { ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger'
+import type { HealthIndicatorFunction } from '@nestjs/terminus'
 import {
   DiskHealthIndicator,
   HealthCheck,
@@ -16,12 +17,27 @@ import { Public } from '@/shared-kernel/infrastructure/decorators/public.decorat
 type HealthEntry = { status: 'up' | 'down'; message: string }
 
 /**
- * Health check controller
+ * Health check controller — three probe endpoints following k8s / Spring Boot Actuator conventions.
+ *
+ * /livez   — liveness probe:  "is the process alive?" — memory only, NO external deps.
+ *             Fail = container restart. Never check DB/Redis here — a DB hiccup would
+ *             restart all pods simultaneously.
+ *
+ * /readyz  — readiness probe: "is the app ready to serve traffic?" — DB + Redis.
+ *             Fail = remove from LB pool (no restart). Suitable for drain control.
+ *
+ * /health  — full detail for ops dashboards & monitoring scrape.
+ *             Sanitized responses — never leaks raw infra error messages.
+ *
+ * All three endpoints are:
+ *   - @Public()      — k8s/LB probes cannot send Bearer tokens
+ *   - @SkipThrottle() — probe traffic must not consume rate-limit quota
+ *   - Cache-Control: no-store — stale health responses must never be served from cache
  */
 @Public()
-@Controller('health')
+@Controller()
 @ApiTags('health')
-@SkipThrottle() // Health check endpoints are not rate-limited
+@SkipThrottle()
 export class HealthController {
   constructor(
     private readonly health: HealthCheckService,
@@ -32,11 +48,54 @@ export class HealthController {
     private readonly config: ConfigService<Env, true>,
   ) {}
 
-  @Get()
+  /**
+   * Liveness probe — "is the process alive?"
+   *
+   * Checks heap memory only (300 MB threshold — generous to avoid spurious restarts
+   * during warm cache / GC pressure). NO external deps.
+   * Suitable for: k8s livenessProbe, AWS ALB health check, Fly.io health check.
+   */
+  @Get('livez')
   @HealthCheck()
+  @Header('Cache-Control', 'no-store')
+  @ApiOperation({ summary: 'Liveness probe (memory only, no external deps)' })
+  @ApiResponse({ status: 200, description: 'Process is alive' })
+  @ApiResponse({ status: 503, description: 'Process memory exceeded threshold' })
+  async liveness() {
+    return this.runChecks([() => this.memory.checkHeap('memory_heap', 300 * 1024 * 1024)])
+  }
+
+  /**
+   * Readiness probe — "is the app ready to serve traffic?"
+   *
+   * Checks DB + Redis. Fail = drop from LB pool (no restart).
+   * Suitable for: k8s readinessProbe, LB membership, drain control before deploy.
+   */
+  @Get('readyz')
+  @HealthCheck()
+  @Header('Cache-Control', 'no-store')
+  @ApiOperation({ summary: 'Readiness probe (DB + Redis)' })
+  @ApiResponse({ status: 200, description: 'All critical dependencies are healthy' })
+  @ApiResponse({ status: 503, description: 'One or more critical dependencies are unhealthy' })
+  async readiness() {
+    return this.runChecks([
+      () => this.drizzle.isHealthy('database'),
+      () => this.redis.isHealthy('redis'),
+    ])
+  }
+
+  /**
+   * Full detail — for ops dashboards & monitoring scrape.
+   *
+   * Checks DB + Redis + heap + RSS + disk. Sanitized: never returns raw
+   * infra error messages. Suitable for uptime monitoring, Grafana, Datadog.
+   */
+  @Get('health')
+  @HealthCheck()
+  @Header('Cache-Control', 'no-store')
   @ApiOperation({
     summary: 'Full health check',
-    description: 'Checks database, memory, and disk health for production monitoring',
+    description: 'Checks database, Redis, memory, and disk health for production monitoring',
   })
   @ApiResponse({
     status: 200,
@@ -57,43 +116,33 @@ export class HealthController {
     description: 'One or more components are unhealthy',
     schema: {
       example: {
-        type: 'https://api.example.com/errors/service-unavailable',
-        title: 'Service Unavailable',
-        status: 503,
-        instance: '/health',
-        request_id: 'req_abc123',
-        timestamp: '2024-11-03T10:30:00Z',
-        errors: [
-          {
-            code: 'DATABASE_UNAVAILABLE',
-            message: 'database: Connection refused',
-          },
-        ],
+        environment: 'production',
+        message: 'One or more components unhealthy',
       },
     },
   })
-  async check() {
+  async detailed() {
+    return this.runChecks([
+      () => this.drizzle.isHealthy('database'),
+      () => this.redis.isHealthy('redis'),
+      () => this.memory.checkHeap('memory_heap', 150 * 1024 * 1024),
+      () => this.memory.checkRSS('memory_rss', 300 * 1024 * 1024),
+      () => this.disk.checkStorage('storage', { path: '/', thresholdPercent: 0.9 }),
+    ])
+  }
+
+  /**
+   * Shared check runner — builds a sanitized response from HealthCheckService.
+   *
+   * On success: returns per-component entries with environment tag.
+   * On failure: throws ServiceUnavailableException with a STATIC aggregate
+   *   message ('One or more components unhealthy') — never leaks per-component
+   *   raw error messages to unauthenticated callers.
+   */
+  private async runChecks(checks: HealthIndicatorFunction[]) {
     try {
-      const result = await this.health.check([
-        // Database health check
-        () => this.drizzle.isHealthy('database'),
+      const result = await this.health.check(checks)
 
-        // Redis health check
-        () => this.redis.isHealthy('redis'),
-
-        // Memory health check (heap must not exceed 150 MB)
-        () => this.memory.checkHeap('memory_heap', 150 * 1024 * 1024),
-
-        // Memory health check (RSS must not exceed 300 MB)
-        () => this.memory.checkRSS('memory_rss', 300 * 1024 * 1024),
-
-        // Disk health check (disk usage must not exceed 90%)
-        () =>
-          this.disk.checkStorage('storage', {
-            path: '/',
-            thresholdPercent: 0.9,
-          }),
-      ])
       const defaultMessages: Record<string, string> = {
         memory_heap: 'Heap memory usage is within threshold',
         memory_rss: 'RSS memory usage is within threshold',
@@ -109,39 +158,14 @@ export class HealthController {
       }
 
       const environment: Env['NODE_ENV'] = this.config.get('NODE_ENV')
-
-      return {
-        environment,
-        ...details,
-      }
+      return { environment, ...details }
     } catch (error) {
       if (error instanceof ServiceUnavailableException) {
-        const response = error.getResponse() as Record<string, unknown>
-        const detail = this.formatHealthCheckErrors(response.error)
-        throw new ServiceUnavailableException(detail)
+        // Static aggregate message — no per-component concatenation that could
+        // surface raw infra error strings to unauthenticated callers.
+        throw new ServiceUnavailableException('One or more components unhealthy')
       }
       throw error
     }
-  }
-
-  /**
-   * Format health check errors into a detail string
-   */
-  private formatHealthCheckErrors(errors: unknown): string {
-    if (typeof errors !== 'object' || errors === null) {
-      return 'Health check failed'
-    }
-
-    const details: string[] = []
-    for (const [key, value] of Object.entries(errors)) {
-      if (typeof value === 'object' && value !== null) {
-        const info = value as Record<string, unknown>
-        const rawMessage = info.message ?? info.error ?? 'check failed'
-        const message = typeof rawMessage === 'string' ? rawMessage : JSON.stringify(rawMessage)
-        details.push(`${key}: ${message}`)
-      }
-    }
-
-    return details.length > 0 ? details.join('; ') : 'Health check failed'
   }
 }

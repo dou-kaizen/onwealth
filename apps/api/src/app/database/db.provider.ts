@@ -2,15 +2,23 @@ import * as schema from '@onwealth/database'
 import { drizzle } from 'drizzle-orm/node-postgres'
 import { Pool } from 'pg'
 
-import type { DrizzleModuleOptions } from './db.port.js'
+import type { DrizzleDb, DrizzleModuleOptions } from './db.port.js'
 
 /**
- * Creates a Drizzle database instance.
+ * Creates a Drizzle database instance alongside the underlying pg Pool.
  *
- * Uses the node-postgres connection pool for connection management.
- * Uses the Drizzle relations syntax to support relational queries.
+ * Returns both db and pool so DrizzleService can manage pool lifecycle
+ * (drain on SIGTERM via OnModuleDestroy).
+ *
+ * Statement-level timeouts are NOT set here via pool.on('connect') — that
+ * pattern silently breaks under PgBouncer transaction mode. Role-level
+ * timeouts are enforced via packages/database/sql/00-init-role-timeouts.sql
+ * (run once per environment before first migration).
  */
-export function createDrizzleInstance(options: DrizzleModuleOptions) {
+export function createDrizzleInstance(options: DrizzleModuleOptions): {
+  db: DrizzleDb
+  pool: Pool
+} {
   const pool = new Pool({
     connectionString: options.connectionString,
     max: options.pool?.max ?? 10,
@@ -24,5 +32,6 @@ export function createDrizzleInstance(options: DrizzleModuleOptions) {
     console.error('[pg-pool] Unexpected idle client error:', err.message)
   })
 
-  return drizzle({ client: pool, schema })
+  const db = drizzle({ client: pool, schema })
+  return { db, pool }
 }

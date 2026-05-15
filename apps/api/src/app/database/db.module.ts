@@ -6,13 +6,18 @@ import type { Env } from '@/app/config/env.schema'
 import type { DrizzleAsyncOptions } from './db.port.js'
 import { DB_TOKEN } from './db.port.js'
 import { createDrizzleInstance } from './db.provider.js'
+import { DrizzleService } from './drizzle.service.js'
 
 /**
  * Drizzle database module
  *
- * Uses the Dynamic Module pattern, similar to @nestjs/typeorm
+ * Uses the Dynamic Module pattern, similar to @nestjs/typeorm.
  * - forRoot(): configure with the default ConfigService
  * - forRootAsync(): configure with a custom factory function
+ *
+ * Wiring strategy: a single DrizzleService factory holds both db and pool.
+ * DB_TOKEN is aliased to service.db so existing @Inject(DB_TOKEN) consumers
+ * remain unchanged. DrizzleService.onModuleDestroy() drains the pool on SIGTERM.
  */
 @Global() // @global-approved: 数据库连接，所有 context 的 repository 都依赖
 @Module({})
@@ -26,28 +31,31 @@ export class DrizzleModule {
       module: DrizzleModule,
       providers: [
         {
-          provide: DB_TOKEN,
+          provide: DrizzleService,
           inject: [ConfigService],
-          useFactory: (configService: ConfigService<Env, true>) => {
-            return createDrizzleInstance({
-              connectionString: configService.get('DATABASE_URL', {
-                infer: true,
-              }),
+          useFactory: (configService: ConfigService<Env, true>): DrizzleService => {
+            const { db, pool } = createDrizzleInstance({
+              connectionString: configService.get('DATABASE_URL', { infer: true }),
               pool: {
                 max: configService.get('DB_POOL_MAX', { infer: true }),
                 min: configService.get('DB_POOL_MIN', { infer: true }),
-                idleTimeoutMillis: configService.get('DB_POOL_IDLE_TIMEOUT', {
-                  infer: true,
-                }),
+                idleTimeoutMillis: configService.get('DB_POOL_IDLE_TIMEOUT', { infer: true }),
                 connectionTimeoutMillis: configService.get('DB_POOL_CONNECTION_TIMEOUT', {
                   infer: true,
                 }),
               },
             })
+            return new DrizzleService(db, pool)
           },
         },
+        // DB_TOKEN aliases to DrizzleService.db so all @Inject(DB_TOKEN) consumers work unchanged.
+        {
+          provide: DB_TOKEN,
+          inject: [DrizzleService],
+          useFactory: (service: DrizzleService) => service.db,
+        },
       ],
-      exports: [DB_TOKEN],
+      exports: [DB_TOKEN, DrizzleService],
     }
   }
 
@@ -71,15 +79,21 @@ export class DrizzleModule {
       imports: options.imports ?? [],
       providers: [
         {
-          provide: DB_TOKEN,
+          provide: DrizzleService,
           inject: options.inject ?? [],
-          useFactory: async (...args: unknown[]) => {
+          useFactory: async (...args: unknown[]): Promise<DrizzleService> => {
             const moduleOptions = await options.useFactory(...args)
-            return createDrizzleInstance(moduleOptions)
+            const { db, pool } = createDrizzleInstance(moduleOptions)
+            return new DrizzleService(db, pool)
           },
         },
+        {
+          provide: DB_TOKEN,
+          inject: [DrizzleService],
+          useFactory: (service: DrizzleService) => service.db,
+        },
       ],
-      exports: [DB_TOKEN],
+      exports: [DB_TOKEN, DrizzleService],
     }
   }
 }

@@ -2,6 +2,8 @@ import { RequestMethod } from '@nestjs/common'
 import { ConfigService } from '@nestjs/config'
 import { NestFactory, Reflector } from '@nestjs/core'
 import type { NestExpressApplication } from '@nestjs/platform-express'
+import express from 'express'
+import helmet from 'helmet'
 import { Logger } from 'nestjs-pino'
 import type { Env } from '@/app/config/env.schema'
 import { createCorsConfig } from '@/app/config/security.config'
@@ -27,6 +29,16 @@ async function bootstrap() {
   // Use nestjs-pino Logger
   app.useLogger(app.get(Logger))
 
+  // Security hardening: Helmet (adds HSTS, X-Content-Type-Options, X-Frame-Options, etc.)
+  // CSP + COEP disabled — JSON API, no HTML served; COEP not needed for APIs.
+  app.use(helmet({ contentSecurityPolicy: false, crossOriginEmbedderPolicy: false }))
+
+  // Trust the first proxy hop so ThrottlerGuard rates by real client IP, not LB IP.
+  app.set('trust proxy', 1)
+
+  // Explicit body limit — prevents payload amplification attacks.
+  app.use(express.json({ limit: '100kb' }))
+
   // CORS configuration
   const configService = app.get<ConfigService<Env, true>>(ConfigService)
   const allowedOrigins = configService.get('ALLOWED_ORIGINS', { infer: true })
@@ -38,9 +50,11 @@ async function bootstrap() {
       // Exclude Swagger well-known endpoints
       { path: '.well-known', method: RequestMethod.ALL },
       { path: '.well-known/{*path}', method: RequestMethod.ALL },
-      // Exclude health check endpoints
+      // Exclude health / liveness / readiness probe endpoints (no /api prefix)
       { path: 'health', method: RequestMethod.ALL },
       { path: 'health/{*path}', method: RequestMethod.ALL },
+      { path: 'livez', method: RequestMethod.ALL },
+      { path: 'readyz', method: RequestMethod.ALL },
     ],
   })
 

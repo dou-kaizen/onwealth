@@ -80,6 +80,9 @@ importers:
       drizzle-orm:
         specifier: 0.44.7
         version: 0.44.7(@opentelemetry/api@1.9.0)(@types/pg@8.15.6)(pg@8.16.3)(postgres@3.4.8)
+      helmet:
+        specifier: ^8.1.0
+        version: 8.1.0
       keyv:
         specifier: ^5.6.0
         version: 5.6.0
@@ -3282,6 +3285,10 @@ packages:
 
   headers-polyfill@4.0.3:
     resolution: {integrity: sha512-IScLbePpkvO846sIwOtOTDjutRMWdXdJmXdMvk6gCBHxFO8d+QKOQedyZSxFTTFYRSmlgSTDtXqqq4pcenBXLQ==}
+
+  helmet@8.1.0:
+    resolution: {integrity: sha512-jOiHyAZsmnr8LqoPGmCjYAaiuWwjAPLgY8ZX2XrmHawt99/u1y6RgrZMTeoPfpUbV96HOalYgz1qzkRbw54Pmg==}
+    engines: {node: '>=18.0.0'}
 
   help-me@5.0.0:
     resolution: {integrity: sha512-7xgomUX6ADmcYzFik0HzAxh/73YlKR9bmFzf51CZwR+b6YtzU2m0u49hQCqV6SvlqIqsaxovfwdvbnsw3b/zpg==}
@@ -7510,6 +7517,8 @@ snapshots:
 
   headers-polyfill@4.0.3:
     optional: true
+
+  helmet@8.1.0: {}
 
   help-me@5.0.0: {}
 
