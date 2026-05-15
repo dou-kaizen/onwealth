@@ -1,6 +1,6 @@
 # Project Roadmap
 
-_Last updated: 2026-05-04 | Branch: init-infrastructure_
+_Last updated: 2026-05-15 | Branch: init-infrastructure_
 
 ## Phase 1 — Infrastructure Foundation
 
@@ -19,6 +19,7 @@ _Last updated: 2026-05-04 | Branch: init-infrastructure_
 - [x] oxlint + oxfmt via `@infra-x/code-quality` presets
 - [x] `GET /health` smoke endpoint
 - [x] **Foundation Hardening** (2026-05-04): graceful shutdown, security defaults, operational tuning, error contract refinement, trace hardening, tooling correctness (6-phase pass)
+- [x] OpenAPI / Swagger documentation (Swagger UI `/swagger`, Scalar `/docs`, JSON `/swagger-json`, YAML `/openapi.yaml`; env-gated via `ENABLE_SWAGGER`)
 
 ## Phase 2 — Authentication (planned)
 
@@ -39,7 +40,6 @@ _Last updated: 2026-05-04 | Branch: init-infrastructure_
 ## Phase 4 — Production Readiness (planned)
 
 - [ ] Drizzle migrations pipeline
-- [ ] OpenAPI / Swagger documentation
 - [ ] CI/CD pipeline (GitHub Actions)
 - [ ] Docker + docker-compose for local dev
 - [ ] Deployment guide (`docs/deployment-guide.md`)

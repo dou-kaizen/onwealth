@@ -90,12 +90,20 @@ export class ProblemDetailsDto {
   @ApiProperty({ required: false, description: 'ISO-8601 occurrence time' })
   timestamp?: string
 
-  @ApiProperty({ required: false, description: 'Machine-readable code', example: 'VALIDATION_FAILED' })
+  @ApiProperty({
+    required: false,
+    description: 'Machine-readable code',
+    example: 'VALIDATION_FAILED',
+  })
   code?: string
 
   @ApiProperty({ required: false, description: 'Human-readable description for this occurrence' })
   detail?: string
 
-  @ApiProperty({ required: false, type: [FieldError], description: 'Field-level error details (validation only)' })
+  @ApiProperty({
+    required: false,
+    type: [FieldError],
+    description: 'Field-level error details (validation only)',
+  })
   errors?: FieldError[]
 }

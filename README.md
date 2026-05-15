@@ -108,6 +108,19 @@ Rules enforced: no circular deps; `@onwealth/core` is NestJS-free; `@onwealth/da
 
 `GET /health` — returns `{ data: { status, uptime, timestamp }, meta: { request_id, correlation_id, trace_id, timestamp } }`
 
+### API Documentation (env-gated via `ENABLE_SWAGGER`)
+
+Enabled by default outside production. Set `ENABLE_SWAGGER=true` to force-enable in production, `ENABLE_SWAGGER=false` to disable everywhere.
+
+| Route | Purpose |
+|---|---|
+| `GET /swagger` | Swagger UI |
+| `GET /docs` | Scalar API reference |
+| `GET /swagger-json` | OpenAPI 3 JSON |
+| `GET /openapi.yaml` | OpenAPI 3 YAML |
+
+A loose CSP is path-mounted on `/swagger` and `/docs` to allow inline assets; the rest of the app retains strict helmet defaults.
+
 All error responses use RFC 9457 `application/problem+json`. See [docs/system-architecture.md](./docs/system-architecture.md#error-response-shape-rfc-9457).
 
 ## Documentation

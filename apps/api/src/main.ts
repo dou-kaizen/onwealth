@@ -21,8 +21,8 @@ import { Logger } from 'nestjs-pino'
 import { ApiModule } from './api.module'
 import { setupSwagger } from './config/swagger.config'
 
-import type { Env } from '@onwealth/platform/config'
 import type { NestExpressApplication } from '@nestjs/platform-express'
+import type { Env } from '@onwealth/platform/config'
 
 /**
  * Bootstrap order (each step depends on prior):

@@ -75,10 +75,7 @@ function addDefaultErrorResponses(document: OpenAPIObject): void {
  * openapi-typescript) generate clients with the correct base regardless
  * of which environment serves the spec.
  */
-export function setupSwagger(
-  app: INestApplication,
-  configService: ConfigService<Env, true>,
-): void {
+export function setupSwagger(app: INestApplication, configService: ConfigService<Env, true>): void {
   const apiBaseUrl = configService.get('API_BASE_URL', { infer: true })
   const nodeEnv = configService.get('NODE_ENV', { infer: true })
 

@@ -1,6 +1,6 @@
 # System Architecture
 
-_Last updated: 2026-05-04 | Branch: init-infrastructure (Foundation Hardening)_
+_Last updated: 2026-05-15 | Branch: init-infrastructure (Foundation Hardening)_
 
 ## Overview
 

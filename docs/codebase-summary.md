@@ -1,6 +1,6 @@
 # Codebase Summary
 
-_Last updated: 2026-05-04 | Branch: init-infrastructure (Foundation Hardening)_
+_Last updated: 2026-05-15 | Branch: init-infrastructure (Foundation Hardening)_
 
 ## Repository Layout
 
@@ -26,6 +26,15 @@ onwealth/                          # pnpm + Turborepo monorepo
 | `@onwealth/database` | Drizzle schema barrel (`packages/database/src/schemas/index.ts`) | No `@nestjs/*`; empty in foundation phase |
 | `@onwealth/platform` | NestJS modules + `ErrorCode` + `ProblemDetailsDto` — 12 subpath exports | No feature symbols (auth/user/bot) |
 | `@onwealth/api` | Boots NestJS app, wires middleware chain | Consumes `@onwealth/platform/*` via subpath only — never relative |
+
+## Source LOC (foundation snapshot)
+
+| Path | LOC |
+|---|---|
+| `apps/api/src` | 584 |
+| `packages/core/src` | 94 |
+| `packages/database/src` | 9 (intentionally empty schema barrel) |
+| `packages/platform/src` | 1904 |
 
 ## `@onwealth/platform` Subpath Exports
 
@@ -92,7 +101,6 @@ Source: `apps/api/src/config/swagger.config.ts`
 | nestjs-cls | ^5.0.0 | Request-scoped storage |
 | drizzle-orm | ^0.44.7 | ORM |
 | pg | ^8.16.3 | PostgreSQL driver (node-postgres pool) |
-| postgres | ^3.4.8 | Catalog-pinned; not currently imported in source |
 | zod | ^4.0.0 | Env validation |
 | helmet | ^8.0.0 | Security headers |
 | @nestjs/throttler | ^6.4.0 | Rate limiting |

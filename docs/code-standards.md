@@ -162,7 +162,7 @@ Run `pnpm depcruise:check` before pushing. It is also part of `pnpm lint`.
 
 Adding new packages: update `.dependency-cruiser.cjs` rules if the package has layer restrictions.
 
-`core-no-runtime-libs` banlist includes: `ioredis | pino | bcrypt | drizzle-orm | pg | postgres | zod | class-validator | class-transformer`. Core must stay validation/serialization-agnostic.
+`core-no-runtime-libs` banlist includes: `ioredis | pino | bcrypt | drizzle-orm | pg | zod | class-validator | class-transformer`. Core must stay validation/serialization-agnostic.
 
 ## Testing
 

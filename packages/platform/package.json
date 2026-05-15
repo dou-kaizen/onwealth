@@ -82,7 +82,6 @@
     "pg": "catalog:",
     "pino": "catalog:",
     "pino-http": "catalog:",
-    "postgres": "catalog:",
     "reflect-metadata": "catalog:",
     "rxjs": "catalog:",
     "zod": "catalog:"
