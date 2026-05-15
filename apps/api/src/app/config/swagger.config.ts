@@ -37,7 +37,7 @@ function addDefaultErrorResponses(document: OpenAPIObject): void {
     const pathItem = document.paths[path]
     if (!pathItem) continue
 
-    for (const method in pathItem) {
+    for (const method of Object.keys(pathItem ?? {})) {
       // Skip non-HTTP method properties (e.g. parameters, servers)
       if (!['get', 'post', 'put', 'patch', 'delete', 'options', 'head'].includes(method)) {
         continue
@@ -86,6 +86,8 @@ export function setupSwagger(app: INestApplication): void {
     .build()
 
   const document = SwaggerModule.createDocument(app, config, {
+    // Empty `include` paired with `deepScanRoutes: true` makes SwaggerModule
+    // walk every registered module rather than filter to an allowlist.
     include: [],
     deepScanRoutes: true,
     extraModels: [ProblemDetailsDto],

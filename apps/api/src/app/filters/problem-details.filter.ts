@@ -9,6 +9,7 @@ import type {
   ProblemDetailsDto,
 } from '@/shared-kernel/infrastructure/dtos/problem-details.dto'
 import type { ValidationErrorItem } from '@/shared-kernel/infrastructure/types/validation-error'
+import { flattenValidationErrors } from '@/shared-kernel/infrastructure/types/validation-error'
 
 /**
  * RFC 9457 Problem Details exception filter
@@ -90,11 +91,16 @@ export class ProblemDetailsFilter implements ExceptionFilter {
   /**
    * Generate the problem type URI
    *
-   * RFC 9457 §3.1.1: the type field should be a URI, ideally dereferenceable to human-readable documentation
+   * RFC 9457 §3.1.1: the type field should be a URI, ideally dereferenceable to human-readable documentation.
+   * §4.1 reserves "about:blank" as the default when no canonical type URI is known — used
+   * for statuses outside the mapped allowlist so we never invent a fake /errors/unknown-error doc.
    */
   private getTypeUri(status: number): string {
-    const baseUrl = this.configService.get('API_BASE_URL', { infer: true })
     const errorType = this.getErrorType(status)
+    if (errorType === 'about:blank') {
+      return 'about:blank'
+    }
+    const baseUrl = this.configService.get('API_BASE_URL', { infer: true })
     return `${baseUrl}/errors/${errorType}`
   }
 
@@ -116,7 +122,7 @@ export class ProblemDetailsFilter implements ExceptionFilter {
       504: 'gateway-timeout',
     }
 
-    return typeMap[status] ?? 'unknown-error'
+    return typeMap[status] ?? 'about:blank'
   }
 
   /**
@@ -198,49 +204,44 @@ export class ProblemDetailsFilter implements ExceptionFilter {
     exceptionResponse: string | Record<string, unknown>,
   ): FieldError[] | undefined {
     if (
-      typeof exceptionResponse === 'object' &&
-      'message' in exceptionResponse &&
-      Array.isArray(exceptionResponse.message)
+      typeof exceptionResponse !== 'object' ||
+      !('message' in exceptionResponse) ||
+      !Array.isArray(exceptionResponse.message)
     ) {
-      const errors: FieldError[] = []
-
-      // Iterate over each validation error (may be a string or ValidationError object)
-      for (const item of exceptionResponse.message) {
-        if (typeof item === 'string') {
-          // Legacy format: array of strings (e.g. ["email must be an email"])
-          const parts = item.split(' ')
-          const field = parts[0] ?? 'unknown'
-
-          errors.push({
-            field,
-            pointer: `/${field}`,
-            code: 'VALIDATION_ERROR',
-            message: item,
-          })
-        } else if (this.isValidationErrorItem(item)) {
-          // New format: array of ValidationError objects
-          // { property: 'email', constraints: { isEmail: '...' }, contexts: { isEmail: { code: 'INVALID_EMAIL' } } }
-          const field = item.property
-          const constraints = item.constraints ?? {}
-          const contexts = item.contexts ?? {}
-
-          // Generate one field error per constraint
-          for (const [constraintName, message] of Object.entries(constraints)) {
-            const contextCode = contexts[constraintName]?.code
-            errors.push({
-              field,
-              pointer: `/${field}`,
-              code: contextCode ?? 'VALIDATION_ERROR',
-              message,
-            })
-          }
-        }
-      }
-
-      return errors.length > 0 ? errors : undefined
+      return undefined
     }
 
-    return undefined
+    const errors: FieldError[] = []
+    const structuredItems: ValidationErrorItem[] = []
+
+    for (const item of exceptionResponse.message) {
+      if (typeof item === 'string') {
+        // Legacy string form (e.g. "email must be an email") — no nesting possible.
+        const parts = item.split(' ')
+        const field = parts[0] ?? 'unknown'
+        errors.push({
+          field,
+          pointer: `/${field}`,
+          code: 'VALIDATION_ERROR',
+          message: item,
+        })
+      } else if (this.isValidationErrorItem(item)) {
+        structuredItems.push(item)
+      }
+    }
+
+    // Flatten the structured tree so nested DTOs (e.g. address.street.zip) produce
+    // dotted property paths instead of being dropped on the top-level scan.
+    for (const flat of flattenValidationErrors(structuredItems)) {
+      errors.push({
+        field: flat.property,
+        pointer: `/${flat.property.replaceAll('.', '/')}`,
+        code: flat.code ?? 'VALIDATION_ERROR',
+        message: flat.message,
+      })
+    }
+
+    return errors.length > 0 ? errors : undefined
   }
 
   /**

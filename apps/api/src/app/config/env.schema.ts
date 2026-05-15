@@ -11,13 +11,14 @@ export const envSchema = z
     // Application environment
     NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
 
-    // Application port
+    // Application port — restricted to unprivileged range (1024–65535).
+    // Binding to ports <1024 needs root on POSIX and is almost never what the app wants.
     PORT: z
       .string()
       .default('3000')
       .transform((value) => Number.parseInt(value, 10))
-      .refine((value) => value > 0 && value < 65_536, {
-        message: 'PORT must be between 1 and 65535',
+      .refine((value) => value >= 1024 && value < 65_536, {
+        message: 'PORT must be between 1024 and 65535',
       }),
 
     // Database connection string — REQUIRED, no default to prevent silent wrong-DB connections
