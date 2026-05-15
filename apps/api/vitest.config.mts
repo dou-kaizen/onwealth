@@ -13,7 +13,21 @@ export default defineConfig({
       reporter: ['text', 'json', 'html'],
       reportsDirectory: './coverage',
       include: ['src/**/*.ts'],
-      exclude: ['**/*.spec.ts', '**/*.e2e-spec.ts', '**/index.ts', '**/*.module.ts'],
+      exclude: [
+        '**/*.spec.ts',
+        '**/*.e2e-spec.ts',
+        '**/index.ts',
+        '**/*.module.ts',
+        'src/__tests__/**', // exclude test helpers/setup from denominator
+      ],
+      thresholds: {
+        // TODO: raise thresholds (lines: 80, branches: 70, functions: 80, statements: 80)
+        // as test suite grows beyond infrastructure bootstrapping specs.
+        lines: 0,
+        branches: 0,
+        functions: 0,
+        statements: 0,
+      },
     },
   },
   plugins: [
