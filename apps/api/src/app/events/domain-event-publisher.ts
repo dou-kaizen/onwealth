@@ -15,10 +15,12 @@ export class DomainEventPublisher {
 
   async publishEventsForAggregate(aggregate: BaseAggregateRoot): Promise<void> {
     const events = aggregate.getDomainEvents()
+    // at-most-once semantics: clear before publish so partial failure does not re-publish
+    // succeeded events on the next call. Re-evaluate if outbox/retry pattern is introduced.
+    aggregate.clearDomainEvents()
     for (const event of events) {
       await this.publish(event)
     }
-    aggregate.clearDomainEvents()
   }
 
   async publish(event: DomainEvent): Promise<void> {

@@ -3,7 +3,6 @@ import { Injectable } from '@nestjs/common'
 import type { Response } from 'express'
 import { ClsService } from 'nestjs-cls'
 import type { Observable } from 'rxjs'
-import { tap } from 'rxjs/operators'
 
 /**
  * Correlation ID interceptor
@@ -54,10 +53,6 @@ export class CorrelationIdInterceptor implements NestInterceptor {
       response.setHeader('X-Correlation-Id', correlationId)
     }
 
-    return next.handle().pipe(
-      tap(() => {
-        // Post-request processing (if needed)
-      }),
-    )
+    return next.handle()
   }
 }

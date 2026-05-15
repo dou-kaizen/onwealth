@@ -1,3 +1,5 @@
+import { randomBytes } from 'node:crypto'
+
 /**
  * W3C Trace Context utility functions
  *
@@ -92,21 +94,25 @@ export function generateTraceparent(traceId: string, parentId?: string): string 
 }
 
 /**
- * Generates a new span ID (16 hex characters).
+ * Generates a new span ID (16 hex characters / 8 random bytes).
+ *
+ * Uses node:crypto randomBytes for cryptographic-quality randomness.
  *
  * @returns A 16-character hexadecimal string
  */
 export function generateSpanId(): string {
-  return Array.from({ length: 16 }, () => Math.floor(Math.random() * 16).toString(16)).join('')
+  return randomBytes(8).toString('hex')
 }
 
 /**
- * Generates a new trace ID (32 hex characters).
+ * Generates a new trace ID (32 hex characters / 16 random bytes).
+ *
+ * Uses node:crypto randomBytes for cryptographic-quality randomness.
  *
  * @returns A 32-character hexadecimal string
  */
 export function generateTraceId(): string {
-  return Array.from({ length: 32 }, () => Math.floor(Math.random() * 16).toString(16)).join('')
+  return randomBytes(16).toString('hex')
 }
 
 /**
