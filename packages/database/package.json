@@ -15,10 +15,12 @@
   },
   "scripts": {
     "build": "tsdown",
-    "lint": "oxlint",
-    "lint:fix": "oxlint --fix",
-    "format": "oxfmt --write .",
-    "format:check": "oxfmt --check .",
+    "lint": "biome lint .",
+    "lint:fix": "biome lint --write .",
+    "format": "biome format --write .",
+    "format:check": "biome format .",
+    "check": "biome check .",
+    "check:fix": "biome check --write .",
     "typecheck": "tsc --noEmit",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
@@ -26,7 +28,6 @@
     "db:studio": "drizzle-kit studio"
   },
   "devDependencies": {
-    "@infra-x/code-quality": "^0.6.2",
     "@types/pg": "8.15.6",
     "dotenv": "^17.3.1",
     "drizzle-kit": "0.31.6",
