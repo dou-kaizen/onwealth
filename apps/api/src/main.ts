@@ -58,7 +58,11 @@ async function bootstrap() {
     ],
   })
 
-  // Global exception filters (most specific to most generic)
+  // Global exception filters — Nest invokes them in REVERSE registration order
+  // (last-registered runs first as the outer catch). Order below is therefore
+  // outermost → innermost when read top-down: AllExceptionsFilter is the
+  // ultimate fallback, ProblemDetailsFilter shapes HttpException responses,
+  // ThrottlerExceptionFilter is most specific (catches ThrottlerException only).
   app.useGlobalFilters(
     app.get(ThrottlerExceptionFilter),
     app.get(ProblemDetailsFilter),

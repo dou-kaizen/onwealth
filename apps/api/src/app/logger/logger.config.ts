@@ -5,6 +5,16 @@ import type { Params } from 'nestjs-pino'
 import type { Env } from '@/app/config/env.schema'
 import { redactCensor, redactPaths } from './redaction.config.js'
 
+// High-frequency probe routes — exclude from access logs to avoid spam.
+// Kept in sync with main.ts global-prefix exclusions and health.controller routes.
+const EXCLUDED_PATHS = [
+  { method: RequestMethod.GET, path: 'health' },
+  { method: RequestMethod.GET, path: 'health/live' },
+  { method: RequestMethod.GET, path: 'health/ready' },
+  { method: RequestMethod.GET, path: 'livez' },
+  { method: RequestMethod.GET, path: 'readyz' },
+] as const
+
 /**
  * Create nestjs-pino configuration
  *
@@ -89,12 +99,7 @@ export function createLoggerConfig(config: ConfigService<Env, true>): Params {
           }),
     },
 
-    // Exclude health check routes (high-frequency; avoid log spam)
-    exclude: [
-      { method: RequestMethod.GET, path: 'health' },
-      { method: RequestMethod.GET, path: 'health/live' },
-      { method: RequestMethod.GET, path: 'health/ready' },
-    ],
+    exclude: [...EXCLUDED_PATHS],
   }
 }
 

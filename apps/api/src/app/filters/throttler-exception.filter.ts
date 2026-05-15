@@ -38,8 +38,9 @@ export class ThrottlerExceptionFilter implements ExceptionFilter {
     const limit = this.configService.get('THROTTLE_LIMIT', { infer: true })
     const resetTime = Math.floor(Date.now() / 1000) + ttl
 
-    // Set rate limit response headers
-    // RFC 6585 §4: Retry-After header (required)
+    // RFC 6585 §4 requires Retry-After. We expose the full TTL window rather than
+    // the exact time-to-reset of the offending bucket — @nestjs/throttler does not
+    // surface per-bucket remaining time, and full-TTL is the safe upper bound.
     response.setHeader('Retry-After', ttl.toString())
 
     // IETF Rate Limit Headers draft

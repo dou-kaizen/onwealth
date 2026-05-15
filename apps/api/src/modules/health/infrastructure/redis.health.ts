@@ -7,6 +7,9 @@ import { CACHE_PORT } from '@/shared-kernel/application/ports/cache.port'
 /** Temporary key for the health probe; TTL is set to 5 seconds */
 const PROBE_KEY = '__health_probe__'
 
+/** Sentinel value written then read back to assert round-trip integrity. */
+const PROBE_VALUE = '1'
+
 /** Health check timeout — prevents hanging under half-open TCP connections. */
 const HEALTH_TIMEOUT_MS = 3_000
 
@@ -52,8 +55,13 @@ export class RedisHealthIndicator {
       setTimeout(() => reject(new Error('Redis health check timed out')), HEALTH_TIMEOUT_MS),
     )
     const probe = async () => {
-      await this.cache.set(PROBE_KEY, '1', 5)
-      await this.cache.get(PROBE_KEY)
+      await this.cache.set(PROBE_KEY, PROBE_VALUE, 5)
+      const readback = await this.cache.get(PROBE_KEY)
+      // Read-after-write divergence => stale replica, cache backed by null driver,
+      // or serialization mismatch. Treat as DOWN even though connection succeeded.
+      if (readback !== PROBE_VALUE) {
+        throw new Error('Redis health check readback mismatch')
+      }
     }
     await Promise.race([probe(), timeout])
   }

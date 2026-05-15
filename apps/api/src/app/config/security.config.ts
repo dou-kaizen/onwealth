@@ -36,6 +36,7 @@ export function createCorsConfig(allowedOrigins?: string[]): CorsOptions {
       'Content-Type',
       'Authorization',
       'Accept',
+      'X-Request-Id',
       'X-Correlation-Id',
       'Traceparent',
       'Tracestate',
