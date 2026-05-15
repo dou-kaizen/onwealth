@@ -31,6 +31,7 @@ export class OffsetPaginationDto {
   @Type(() => Number)
   @IsIntField()
   @MinField(1)
+  @MaxField(10_000)
   page?: number = 1
 
   /**

@@ -18,7 +18,9 @@ export function createValidationPipe(): ValidationPipe {
     forbidNonWhitelisted: true,
     transform: true,
     transformOptions: {
-      enableImplicitConversion: true,
+      // Explicit @Type(() => X) decorators must be used for type coercion; implicit
+      // coercion runs before whitelist strip which can bypass validation guards.
+      enableImplicitConversion: false,
     },
     stopAtFirstError: false,
     errorHttpStatusCode: HttpStatus.UNPROCESSABLE_ENTITY,

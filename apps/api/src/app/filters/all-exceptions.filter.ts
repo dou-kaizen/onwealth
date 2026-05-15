@@ -98,10 +98,10 @@ export class AllExceptionsFilter implements ExceptionFilter {
   private readonly logger = new Logger(AllExceptionsFilter.name)
 
   constructor(
-    @Optional() private readonly cls?: ClsService,
-    @Optional()
+    // Required: misconfigured DI must fail loudly at startup, not silently produce wrong status codes
     @Inject(ProblemDetailsFilter)
-    private readonly problemDetailsFilter?: ProblemDetailsFilter,
+    private readonly problemDetailsFilter: ProblemDetailsFilter,
+    @Optional() private readonly cls?: ClsService,
     @Optional() private readonly configService?: ConfigService<Env, true>,
   ) {}
 
@@ -111,12 +111,12 @@ export class AllExceptionsFilter implements ExceptionFilter {
     const request = context.getRequest<Request>()
 
     // For HTTP exceptions, delegate to ProblemDetailsFilter (RFC 9457 format)
-    if (exception instanceof HttpException && this.problemDetailsFilter) {
+    if (exception instanceof HttpException) {
       return this.problemDetailsFilter.catch(exception, host)
     }
 
     // Map Postgres DatabaseError to an appropriate HttpException, then re-delegate
-    if (exception instanceof DrizzleQueryError && this.problemDetailsFilter) {
+    if (exception instanceof DrizzleQueryError) {
       const cause = exception.cause
       if (cause instanceof DatabaseError) {
         const httpException = mapDatabaseError(cause)
@@ -131,8 +131,10 @@ export class AllExceptionsFilter implements ExceptionFilter {
     // Only handle non-HTTP exceptions (system errors)
     const status = HttpStatus.INTERNAL_SERVER_ERROR
 
-    // Get error message
-    const isProduction = this.configService?.get('NODE_ENV', { infer: true }) === 'production'
+    // Default to true (prod-safe) when configService is absent to avoid leaking error.message
+    const isProduction = this.configService
+      ? this.configService.get('NODE_ENV', { infer: true }) === 'production'
+      : true
     let message = 'Internal server error'
     if (exception instanceof Error) {
       message = isProduction ? 'The server encountered an unexpected error' : exception.message
@@ -143,11 +145,12 @@ export class AllExceptionsFilter implements ExceptionFilter {
     const correlationId = this.cls?.get<string>('correlationId')
     const traceId = this.cls?.get<string>('traceId')
 
-    // Build Problem Details response (RFC 9457 format)
-    const baseUrl =
-      this.configService?.get('API_BASE_URL', { infer: true }) ?? 'https://api.example.com'
+    // Build Problem Details response (RFC 9457 format).
+    // RFC 9457 §3: use 'about:blank' when no specific documentation URI exists for the
+    // error type. Non-HTTP system errors are unclassified — 'about:blank' is correct here;
+    // it signals "no additional semantics beyond the HTTP status code".
     const problemDetails: ProblemDetailsDto = {
-      type: `${baseUrl}/errors/internal-server-error`,
+      type: 'about:blank',
       title: 'Internal Server Error',
       status,
       instance: request.url,

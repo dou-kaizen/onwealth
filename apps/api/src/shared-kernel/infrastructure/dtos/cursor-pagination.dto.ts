@@ -4,7 +4,9 @@ import { IsOptional } from 'class-validator'
 
 import {
   IsIntField,
+  IsStringField,
   MaxField,
+  MaxLengthField,
   MinField,
 } from '@/shared-kernel/infrastructure/decorators/validators'
 
@@ -37,5 +39,7 @@ export class CursorPaginationDto {
    */
   @ApiPropertyOptional({ example: 'eyJpZCI6InVzcl8wMjAifQ==' })
   @IsOptional()
+  @IsStringField()
+  @MaxLengthField(512)
   cursor?: string
 }
