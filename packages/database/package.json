@@ -34,14 +34,12 @@
     "drizzle-kit": "0.31.6",
     "drizzle-orm": "0.44.7",
     "pg": "8.16.3",
-    "postgres": "^3.4.8",
     "tsdown": "^0.21.4",
     "tsx": "^4.21.0",
     "typescript": "^5.9.3"
   },
   "peerDependencies": {
     "drizzle-orm": "0.44.7",
-    "pg": "8.16.3",
-    "postgres": "^3.4.8"
+    "pg": "8.16.3"
   }
 }

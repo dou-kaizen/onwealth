@@ -19,7 +19,7 @@ import { DrizzleService } from './drizzle.service.js'
  * DB_TOKEN is aliased to service.db so existing @Inject(DB_TOKEN) consumers
  * remain unchanged. DrizzleService.onModuleDestroy() drains the pool on SIGTERM.
  */
-@Global() // @global-approved: 数据库连接，所有 context 的 repository 都依赖
+@Global() // @global-approved: shared DB connection — every context's repositories depend on it.
 @Module({})
 export class DrizzleModule {
   /**

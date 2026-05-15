@@ -10,6 +10,7 @@
     "format:check": "turbo run format:check",
     "typecheck": "turbo run typecheck",
     "deps": "turbo run deps",
+    "db:dev": "pnpm --filter @onwealth/database run db:init-roles && pnpm --filter @onwealth/database run db:migrate",
     "prepare": "pnpm run setup:env",
     "setup:env": "pnpm --filter api --filter @onwealth/database exec sh -c 'test -f .env || cp .env.example .env'"
   },

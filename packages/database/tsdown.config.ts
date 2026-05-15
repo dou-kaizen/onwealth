@@ -7,6 +7,6 @@ export default defineConfig({
   dts: true,
   tsconfig: './tsconfig.json',
   deps: {
-    neverBundle: ['drizzle-orm', 'drizzle-orm/pg-core', 'pg', 'postgres'],
+    neverBundle: ['drizzle-orm', 'drizzle-orm/pg-core', 'pg'],
   },
 })
