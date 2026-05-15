@@ -68,6 +68,7 @@
     "clean": "rm -rf dist .tsbuildinfo"
   },
   "dependencies": {
+    "@nest-lab/throttler-storage-redis": "catalog:",
     "@nestjs/common": "catalog:",
     "@nestjs/config": "catalog:",
     "@nestjs/core": "catalog:",
@@ -77,6 +78,7 @@
     "class-transformer": "catalog:",
     "class-validator": "catalog:",
     "drizzle-orm": "catalog:",
+    "ioredis": "catalog:",
     "nestjs-cls": "catalog:",
     "nestjs-pino": "catalog:",
     "pg": "catalog:",

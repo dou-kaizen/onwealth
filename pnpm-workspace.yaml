@@ -29,6 +29,9 @@ catalog:
   zod: ^4.0.0
   # Security
   helmet: ^8.0.0
+  # Cluster-safe throttler storage
+  ioredis: ^5.4.0
+  '@nest-lab/throttler-storage-redis': ^1.1.0
   # Database
   drizzle-orm: ^0.44.7
   pg: ^8.16.3

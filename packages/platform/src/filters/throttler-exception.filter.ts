@@ -37,7 +37,10 @@ export class ThrottlerExceptionFilter implements ExceptionFilter {
     const response = context.getResponse<Response>()
     const request = context.getRequest<Request>()
 
-    const ttl = Math.floor(this.configService.get('THROTTLE_TTL', { infer: true }) / 1000)
+    const ttl = Math.max(
+      1,
+      Math.floor(this.configService.get('THROTTLE_TTL', { infer: true }) / 1000),
+    )
     const limit = this.configService.get('THROTTLE_LIMIT', { infer: true })
     const resetTime = Math.floor(Date.now() / 1000) + ttl
 
@@ -51,7 +54,7 @@ export class ThrottlerExceptionFilter implements ExceptionFilter {
       type: `${this.configService.get('API_BASE_URL', { infer: true })}/errors/rate-limit-exceeded`,
       title: 'Too Many Requests',
       status: 429,
-      instance: request.url,
+      instance: request.url?.split('?')[0] ?? request.url,
       request_id: this.cls.getId(),
       correlation_id: this.cls.get('correlationId'),
       trace_id: this.cls.get('traceId'),
