@@ -51,7 +51,7 @@ export class LocationHeaderInterceptor implements NestInterceptor {
           return
         }
 
-        // Build Location header
+        // Build Location header; buildResourcePath applies encodeURIComponent on the id
         const baseUrl = `${request.protocol}://${request.get('host')}`
         const resourcePath = this.buildResourcePath(request.path, data.id)
 
@@ -70,7 +70,8 @@ export class LocationHeaderInterceptor implements NestInterceptor {
   private buildResourcePath(requestPath: string, resourceId: string): string {
     // Remove trailing slash
     const cleanPath = requestPath.replace(/\/$/, '')
-
-    return `${cleanPath}/${resourceId}`
+    // encodeURIComponent prevents path traversal via ../  or special chars in the id
+    const safeId = encodeURIComponent(String(resourceId))
+    return `${cleanPath}/${safeId}`
   }
 }

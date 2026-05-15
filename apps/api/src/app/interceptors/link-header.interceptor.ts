@@ -199,14 +199,18 @@ export class LinkHeaderInterceptor implements NestInterceptor {
   ): string {
     const parameters = new URLSearchParams()
 
-    // Add existing query parameters
+    // Add existing query parameters; use append (not set) to preserve multi-value params
+    // e.g. ?status=active&status=pending must survive into next/prev links
     for (const [key, value] of Object.entries(query)) {
       if (key !== 'cursor' && key !== 'page') {
-        parameters.set(key, String(value))
+        const values = Array.isArray(value) ? value : [value]
+        for (const v of values) {
+          parameters.append(key, String(v))
+        }
       }
     }
 
-    // Override specified parameters
+    // Override specified parameters (pagination controls — always single-value)
     for (const [key, value] of Object.entries(overrides)) {
       parameters.set(key, String(value))
     }
