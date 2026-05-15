@@ -79,6 +79,10 @@ export function setupSwagger(app: INestApplication, configService: ConfigService
   const apiBaseUrl = configService.get('API_BASE_URL', { infer: true })
   const nodeEnv = configService.get('NODE_ENV', { infer: true })
 
+  // `.addBearerAuth()` is intentionally NOT registered yet. Adding it advertises
+  // a Bearer scheme in the OpenAPI spec while no guard validates tokens — FE
+  // codegen pipelines would surface a broken auth flow. Re-add in the same PR
+  // that wires the auth guard (see docs/code-standards.md "Auth transport").
   const config = new DocumentBuilder()
     .setTitle(swaggerConfig.title)
     .setDescription(swaggerConfig.description)
@@ -86,7 +90,6 @@ export function setupSwagger(app: INestApplication, configService: ConfigService
     .setLicense('MIT', 'https://opensource.org/licenses/MIT')
     .addServer(apiBaseUrl, nodeEnv)
     .addTag('health', 'Health check endpoints')
-    .addBearerAuth()
     .build()
 
   const document = SwaggerModule.createDocument(app, config, {
@@ -103,10 +106,16 @@ export function setupSwagger(app: INestApplication, configService: ConfigService
     yamlDocumentUrl: '/openapi.yaml',
   })
 
+  // Pin Scalar bundle to Scalar-controlled CDN. Default upstream value is
+  // `https://cdn.jsdelivr.net/npm/@scalar/api-reference` which puts the API
+  // docs page on a shared CDN allowlist (`cdn.jsdelivr.net` would have to be
+  // permitted in CSP — broad typosquat / sibling-package surface). The CSP
+  // for `/docs` is pinned to `https://cdn.scalar.com` (see main.ts).
   app.use(
     '/docs',
     apiReference({
       content: document,
+      cdn: 'https://cdn.scalar.com/scalar-app.js',
     }),
   )
 }

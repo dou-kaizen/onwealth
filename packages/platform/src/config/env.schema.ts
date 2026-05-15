@@ -12,6 +12,7 @@ const PROD_FORBIDDEN_DEFAULTS = {
   JWT_SECRET: 'your-secret-key-change-me-in-production-min-32-chars',
   DATABASE_URL: 'postgres://postgres:postgres@localhost:5432/onwealth',
   API_BASE_URL: 'https://api.example.com',
+  REDIS_URL: 'redis://localhost:6379',
 } as const
 
 /**
@@ -156,17 +157,26 @@ export const envSchema = z
       .transform((value) => (value === undefined ? undefined : value === 'true')),
   })
   .check((ctx) => {
-    if (ctx.value.NODE_ENV !== 'production') return
-    for (const [key, forbidden] of Object.entries(PROD_FORBIDDEN_DEFAULTS)) {
-      const value = ctx.value[key as keyof typeof PROD_FORBIDDEN_DEFAULTS]
-      if (value === forbidden) {
-        ctx.issues.push({
-          code: 'custom',
-          path: [key],
-          message: `${key} must not use the placeholder default value in production`,
-          input: value,
-        })
+    if (ctx.value.NODE_ENV === 'production') {
+      for (const [key, forbidden] of Object.entries(PROD_FORBIDDEN_DEFAULTS)) {
+        const value = ctx.value[key as keyof typeof PROD_FORBIDDEN_DEFAULTS]
+        if (value === forbidden) {
+          ctx.issues.push({
+            code: 'custom',
+            path: [key],
+            message: `${key} must not use the placeholder default value in production`,
+            input: value,
+          })
+        }
       }
+    }
+    if (ctx.value.DB_POOL_MIN > ctx.value.DB_POOL_MAX) {
+      ctx.issues.push({
+        code: 'custom',
+        path: ['DB_POOL_MIN'],
+        message: `DB_POOL_MIN (${ctx.value.DB_POOL_MIN}) must be <= DB_POOL_MAX (${ctx.value.DB_POOL_MAX})`,
+        input: ctx.value.DB_POOL_MIN,
+      })
     }
   })
 

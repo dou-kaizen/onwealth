@@ -41,6 +41,18 @@ export const redactPaths = [
   'res.body.token',
   'res.body.accessToken',
   'res.body.refreshToken',
+
+  // Query string tokens — common shapes for auth & OAuth flows
+  'req.query.token',
+  'req.query.access_token',
+  'req.query.refresh_token',
+  'req.query.api_key',
+  'req.query.apiKey',
+  'req.query.reset_token',
+  'req.query.resetToken',
+  'req.query.code',
+  'req.query.state',
+  'req.query.id_token',
 ]
 
 export const redactCensor = '[REDACTED]'

@@ -72,13 +72,12 @@ export class AllExceptionsFilter implements ExceptionFilter {
     const correlationId = this.cls?.get<string>('correlationId')
     const traceId = this.cls?.get<string>('traceId')
 
-    const baseUrl =
-      this.configService?.get('API_BASE_URL', { infer: true }) ?? 'https://api.example.com'
+    const baseUrl = this.configService?.get('API_BASE_URL', { infer: true }) ?? 'about:blank'
     const problemDetails: ProblemDetailsDto = {
-      type: `${baseUrl}/errors/internal-server-error`,
+      type: baseUrl === 'about:blank' ? 'about:blank' : `${baseUrl}/errors/internal-server-error`,
       title: 'Internal Server Error',
       status,
-      instance: request.url,
+      instance: request.url?.split('?')[0] ?? request.url,
       request_id: requestId,
       correlation_id: correlationId,
       trace_id: traceId,

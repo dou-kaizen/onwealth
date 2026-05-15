@@ -78,21 +78,42 @@ async function bootstrap(): Promise<void> {
   app.use(helmet())
 
   if (swaggerEnabled) {
-    const looseSwaggerCsp = helmet({
+    // Swagger UI ships bundled assets (no external CDN at runtime as of
+    // @nestjs/swagger v11). `'unsafe-inline'` + `'unsafe-eval'` are still
+    // required for the try-it-out fetch executor. No third-party origins.
+    const swaggerUiCsp = helmet({
       contentSecurityPolicy: {
         directives: {
           defaultSrc: ["'self'"],
-          scriptSrc: ["'self'", "'unsafe-inline'", "'unsafe-eval'", 'https://cdn.jsdelivr.net'],
-          styleSrc: ["'self'", "'unsafe-inline'", 'https://cdn.jsdelivr.net'],
-          imgSrc: ["'self'", 'data:', 'https://cdn.jsdelivr.net'],
-          fontSrc: ["'self'", 'data:', 'https://cdn.jsdelivr.net'],
+          scriptSrc: ["'self'", "'unsafe-inline'", "'unsafe-eval'"],
+          styleSrc: ["'self'", "'unsafe-inline'"],
+          imgSrc: ["'self'", 'data:'],
+          fontSrc: ["'self'", 'data:'],
           workerSrc: ["'self'", 'blob:'],
           connectSrc: ["'self'"],
         },
       },
     })
-    app.use('/swagger', looseSwaggerCsp)
-    app.use('/docs', looseSwaggerCsp)
+
+    // Scalar API reference loads its bundle from a vendor-controlled CDN.
+    // Pin to `cdn.scalar.com` only — avoids shared-CDN typosquat surface
+    // (previous config allowed all of `cdn.jsdelivr.net`).
+    const scalarCsp = helmet({
+      contentSecurityPolicy: {
+        directives: {
+          defaultSrc: ["'self'"],
+          scriptSrc: ["'self'", "'unsafe-inline'", 'https://cdn.scalar.com'],
+          styleSrc: ["'self'", "'unsafe-inline'", 'https://cdn.scalar.com'],
+          imgSrc: ["'self'", 'data:', 'https://cdn.scalar.com'],
+          fontSrc: ["'self'", 'data:', 'https://cdn.scalar.com'],
+          workerSrc: ["'self'", 'blob:'],
+          connectSrc: ["'self'", 'https://cdn.scalar.com'],
+        },
+      },
+    })
+
+    app.use('/swagger', swaggerUiCsp)
+    app.use('/docs', scalarCsp)
   }
 
   // Single LB hop trust posture (public internet → CDN/LB → API).
@@ -102,19 +123,6 @@ async function bootstrap(): Promise<void> {
   // Multi-hop CDN→LB→API topologies should bump to 2; documented in
   // docs/code-standards.md under "Trust proxy".
   app.getHttpAdapter().getInstance().set('trust proxy', 1)
-
-  // In-memory throttler is per-process. With multiple workers/replicas, a
-  // client can send N× the configured THROTTLE_LIMIT before any single
-  // instance returns 429. WORKERS env is operator-set (K8s does not auto-
-  // populate); operators must mirror replica count for the warning to fire.
-  // Use parseInt + Number.isFinite so empty-string ('') and non-numeric
-  // values (NaN) don't silently suppress the warning.
-  const workers = Number.parseInt(process.env['WORKERS'] ?? '1', 10)
-  if (Number.isFinite(workers) && workers > 1) {
-    logger.warn(
-      `Running ${workers} workers with in-memory throttler — rate limiting is NOT cluster-safe. Wire REDIS_URL before public exposure.`,
-    )
-  }
 
   app.useGlobalPipes(createValidationPipe())
 
@@ -144,9 +152,16 @@ async function bootstrap(): Promise<void> {
       'ALLOWED_ORIGINS is not set — CORS is disabled. Browser clients will fail cross-origin requests.',
     )
   }
+  // INVARIANT: auth tokens are Bearer-only at this phase. `credentials: true`
+  // is intentionally NOT set — cookie-based session/refresh would require a
+  // CSRF guard (csurf / SameSite=Strict / double-submit) that hasn't shipped.
+  // Re-enable credentials only alongside the CSRF guard. See
+  // docs/code-standards.md "Auth transport" for the full invariant.
   app.enableCors({
     origin: allowedOrigins.length > 0 ? allowedOrigins : false,
-    credentials: true,
+    // Red Team (F3): trace headers stamped by interceptors must be readable
+    // by browser JS, else cross-origin clients lose request correlation.
+    exposedHeaders: ['X-Request-Id', 'X-Correlation-Id', 'Trace-Id'],
   })
 
   if (swaggerEnabled) {

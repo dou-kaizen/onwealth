@@ -57,7 +57,7 @@ export class ProblemDetailsFilter implements ExceptionFilter {
     const status = exception.getStatus()
     const exceptionResponse = exception.getResponse()
 
-    if (status === 404 && this.#silentPaths.includes(request.url)) {
+    if (status === 404 && this.#silentPaths.includes(request.path)) {
       response.status(404).end()
       return
     }
@@ -71,7 +71,7 @@ export class ProblemDetailsFilter implements ExceptionFilter {
       type: this.getTypeUri(status),
       title: this.getTitle(status, exception),
       status,
-      instance: request.url,
+      instance: request.url?.split('?')[0] ?? request.url,
       request_id: this.cls.getId(),
       correlation_id: this.cls.get('correlationId'),
       trace_id: this.cls.get('traceId'),
