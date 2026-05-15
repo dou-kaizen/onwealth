@@ -1,4 +1,5 @@
 import { applyDecorators } from '@nestjs/common'
+import type { ValidationOptions } from 'class-validator'
 import {
   IsBoolean,
   IsEmail,
@@ -13,10 +14,7 @@ import {
   Min,
   MinLength,
 } from 'class-validator'
-
 import { ErrorCode } from '@/shared-kernel/infrastructure/enums/error-code'
-
-import type { ValidationOptions } from 'class-validator'
 
 export function IsEmailField(options?: ValidationOptions) {
   return applyDecorators(IsEmail({}, { ...options, context: { code: ErrorCode.INVALID_EMAIL } }))

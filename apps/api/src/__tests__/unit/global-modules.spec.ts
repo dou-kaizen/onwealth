@@ -13,6 +13,7 @@ import path from 'node:path'
  */
 
 import { beforeAll, describe, expect, it } from 'vitest'
+
 const APPROVED_GLOBAL_MODULES = new Set([
   'src/app/database/db.module.ts',
   'src/app/events/domain-events.module.ts',

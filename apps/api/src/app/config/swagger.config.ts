@@ -1,10 +1,8 @@
-import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger'
-import { apiReference } from '@scalar/nestjs-api-reference'
-
-import { ProblemDetailsDto } from '@/shared-kernel/infrastructure/dtos/problem-details.dto'
-
 import type { INestApplication } from '@nestjs/common'
 import type { OpenAPIObject, SwaggerCustomOptions } from '@nestjs/swagger'
+import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger'
+import { apiReference } from '@scalar/nestjs-api-reference'
+import { ProblemDetailsDto } from '@/shared-kernel/infrastructure/dtos/problem-details.dto'
 
 /**
  * Swagger base configuration

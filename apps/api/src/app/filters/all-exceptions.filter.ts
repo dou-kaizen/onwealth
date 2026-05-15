@@ -1,26 +1,24 @@
+import type { ArgumentsHost, ExceptionFilter } from '@nestjs/common'
 import {
   Catch,
   ConflictException,
   HttpException,
   HttpStatus,
+  Inject,
   InternalServerErrorException,
   Logger,
   Optional,
-  Inject,
   ServiceUnavailableException,
   UnprocessableEntityException,
 } from '@nestjs/common'
 import { ConfigService } from '@nestjs/config'
 import { DrizzleQueryError } from 'drizzle-orm'
+import type { Request, Response } from 'express'
 import { ClsService } from 'nestjs-cls'
 import { DatabaseError } from 'pg'
-
-import { ProblemDetailsFilter } from '@/app/filters/problem-details.filter'
-
 import type { Env } from '@/app/config/env.schema'
+import { ProblemDetailsFilter } from '@/app/filters/problem-details.filter'
 import type { ProblemDetailsDto } from '@/shared-kernel/infrastructure/dtos/problem-details.dto'
-import type { ExceptionFilter, ArgumentsHost } from '@nestjs/common'
-import type { Request, Response } from 'express'
 
 /**
  * Maps a pg DatabaseError to a NestJS HttpException.

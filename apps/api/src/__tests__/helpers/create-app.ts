@@ -1,8 +1,7 @@
+import type { INestApplication, Type } from '@nestjs/common'
 import { RequestMethod } from '@nestjs/common'
 import { Reflector } from '@nestjs/core'
 import { Test } from '@nestjs/testing'
-
-import { AppModule } from '@/app.module'
 import { createValidationPipe } from '@/app/config/validation.config'
 import { AllExceptionsFilter } from '@/app/filters/all-exceptions.filter'
 import { ProblemDetailsFilter } from '@/app/filters/problem-details.filter'
@@ -14,8 +13,7 @@ import { RequestContextInterceptor } from '@/app/interceptors/request-context.in
 import { TimeoutInterceptor } from '@/app/interceptors/timeout.interceptor'
 import { TraceContextInterceptor } from '@/app/interceptors/trace-context.interceptor'
 import { TransformInterceptor } from '@/app/interceptors/transform.interceptor'
-
-import type { INestApplication, Type } from '@nestjs/common'
+import { AppModule } from '@/app.module'
 
 export interface CreateTestAppOptions {
   moduleOverrides?: { original: Type; replacement: Type }[]

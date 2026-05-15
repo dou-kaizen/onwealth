@@ -1,9 +1,8 @@
+import type { CallHandler, ExecutionContext, NestInterceptor } from '@nestjs/common'
 import { Injectable } from '@nestjs/common'
-import { tap } from 'rxjs/operators'
-
-import type { NestInterceptor, ExecutionContext, CallHandler } from '@nestjs/common'
-import type { Response, Request } from 'express'
+import type { Request, Response } from 'express'
 import type { Observable } from 'rxjs'
+import { tap } from 'rxjs/operators'
 
 /**
  * Location header interceptor

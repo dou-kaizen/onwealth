@@ -1,10 +1,9 @@
+import type { CallHandler, ExecutionContext, NestInterceptor } from '@nestjs/common'
 import { Injectable } from '@nestjs/common'
-import { ClsService } from 'nestjs-cls'
-import { tap } from 'rxjs/operators'
-
-import type { NestInterceptor, ExecutionContext, CallHandler } from '@nestjs/common'
 import type { Response } from 'express'
+import { ClsService } from 'nestjs-cls'
 import type { Observable } from 'rxjs'
+import { tap } from 'rxjs/operators'
 
 /**
  * Request context interceptor

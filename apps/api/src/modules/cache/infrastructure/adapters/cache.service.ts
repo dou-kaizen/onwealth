@@ -1,8 +1,7 @@
 import { CACHE_MANAGER } from '@nestjs/cache-manager'
 import { Inject, Injectable } from '@nestjs/common'
-
-import type { CachePort } from '@/shared-kernel/application/ports/cache.port'
 import type { Cache } from 'cache-manager'
+import type { CachePort } from '@/shared-kernel/application/ports/cache.port'
 
 @Injectable()
 export class CacheService implements CachePort {

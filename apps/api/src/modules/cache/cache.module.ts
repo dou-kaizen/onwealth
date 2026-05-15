@@ -2,11 +2,9 @@ import KeyvRedis from '@keyv/redis'
 import { CacheModule as NestCacheModule } from '@nestjs/cache-manager'
 import { Global, Module } from '@nestjs/common'
 import { ConfigModule, ConfigService } from '@nestjs/config'
-
+import type { Env } from '@/app/config/env.schema'
 import { CacheService } from '@/modules/cache/infrastructure/adapters/cache.service'
 import { CACHE_PORT } from '@/shared-kernel/application/ports/cache.port'
-
-import type { Env } from '@/app/config/env.schema'
 
 /**
  * Cache module

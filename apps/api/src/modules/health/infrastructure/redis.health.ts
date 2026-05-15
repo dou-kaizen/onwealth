@@ -1,9 +1,8 @@
-import { Injectable, Inject } from '@nestjs/common'
-
-import { CACHE_PORT } from '@/shared-kernel/application/ports/cache.port'
+import { Inject, Injectable } from '@nestjs/common'
+import type { HealthIndicatorResult } from '@nestjs/terminus'
 
 import type { CachePort } from '@/shared-kernel/application/ports/cache.port'
-import type { HealthIndicatorResult } from '@nestjs/terminus'
+import { CACHE_PORT } from '@/shared-kernel/application/ports/cache.port'
 
 /** Temporary key for the health probe; TTL is set to 5 seconds */
 const PROBE_KEY = '__health_probe__'

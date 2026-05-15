@@ -1,11 +1,9 @@
+import type { CallHandler, ExecutionContext, NestInterceptor } from '@nestjs/common'
 import { Injectable } from '@nestjs/common'
-import { map } from 'rxjs/operators'
-
-import { USE_ENVELOPE_KEY } from '@/shared-kernel/infrastructure/decorators/use-envelope.decorator'
-
-import type { NestInterceptor, ExecutionContext, CallHandler } from '@nestjs/common'
 import type { Reflector } from '@nestjs/core'
 import type { Observable } from 'rxjs'
+import { map } from 'rxjs/operators'
+import { USE_ENVELOPE_KEY } from '@/shared-kernel/infrastructure/decorators/use-envelope.decorator'
 
 /**
  * Response transform interceptor (conditional envelope)

@@ -1,19 +1,17 @@
 import { Controller, Get, ServiceUnavailableException } from '@nestjs/common'
 import { ConfigService } from '@nestjs/config'
-import { ApiTags, ApiOperation, ApiResponse } from '@nestjs/swagger'
+import { ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger'
 import {
+  DiskHealthIndicator,
   HealthCheck,
   HealthCheckService,
   MemoryHealthIndicator,
-  DiskHealthIndicator,
 } from '@nestjs/terminus'
 import { SkipThrottle } from '@nestjs/throttler'
-
+import type { Env } from '@/app/config/env.schema'
 import { DrizzleHealthIndicator } from '@/modules/health/infrastructure/drizzle.health'
 import { RedisHealthIndicator } from '@/modules/health/infrastructure/redis.health'
 import { Public } from '@/shared-kernel/infrastructure/decorators/public.decorator'
-
-import type { Env } from '@/app/config/env.schema'
 
 type HealthEntry = { status: 'up' | 'down'; message: string }
 

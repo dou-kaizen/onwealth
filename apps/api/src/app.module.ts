@@ -1,11 +1,12 @@
+import type { MiddlewareConsumer, NestModule } from '@nestjs/common'
 import { Module } from '@nestjs/common'
 import { ConfigModule, ConfigService } from '@nestjs/config'
 import { APP_GUARD } from '@nestjs/core'
 import { EventEmitterModule } from '@nestjs/event-emitter'
-import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler'
+import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler'
 import { ClsModule } from 'nestjs-cls'
-
 import { createClsConfig } from '@/app/config/cls.config'
+import type { Env } from '@/app/config/env.schema'
 import { validateEnv } from '@/app/config/env.schema'
 import { DrizzleModule } from '@/app/database/db.module'
 import { DomainEventsModule } from '@/app/events/domain-events.module'
@@ -19,9 +20,6 @@ import { LoggerModule } from '@/app/logger/logger.module'
 import { ETagMiddleware } from '@/app/middleware/etag.middleware'
 import { CacheModule } from '@/modules/cache/cache.module'
 import { HealthModule } from '@/modules/health/health.module'
-
-import type { Env } from '@/app/config/env.schema'
-import type { NestModule, MiddlewareConsumer } from '@nestjs/common'
 
 /**
  * Root module: infrastructure-only boilerplate

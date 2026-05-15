@@ -1,4 +1,4 @@
-import { ValidationPipe, UnprocessableEntityException, HttpStatus } from '@nestjs/common'
+import { HttpStatus, UnprocessableEntityException, ValidationPipe } from '@nestjs/common'
 
 /**
  * Create the global validation pipe configuration
