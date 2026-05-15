@@ -1,8 +1,9 @@
 import { RequestMethod } from '@nestjs/common'
 import { ConfigService } from '@nestjs/config'
 import { NestFactory, Reflector } from '@nestjs/core'
+import type { NestExpressApplication } from '@nestjs/platform-express'
 import { Logger } from 'nestjs-pino'
-
+import type { Env } from '@/app/config/env.schema'
 import { createCorsConfig } from '@/app/config/security.config'
 import { setupSwagger } from '@/app/config/swagger.config'
 import { createValidationPipe } from '@/app/config/validation.config'
@@ -16,11 +17,7 @@ import { RequestContextInterceptor } from '@/app/interceptors/request-context.in
 import { TimeoutInterceptor } from '@/app/interceptors/timeout.interceptor'
 import { TraceContextInterceptor } from '@/app/interceptors/trace-context.interceptor'
 import { TransformInterceptor } from '@/app/interceptors/transform.interceptor'
-
 import { AppModule } from './app.module.js'
-
-import type { Env } from '@/app/config/env.schema'
-import type { NestExpressApplication } from '@nestjs/platform-express'
 
 async function bootstrap() {
   const app = await NestFactory.create<NestExpressApplication>(AppModule, {
@@ -77,8 +74,14 @@ async function bootstrap() {
   // Global validation pipe
   app.useGlobalPipes(createValidationPipe())
 
-  // Swagger documentation
-  setupSwagger(app)
+  // Swagger documentation (non-production only — prevents API schema exposure in prod)
+  const nodeEnv = configService.get('NODE_ENV', { infer: true })
+  if (nodeEnv !== 'production') {
+    setupSwagger(app)
+  }
+
+  // Enable graceful SIGTERM/SIGINT lifecycle (calls onModuleDestroy on providers)
+  app.enableShutdownHooks()
 
   const port = configService.get('PORT', { infer: true })
   await app.listen(port)
@@ -107,4 +110,7 @@ async function bootstrap() {
   logger.log(startupMessage)
 }
 
-await bootstrap()
+bootstrap().catch((err: unknown) => {
+  console.error('Fatal bootstrap error:', err)
+  process.exit(1)
+})

@@ -24,8 +24,13 @@ interface CorsOptions {
  * Controls which origins are allowed to access the API
  */
 export function createCorsConfig(allowedOrigins?: string[]): CorsOptions {
+  if (!allowedOrigins?.length) {
+    // Fail-closed: no credentialed CORS when origins unset.
+    // Set ALLOWED_ORIGINS=http://localhost:3000 in .env for dev.
+    return { origin: false, credentials: false }
+  }
   return {
-    origin: allowedOrigins ?? true,
+    origin: allowedOrigins,
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
     allowedHeaders: [
       'Content-Type',

@@ -19,5 +19,10 @@ export function createDrizzleInstance(options: DrizzleModuleOptions) {
     connectionTimeoutMillis: options.pool?.connectionTimeoutMillis ?? 5000,
   })
 
+  // Prevent process crash from unhandled EventEmitter error on idle client drop.
+  pool.on('error', (err: Error) => {
+    console.error('[pg-pool] Unexpected idle client error:', err.message)
+  })
+
   return drizzle({ client: pool, schema })
 }

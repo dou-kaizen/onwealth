@@ -1,9 +1,15 @@
 import { randomUUID } from 'node:crypto'
-
-import { parseTraceparent } from '@/app/interceptors/trace-context.util'
-
 import type { Request } from 'express'
 import type { ClsModuleOptions, ClsService } from 'nestjs-cls'
+import { parseTraceparent } from '@/app/interceptors/trace-context.util'
+
+// Allowlist regex to block HTTP response splitting and log injection
+// via attacker-controlled X-Request-Id / X-Correlation-Id headers.
+const SAFE_ID_RE = /^[\w-]{1,128}$/
+
+function sanitizeClientId(value: string | undefined): string | undefined {
+  return value && SAFE_ID_RE.test(value) ? value : undefined
+}
 
 /**
  * Create CLS (Continuation-Local Storage) configuration
@@ -21,8 +27,10 @@ export function createClsConfig(): ClsModuleOptions {
       mount: true,
       generateId: true,
       idGenerator: (request: Request) => {
-        // Use the client-provided X-Request-Id if present, otherwise generate a new UUID
-        return (request.headers['x-request-id'] as string) || randomUUID()
+        // Use the client-provided X-Request-Id if valid; otherwise generate a fresh UUID.
+        return (
+          sanitizeClientId(request.headers['x-request-id'] as string | undefined) ?? randomUUID()
+        )
       },
       setup: setupClsContext,
     },
@@ -42,7 +50,8 @@ function setupClsContext(cls: ClsService, request: Request) {
   cls.set('url', request.url)
 
   // Parse and store Correlation ID (business tracing)
-  const correlationId = (request.headers['x-correlation-id'] as string) || randomUUID()
+  const correlationId =
+    sanitizeClientId(request.headers['x-correlation-id'] as string | undefined) ?? randomUUID()
   cls.set('correlationId', correlationId)
 
   // Parse W3C Trace Context (distributed tracing)
