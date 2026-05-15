@@ -34,7 +34,17 @@ const POOL_DRAIN_TIMEOUT_MS = 8000
 @Global()
 @Module({})
 export class DatabaseModule implements OnModuleDestroy {
-  /** Process-wide pool reference, populated by the (sync or async) factory. */
+  /**
+   * Process-wide pool reference, populated by the (sync or async) factory.
+   *
+   * TEST CAVEAT: multiple `forRoot()` / `forRootAsync()` calls in the same
+   * process orphan prior pools. e2e harnesses MUST call `app.close()`
+   * between app instantiations so `onModuleDestroy` drains the previous
+   * pool before the next factory overwrites this field. If parallel app
+   * instances become a test requirement, replace this static with a
+   * WeakMap keyed on module token (or move the pool onto the module
+   * instance via a custom provider).
+   */
   private static activePool: Pool | null = null
 
   static forRoot(): DynamicModule {
@@ -57,6 +67,18 @@ export class DatabaseModule implements OnModuleDestroy {
         return instance.db
       },
     }
+    /**
+     * Direct `pg.Pool` access provider. NO consumers today —
+     * `grep -rn "@Inject(POOL_TOKEN)"` returns zero hits across the workspace.
+     * Kept as a cheap stub for future raw-pool use cases (out-of-band
+     * migrations, advisory locks, listen/notify) that bypass Drizzle.
+     *
+     * If you add an `@Inject(POOL_TOKEN)` consumer, refactor so the pool is
+     * returned from `createDrizzleInstance` and resolved through DI ordering
+     * rather than read from the `DatabaseModule.activePool` static side-effect
+     * (see §4.6 caveat). The static read works today only because no consumer
+     * resolves the token during the bootstrap graph.
+     */
     const poolProvider: Provider = {
       provide: POOL_TOKEN,
       useFactory: () => DatabaseModule.activePool,
@@ -79,6 +101,18 @@ export class DatabaseModule implements OnModuleDestroy {
         return instance.db
       },
     }
+    /**
+     * Direct `pg.Pool` access provider. NO consumers today —
+     * `grep -rn "@Inject(POOL_TOKEN)"` returns zero hits across the workspace.
+     * Kept as a cheap stub for future raw-pool use cases (out-of-band
+     * migrations, advisory locks, listen/notify) that bypass Drizzle.
+     *
+     * If you add an `@Inject(POOL_TOKEN)` consumer, refactor so the pool is
+     * returned from `createDrizzleInstance` and resolved through DI ordering
+     * rather than read from the `DatabaseModule.activePool` static side-effect
+     * (see §4.6 caveat). The static read works today only because no consumer
+     * resolves the token during the bootstrap graph.
+     */
     const poolProvider: Provider = {
       provide: POOL_TOKEN,
       useFactory: () => DatabaseModule.activePool,

@@ -28,27 +28,14 @@ export class TransformInterceptor implements NestInterceptor {
   intercept(context: ExecutionContext, next: CallHandler): Observable<unknown> {
     return next.handle().pipe(
       map((data: unknown) => {
-        if (data === null || data === undefined) {
-          return data
-        }
+        if (data === null || data === undefined) return data
 
         const useEnvelope = this.reflector.getAllAndOverride<boolean>(USE_ENVELOPE_KEY, [
           context.getHandler(),
           context.getClass(),
         ])
 
-        if (useEnvelope) {
-          return {
-            data,
-            meta: this.buildMeta(),
-          }
-        }
-
-        if (this.isListResponse(data)) {
-          return data
-        }
-
-        return data
+        return useEnvelope ? { data, meta: this.buildMeta() } : data
       }),
     )
   }
@@ -64,16 +51,5 @@ export class TransformInterceptor implements NestInterceptor {
     const traceId = this.cls.get<string>('traceId')
     if (traceId) meta['trace_id'] = traceId
     return meta
-  }
-
-  private isListResponse(data: unknown): boolean {
-    return (
-      typeof data === 'object' &&
-      data !== null &&
-      'object' in data &&
-      (data as { object: unknown }).object === 'list' &&
-      'data' in data &&
-      Array.isArray((data as { data: unknown }).data)
-    )
   }
 }

@@ -1,6 +1,5 @@
 import { Injectable } from '@nestjs/common'
 import { ClsService } from 'nestjs-cls'
-import { tap } from 'rxjs/operators'
 
 import type { NestInterceptor, ExecutionContext, CallHandler } from '@nestjs/common'
 import type { Response } from 'express'
@@ -28,6 +27,6 @@ export class TraceContextInterceptor implements NestInterceptor {
       response.setHeader('Trace-Id', traceId)
     }
 
-    return next.handle().pipe(tap(() => {}))
+    return next.handle()
   }
 }
