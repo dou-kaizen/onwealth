@@ -4,12 +4,15 @@
   "tasks": {
     "build": {
       "dependsOn": ["^build"],
-      "outputs": ["dist/**", ".next/**", "!.next/cache/**", "**/*.tsbuildinfo"]
+      "outputs": ["dist/**"]
     },
     "typecheck": {
       "dependsOn": ["^typecheck"]
     },
     "lint": {
+      "dependsOn": ["^build"]
+    },
+    "deps": {
       "dependsOn": ["^build"]
     },
     "lint:fix": {
@@ -20,23 +23,9 @@
       "cache": false
     },
     "format:check": {},
-    "test": {
-      "dependsOn": ["^build"],
-      "outputs": ["coverage/**"]
-    },
-    "test:coverage": {
-      "dependsOn": ["^build"],
-      "outputs": ["coverage/**"]
-    },
-    "deps": {
-      "dependsOn": ["^build"]
-    },
     "dev": {
       "dependsOn": ["^build"],
       "persistent": true,
-      "cache": false
-    },
-    "clean": {
       "cache": false
     }
   }

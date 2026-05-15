@@ -1,8 +1,6 @@
-/**
- * Drizzle schemas barrel.
- *
- * Empty in the foundation phase — feature schemas land here as bounded
- * contexts arrive. The platform `DatabaseModule` consumes this barrel as
- * `typeof schema` so the Drizzle client is strongly typed even when empty.
- */
-export {}
+export * from './todos.schema'
+export * from './articles.schema'
+export * from './orders.schema'
+export * from './jobs.schema'
+export * from './identity/index'
+export * from './audit/index'
