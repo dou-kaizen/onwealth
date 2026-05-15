@@ -37,10 +37,15 @@ _Last updated: 2026-05-15 | Branch: init-infrastructure_
 - [x] Redis-backed throttler store (`REDIS_URL` required at boot — shipped in init-infrastructure)
 - [ ] Event bus wiring for `DomainEvent` / `IntegrationEvent` (`@onwealth/core`)
 
-## Phase 4 — Production Readiness (planned)
+## Phase 4 — Production Readiness (partially complete)
 
 - [ ] Drizzle migrations pipeline
-- [ ] CI/CD pipeline (GitHub Actions)
+- [x] CI `verify` job (GitHub Actions): typecheck, lint, format, test+coverage, build, split audit (prod high+ / dev critical) — landed `d848254`
+- [x] Supply chain hardening: exact-version pin `@infra-x/code-quality`, `.npmrc scarf-js=false`, `SCARF_ANALYTICS=false` + `DO_NOT_TRACK=1` env — landed `d848254`
+- [x] Coverage artifact upload in CI (no numeric threshold gate yet)
+- [ ] Numeric coverage threshold gate (deferred)
+- [ ] GitHub Actions SHA pinning (currently @v4 tags — deferred)
+- [ ] Deploy stages (staging / production)
 - [ ] Docker + docker-compose for local dev
 - [ ] Deployment guide (`docs/deployment-guide.md`)
 - [ ] Design system / API design guidelines (`docs/design-guidelines.md`)

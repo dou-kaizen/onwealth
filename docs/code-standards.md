@@ -1,6 +1,6 @@
 # Code Standards
 
-_Last updated: 2026-05-04 | Branch: init-infrastructure (Foundation Hardening)_
+_Last updated: 2026-05-15 | Branch: init-infrastructure (Foundation Hardening)_
 
 ## General Principles
 
@@ -101,8 +101,8 @@ Defined and validated in `packages/platform/src/config/env.schema.ts` via Zod. S
 | `JWT_EXPIRES_IN` | `15m` | format: `\d+[smhd]` (schema only — auth phase pending) |
 | `JWT_REFRESH_EXPIRES_IN` | `7d` | format: `\d+[smhd]` (schema only — auth phase pending) |
 | `ALLOWED_ORIGINS` | — | comma-separated; empty → CORS disabled + WARN logged in non-test |
-| `REDIS_URL` | `redis://localhost:6379` | `redis://` or `rediss://` (schema only — cache phase pending) |
-| `REDIS_TTL` | `3600` | seconds (schema only — cache phase pending) |
+| `REDIS_URL` | `redis://localhost:6379` | `redis://` or `rediss://`; **required at boot** — throttler storage factory fails fast if Redis unreachable |
+| `REDIS_TTL` | `3600` | seconds; throttler-scoped TTL (cache feature pending) |
 | `API_BASE_URL` | **required** | problem+json `type` URIs + OpenAPI server URL; no schema default |
 | `THROTTLE_TTL` | `60000` | ms window |
 | `THROTTLE_LIMIT` | `300` | requests per window |
@@ -172,6 +172,8 @@ Adding new packages: update `.dependency-cruiser.cjs` rules if the package has l
 - Mock `ClsService`, `ConfigService`, `PinoLogger` in unit tests — do not spin up full NestJS app
 - Coverage: `@vitest/coverage-v8`
 - Run: `pnpm test` (Turborepo pipeline, depends on `^build`)
+- Coverage run: `pnpm test:coverage` (runs `vitest --coverage` via Turborepo `test:coverage` task; artifact uploaded in CI — no numeric threshold gate yet)
+- Nested workspace `coverage/` dirs are gitignored (`.gitignore` fix landed `d1dda08`)
 
 ## Linting & Formatting
 
@@ -208,13 +210,15 @@ the foundation-hardening plan's red-team F14 row).
   `--frozen-lockfile`.
 - Public-scope private packages MUST be pinned to exact versions + listed
   in `pnpm.overrides` to defend against dependency confusion via npm
-  scope hijacking. Current: `@infra-x/code-quality`.
-- `pnpm audit --audit-level=high --prod` (and `--audit-level=critical
-  --dev`) run in CI on every PR. Failures block merge.
+  scope hijacking. Current: `@infra-x/code-quality` (exact-version pinned, `d848254`).
+- CI runs two separate audit jobs: `pnpm audit --audit-level=high --prod` (production deps)
+  and `pnpm audit --audit-level=critical --dev` (dev deps). Failures block merge.
 - Postinstall scripts: only the allowlist in `pnpm.onlyBuiltDependencies`
   may run install-time scripts. Adding an entry requires PR review.
-- Telemetry: Scarf disabled via `SCARF_ANALYTICS=false` + `.npmrc`
+- Telemetry: Scarf disabled via `SCARF_ANALYTICS=false` + `DO_NOT_TRACK=1` env + `.npmrc`
   `scarf-js = false`. Turbo telemetry disabled in CI workflow env.
+- GitHub Actions pinned to `@v4` tags (not SHAs). SHA pinning is deferred hardening — track
+  in future supply-chain pass.
 
 ## Git & Commits
 

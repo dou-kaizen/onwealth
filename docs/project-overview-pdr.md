@@ -127,7 +127,7 @@ _Last updated: 2026-05-15 | Branch: init-infrastructure_
 
 ### PDR-007 — Feature Modules (planned)
 
-**Status:** Not started
+**Status:** Partially shipped
 
 **Requirements (TBD):**
 - Feature modules under `apps/api/src/modules/{context}/`

@@ -4,6 +4,47 @@ _Significant changes only. Patch-level fixes are in git history._
 
 ---
 
+## 2026-05-15 — Foundation Hardening continuation (`init-infrastructure`)
+
+Commits: `c91c8d5`, `d1dda08`, `d848254`, `323c1a3`, `91c1d9b`
+
+### feat(throttler) — cluster-safe Redis-backed storage (`91c1d9b`)
+
+- Added `@nest-lab/throttler-storage-redis` + `ioredis` as runtime deps (`packages/platform/package.json`)
+- `redis-throttler-storage.factory.ts`: awaits `ready` event or rejects on `error` / 5 s connect timeout — NestJS init aborts before traffic if Redis unreachable (fail-fast)
+- `ThrottlerModule` wired with Redis storage; `enableOfflineQueue` left at default `true` — transient blips buffer up to `maxRetriesPerRequest: 3` rather than 500-storming the API
+- `OnModuleDestroy` races `client.quit()` against 4 s timeout so dead Redis cannot block graceful shutdown past K8s budget
+- Two-client DI caveat accepted (storage client separate from any future feature Redis client); revisit if DI consolidation becomes worthwhile
+- `WORKERS > 1` in-memory-not-cluster-safe warning removed (superseded by Redis storage)
+- Files: `packages/platform/src/throttler/redis-throttler-storage.factory.ts`, `throttler.module.ts`, `index.ts`
+
+### ci — supply chain hardening + coverage gate (`d848254`)
+
+- Split audit: `pnpm audit --audit-level=high --prod` + `pnpm audit --audit-level=critical --dev` — separate jobs, both block merge
+- `@infra-x/code-quality` pinned to exact version in `pnpm.overrides` (dependency-confusion defense)
+- `.npmrc`: `scarf-js=false` added
+- CI env: `SCARF_ANALYTICS=false`, `DO_NOT_TRACK=1`
+- Turborepo `test:coverage` task added; `pnpm test:coverage` workspace script runs `vitest --coverage`
+- Coverage artifact uploaded via `actions/upload-artifact@v4` — no numeric threshold gate yet
+- GitHub Actions remain on `@v4` tags (SHA pinning deferred)
+- File: `.github/workflows/ci.yml`
+
+### refactor(platform) — drop dead branches and noop taps (`323c1a3`)
+
+- Pruned dead code branches and noop interceptor/filter taps from `packages/platform/src`
+- No behavior change; reduces LOC noise
+
+### chore — ignore test artifacts in nested workspaces (`d1dda08`)
+
+- `.gitignore` updated: `coverage/` dirs in nested workspace packages now ignored
+- Prevents accidental commit of vitest coverage output from sub-packages
+
+### docs(journal) — record foundation hardening ship (`c91c8d5`)
+
+- Journal entry added documenting the foundation hardening delivery
+
+---
+
 ## 2026-05-04 — Foundation Hardening (`init-infrastructure`)
 
 Six-phase hardening pass on top of the initial infrastructure scaffold.

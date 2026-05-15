@@ -34,7 +34,7 @@ onwealth/                          # pnpm + Turborepo monorepo
 | `apps/api/src` | 584 |
 | `packages/core/src` | 94 |
 | `packages/database/src` | 9 (intentionally empty schema barrel) |
-| `packages/platform/src` | 1904 |
+| `packages/platform/src` | 2115 |
 
 ## `@onwealth/platform` Subpath Exports
 
@@ -104,8 +104,10 @@ Source: `apps/api/src/config/swagger.config.ts`
 | zod | ^4.0.0 | Env validation |
 | helmet | ^8.0.0 | Security headers |
 | @nestjs/throttler | ^6.4.0 | Rate limiting |
-| @nestjs/swagger | catalog | OpenAPI spec generation + Swagger UI |
-| @scalar/nestjs-api-reference | catalog | Scalar API Reference UI (`/docs`) |
+| @nest-lab/throttler-storage-redis | ^1.1.0 | Redis-backed throttler storage (cluster-safe) |
+| ioredis | ^5.4.0 | Redis client (`REDIS_URL` required at boot; fail-fast if unreachable) |
+| @nestjs/swagger | ^11.2.1 | OpenAPI spec generation + Swagger UI |
+| @scalar/nestjs-api-reference | ^1.1.4 | Scalar API Reference UI (`/docs`) |
 
 ## Toolchain
 

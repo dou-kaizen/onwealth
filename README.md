@@ -12,7 +12,7 @@ Backend platform for wealth management. Currently in the infrastructure-foundati
 | Database | PostgreSQL via Drizzle ORM + node-postgres pool |
 | Logging | Pino / nestjs-pino (JSON in prod, pino-pretty in dev) |
 | Validation | class-validator + class-transformer + Zod (env) |
-| Rate limiting | @nestjs/throttler |
+| Rate limiting | @nestjs/throttler + @nest-lab/throttler-storage-redis + ioredis (Redis-backed, cluster-safe) |
 | Build | Turborepo + pnpm 10 workspaces |
 | Linting | oxlint (single root config) + dependency-cruiser |
 | Formatting | oxfmt |
@@ -44,6 +44,7 @@ onwealth/
 - Node.js 22 (`nvm use` or `fnm use`)
 - pnpm 10.32.1 (`corepack enable && corepack prepare pnpm@10.32.1 --activate`)
 - PostgreSQL instance accessible at `DATABASE_URL`
+- Redis instance accessible at `REDIS_URL` (required at boot — throttler storage fails fast if unreachable)
 
 ### Install
 
@@ -132,6 +133,7 @@ All error responses use RFC 9457 `application/problem+json`. See [docs/system-ar
 | [docs/code-standards.md](./docs/code-standards.md) | TypeScript rules, NestJS conventions, env vars, logging, testing |
 | [docs/codebase-summary.md](./docs/codebase-summary.md) | Package purposes, subpath exports, runtime deps, toolchain |
 | [docs/project-roadmap.md](./docs/project-roadmap.md) | Phase status and planned work |
+| [docs/project-changelog.md](./docs/project-changelog.md) | Significant changes by date |
 
 ## Branch Convention
 

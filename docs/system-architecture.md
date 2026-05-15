@@ -277,10 +277,18 @@ Runtime posture: ioredis `enableOfflineQueue` left at its default (`true`) so tr
 
 Shutdown: `OnModuleDestroy` on `ThrottlerModule` races `client.quit()` against a 4s timeout (mirroring `DatabaseModule.POOL_DRAIN_TIMEOUT_MS` shape) so a dead Redis cannot hold the process past the K8s graceful-shutdown budget.
 
+## CI / Coverage
+
+Single `verify` job on `ubuntu-24.04`. Steps in order: checkout → setup pnpm → setup node → install → `pnpm audit` (prod high+) → `pnpm audit` (dev critical) → typecheck → lint (oxlint + depcruise) → format check → `turbo test:coverage` (vitest --coverage) → upload coverage artifact → build.
+
+Coverage artifact is uploaded on every run; no numeric threshold gate yet (deferred). SHA pinning for GitHub Actions (currently @v4 tags) is also deferred.
+
 ## Planned (not yet implemented)
 
 - Feature modules under `apps/api/src/modules/{ctx}/`
-- `@nestjs/terminus` health indicators (readiness/liveness probes)
+- Deeper `@nestjs/terminus` health indicators: DB + Redis readiness/liveness probes (`GET /health` liveness endpoint exists; terminus probes not yet wired)
 - Authentication (JWT / OAuth)
 - DDD layer rules in dependency-cruiser (presentation-no-database, etc.)
 - `@ApiResponse` / `@ApiOperation` decorators on individual route handlers (currently only the global default error response is injected)
+- Numeric coverage threshold gate in CI
+- GitHub Actions SHA pinning (currently @v4 tags)
