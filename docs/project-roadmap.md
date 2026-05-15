@@ -34,7 +34,7 @@ _Last updated: 2026-05-15 | Branch: init-infrastructure_
 
 - [ ] First bounded context module under `apps/api/src/modules/{context}/`
 - [ ] `@nestjs/terminus` health indicators (readiness + liveness probes)
-- [ ] Redis-backed throttler store (`REDIS_URL` env already defined)
+- [x] Redis-backed throttler store (`REDIS_URL` required at boot — shipped in init-infrastructure)
 - [ ] Event bus wiring for `DomainEvent` / `IntegrationEvent` (`@onwealth/core`)
 
 ## Phase 4 — Production Readiness (planned)

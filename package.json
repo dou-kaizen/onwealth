@@ -17,7 +17,7 @@
     "prepare": "lefthook install"
   },
   "devDependencies": {
-    "@infra-x/code-quality": "^0.6.2",
+    "@infra-x/code-quality": "0.6.2",
     "dependency-cruiser": "catalog:",
     "lefthook": "^2.1.6",
     "oxfmt": "^0.44.0",
@@ -30,11 +30,12 @@
   },
   "packageManager": "pnpm@10.32.1",
   "pnpm": {
+    "overrides": {
+      "@infra-x/code-quality": "0.6.2"
+    },
     "onlyBuiltDependencies": [
       "@nestjs/core",
-      "@scarf/scarf",
       "@swc/core",
-      "bcrypt",
       "esbuild",
       "lefthook"
     ]

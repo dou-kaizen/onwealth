@@ -13,6 +13,8 @@ concurrency:
 env:
   TURBO_TELEMETRY_DISABLED: 1
   FORCE_COLOR: 1
+  SCARF_ANALYTICS: false
+  DO_NOT_TRACK: 1
 
 jobs:
   verify:
@@ -39,6 +41,12 @@ jobs:
       - name: Install
         run: pnpm install --frozen-lockfile
 
+      - name: Audit (prod deps — high+)
+        run: pnpm audit --audit-level=high --prod
+
+      - name: Audit (dev deps — critical only)
+        run: pnpm audit --audit-level=critical --dev
+
       - name: Typecheck
         run: pnpm typecheck
 
@@ -48,8 +56,18 @@ jobs:
       - name: Format check
         run: pnpm format:check
 
-      - name: Test
-        run: pnpm test
+      - name: Test (with coverage)
+        run: pnpm turbo run test:coverage
+        env:
+          CI: true
+
+      - name: Upload coverage
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-${{ github.run_id }}
+          path: apps/*/coverage/
+          retention-days: 14
 
       - name: Build
         run: pnpm build

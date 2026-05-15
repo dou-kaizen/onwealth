@@ -134,7 +134,9 @@ _Last updated: 2026-05-15 | Branch: init-infrastructure_
 - DDD layer rules added to `.dependency-cruiser.cjs`
 - `@nestjs/terminus` health indicators (readiness/liveness)
 - Authentication (JWT + refresh tokens)
-- Redis-backed throttler store
+
+**Shipped ahead of feature work (init-infrastructure):**
+- Redis-backed throttler store (`@nest-lab/throttler-storage-redis` + `ioredis`; `REDIS_URL` required at boot)
 
 ## Non-Functional Requirements
 

@@ -57,7 +57,12 @@ Routes are only mounted when `swaggerEnabled` is true (see env `ENABLE_SWAGGER`)
 
 ### CSP trade-off
 
-Strict helmet runs globally first. When swagger is enabled, a second (loose) helmet middleware is path-mounted on `/swagger` and `/docs` only — allowing `cdn.jsdelivr.net`, `unsafe-inline`, and `unsafe-eval` for Swagger UI. Express path matching: `app.use('/swagger', mw)` matches `/swagger` and `/swagger/*` but NOT `/swagger-json` (next character after prefix is `-`, not `/`), so the JSON spec endpoint stays under strict CSP without an explicit exclusion (`apps/api/src/main.ts`).
+Strict helmet runs globally first. When swagger is enabled, two scoped helmet middlewares mount per-path:
+
+- `/swagger` → adds `'unsafe-inline'` + `'unsafe-eval'` (Swagger UI try-it-out). No third-party origins — Swagger UI ships bundled by `@nestjs/swagger` v11.
+- `/docs` → adds `https://cdn.scalar.com` only. Scalar's bundle is pinned to the vendor-controlled CDN via the `cdn` option in `apiReference()` (default upstream is `cdn.jsdelivr.net` which would expand the typosquat surface).
+
+Express path matching: `app.use('/swagger', mw)` matches `/swagger` and `/swagger/*` but NOT `/swagger-json` (next character after prefix is `-`, not `/`), so the JSON spec endpoint stays under strict CSP without an explicit exclusion (`apps/api/src/main.ts`). The global `helmet()` runs first; path-mounted middleware overrides `Content-Security-Policy` per request via Express last-writer-wins.
 
 ```
 swaggerExplicit = ENABLE_SWAGGER env (boolean | undefined after Zod transform)
@@ -262,11 +267,20 @@ Not yet wired to an event bus — reserved for Phase 3.
 
 The `code` field in `ProblemDetailsDto` is typed `string` so feature modules may register domain-specific codes alongside the platform constants.
 
+## Throttler
+
+Storage: `@nest-lab/throttler-storage-redis` backed by `ioredis`. Cluster-safe across replicas — rate-limit counters live in Redis, not per-process memory.
+
+Boot posture: `REDIS_URL` MUST point to a reachable Redis instance. The storage factory awaits a `ready` event (or rejects on `error` / 5s connect timeout); if Redis is unreachable, the NestJS init throws and the process exits before serving traffic. Localhost default is rejected at boot when `NODE_ENV=production`.
+
+Runtime posture: ioredis `enableOfflineQueue` left at its default (`true`) so transient blips (rolling Redis upgrade, ~10s outage) buffer throttler commands for up to `maxRetriesPerRequest: 3` attempts rather than 500-storming the API. Longer outages fall through to 500s; the alternative (`enableOfflineQueue: false`) would convert every blip into an outage.
+
+Shutdown: `OnModuleDestroy` on `ThrottlerModule` races `client.quit()` against a 4s timeout (mirroring `DatabaseModule.POOL_DRAIN_TIMEOUT_MS` shape) so a dead Redis cannot hold the process past the K8s graceful-shutdown budget.
+
 ## Planned (not yet implemented)
 
 - Feature modules under `apps/api/src/modules/{ctx}/`
 - `@nestjs/terminus` health indicators (readiness/liveness probes)
-- Redis-backed throttler store
 - Authentication (JWT / OAuth)
 - DDD layer rules in dependency-cruiser (presentation-no-database, etc.)
 - `@ApiResponse` / `@ApiOperation` decorators on individual route handlers (currently only the global default error response is injected)

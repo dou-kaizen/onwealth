@@ -128,7 +128,7 @@ When throwing from services that touch the database, use the correct `ErrorCode`
 
 `app.getHttpAdapter().getInstance().set('trust proxy', 1)` — configured for a single LB hop (public → LB → API). If topology is CDN → LB → API, bump to `2`. Never use `true` (trusts all forwarded IPs — enables throttler bypass via `X-Forwarded-For` spoofing).
 
-In-memory throttler is per-process. With multiple workers/replicas, a client can hit `N × THROTTLE_LIMIT` before any instance returns 429. Set `WORKERS` env to match replica count to enable the warning log. Wire `REDIS_URL` before public exposure at scale.
+Throttler storage is Redis-backed (`@nest-lab/throttler-storage-redis`). `REDIS_URL` is required at boot — the storage factory rejects if Redis is unreachable, aborting NestJS init before any traffic is served. Rate-limit counters are cluster-safe across replicas.
 
 ## Logging
 
@@ -184,6 +184,37 @@ Adding new packages: update `.dependency-cruiser.cjs` rules if the package has l
 | `pnpm typecheck` | tsc project references across all packages |
 
 Config: single root `oxlint.config.ts` (extends `@infra-x/code-quality` presets) — per-package overrides expressed via `overrides[].files` globs. Per-package `lint` script is `oxlint .`; root config is discovered via upward walk so IDE (oxc-vscode) and CLI stay in lockstep. Format scripts are scoped to `src/` (`oxfmt --check src` / `--write src`) to avoid scanning compiled `dist/` output.
+
+## Auth transport
+
+All access and refresh tokens MUST be sent as `Authorization: Bearer <jwt>`
+headers. Cookie-based session/refresh is FORBIDDEN until a CSRF guard ships
+(see `apps/api/src/main.ts` CORS block). Rationale: CORS allowlist with
+cookie auth + no CSRF protection allows any XSS-compromised allowed origin
+to forge state-changing requests against an authenticated session.
+
+Re-enabling `credentials: true` requires landing in the same PR:
+- CSRF token middleware (e.g. `csurf`) OR double-submit cookie scheme
+- `SameSite=Strict` on session/refresh cookies
+- Updated CORS preflight test coverage
+
+Enforcement: comment-and-doc only today. Mechanical lint/depcruise rule
+banning cookie APIs is deferred until the auth module lands (tracked in
+the foundation-hardening plan's red-team F14 row).
+
+## Supply chain
+
+- All catalog deps use caret ranges resolved by `pnpm-lock.yaml`. CI uses
+  `--frozen-lockfile`.
+- Public-scope private packages MUST be pinned to exact versions + listed
+  in `pnpm.overrides` to defend against dependency confusion via npm
+  scope hijacking. Current: `@infra-x/code-quality`.
+- `pnpm audit --audit-level=high --prod` (and `--audit-level=critical
+  --dev`) run in CI on every PR. Failures block merge.
+- Postinstall scripts: only the allowlist in `pnpm.onlyBuiltDependencies`
+  may run install-time scripts. Adding an entry requires PR review.
+- Telemetry: Scarf disabled via `SCARF_ANALYTICS=false` + `.npmrc`
+  `scarf-js = false`. Turbo telemetry disabled in CI workflow env.
 
 ## Git & Commits
 

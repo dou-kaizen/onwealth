@@ -48,7 +48,7 @@ onwealth/                          # pnpm + Turborepo monorepo
 | `/interceptors` | `InterceptorsModule` — `TimeoutInterceptor`, `RequestContextInterceptor`, `CorrelationIdInterceptor`, `TraceContextInterceptor`, `TransformInterceptor` |
 | `/decorators` | `@UseEnvelope()` decorator |
 | `/pipes` | `createValidationPipe()` — whitelist, 422, transform |
-| `/throttler` | `ThrottlerModule` — env-driven TTL/limit |
+| `/throttler` | `ThrottlerModule` — Redis-backed (`@nest-lab/throttler-storage-redis` + `ioredis`), env-driven TTL/limit; fail-fast on boot if `REDIS_URL` unreachable |
 | `/database` | `DatabaseModule` (`forRoot()` / `forRootAsync(options)`), `DRIZZLE_TOKEN` + `POOL_TOKEN` injection tokens, `DrizzleDb` + `DrizzleInstance` types |
 | `/error-codes` | `ErrorCode` const object + union type (opaque string literals, not enum) |
 | `/problem-details` | `ProblemDetailsDto` (RFC 9457), `FieldError`, `ValidationErrorItem` |
@@ -61,7 +61,7 @@ onwealth/                          # pnpm + Turborepo monorepo
 4. Resolve `swaggerEnabled = ENABLE_SWAGGER ?? (NODE_ENV !== 'production')`
 5. `helmet()` — strict CSP global; loose CSP path-mounted on `/swagger` + `/docs` only when swagger enabled
 6. `trust proxy = 1` (single LB hop)
-7. Cluster-safety check: logs WARN if `WORKERS > 1` (in-memory throttler not safe for multi-process)
+7. Throttler uses Redis-backed storage (`REDIS_URL` required at boot; process exits if unreachable — no silent fallback to in-memory)
 8. `createValidationPipe()` (whitelist + 422 + transform + `enableImplicitConversion: false`)
 9. 5 global interceptors (bind order): `TimeoutInterceptor` → `RequestContextInterceptor` → `CorrelationIdInterceptor` → `TraceContextInterceptor` → `TransformInterceptor`; first 4 via `app.get(...)` DI, `TransformInterceptor` via `new` (needs `reflector` + `cls`)
 10. Global filters (registered LIFO — last registered runs first on exception):
