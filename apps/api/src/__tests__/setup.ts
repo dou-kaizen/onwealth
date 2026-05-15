@@ -10,7 +10,7 @@ declare global {
 }
 
 beforeAll(() => {
-  const required = ['DATABASE_URL', 'JWT_SECRET']
+  const required = ['DATABASE_URL', 'JWT_SECRET', 'REDIS_URL', 'API_BASE_URL']
   for (const key of required) {
     if (!process.env[key]) {
       throw new Error(`E2E test requires environment variable: ${key}`)

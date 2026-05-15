@@ -56,21 +56,3 @@ export function createCorsConfig(allowedOrigins?: string[]): CorsOptions {
     maxAge: 3600,
   }
 }
-
-/**
- * Rate limiting configuration
- *
- * Prevents API abuse and DDoS attacks
- */
-export const throttlerConfig = {
-  // Time window (milliseconds)
-  ttl: 60_000, // 60 seconds
-  // Maximum number of requests within the time window
-  limit: 10, // 10 requests per minute
-  // Whether to ignore User-Agent
-  ignoreUserAgents: [],
-  // Whether to skip successful requests
-  skipSuccessfulRequests: false,
-  // Whether to skip failed requests
-  skipFailedRequests: false,
-}
