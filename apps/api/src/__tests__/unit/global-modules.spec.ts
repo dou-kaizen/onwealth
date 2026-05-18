@@ -14,11 +14,11 @@ import path from 'node:path'
 
 import { beforeAll, describe, expect, it } from 'vitest'
 
-const APPROVED_GLOBAL_MODULES = new Set([
-  'src/app/database/db.module.ts',
-  'src/app/events/domain-events.module.ts',
-  'src/modules/cache/cache.module.ts',
-])
+// The global infrastructure modules (Drizzle, DomainEvents, Cache) were
+// extracted into the @onwealth/shared-kernel package — their @Global() guard
+// now lives in that package's own global-modules.spec.ts. apps/api itself
+// declares no @Global() modules.
+const APPROVED_GLOBAL_MODULES = new Set<string>([])
 
 const SRC_ROOT = path.resolve(import.meta.dirname, '../../../')
 

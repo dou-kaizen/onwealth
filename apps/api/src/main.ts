@@ -1,121 +1,32 @@
-import { RequestMethod } from '@nestjs/common'
-import { ConfigService } from '@nestjs/config'
-import { NestFactory, Reflector } from '@nestjs/core'
-import type { NestExpressApplication } from '@nestjs/platform-express'
-import express from 'express'
-import helmet from 'helmet'
+import type { ConfigType } from '@nestjs/config'
+import { appConfig } from '@onwealth/shared-kernel'
+import { createHttpApp, httpConfig } from '@onwealth/nest-http'
 import { Logger } from 'nestjs-pino'
-import type { Env } from '@/app/config/env.schema'
-import { createCorsConfig } from '@/app/config/security.config'
-import { setupSwagger } from '@/app/config/swagger.config'
-import { createValidationPipe } from '@/app/config/validation.config'
-import { AllExceptionsFilter } from '@/app/filters/all-exceptions.filter'
-import { ProblemDetailsFilter } from '@/app/filters/problem-details.filter'
-import { ThrottlerExceptionFilter } from '@/app/filters/throttler-exception.filter'
-import { CorrelationIdInterceptor } from '@/app/interceptors/correlation-id.interceptor'
-import { LinkHeaderInterceptor } from '@/app/interceptors/link-header.interceptor'
-import { LocationHeaderInterceptor } from '@/app/interceptors/location-header.interceptor'
-import { RequestContextInterceptor } from '@/app/interceptors/request-context.interceptor'
-import { TimeoutInterceptor } from '@/app/interceptors/timeout.interceptor'
-import { TraceContextInterceptor } from '@/app/interceptors/trace-context.interceptor'
-import { TransformInterceptor } from '@/app/interceptors/transform.interceptor'
 import { AppModule } from './app.module.js'
 
 async function bootstrap() {
-  const app = await NestFactory.create<NestExpressApplication>(AppModule, {
-    bufferLogs: true, // buffer logs until Logger is ready
-  })
+  // Shared HTTP bootstrap — filters, interceptors, pipes, CORS, Swagger, etc.
+  const app = await createHttpApp(AppModule)
 
-  // Use nestjs-pino Logger
+  // Use nestjs-pino Logger — flushes the buffered bootstrap logs.
   app.useLogger(app.get(Logger))
 
-  // Security hardening: Helmet (adds HSTS, X-Content-Type-Options, X-Frame-Options, etc.)
-  // CSP + COEP disabled — JSON API, no HTML served; COEP not needed for APIs.
-  app.use(helmet({ contentSecurityPolicy: false, crossOriginEmbedderPolicy: false }))
+  const httpCfg = app.get<ConfigType<typeof httpConfig>>(httpConfig.KEY)
+  const appCfg = app.get<ConfigType<typeof appConfig>>(appConfig.KEY)
 
-  // Trust the first proxy hop so ThrottlerGuard rates by real client IP, not LB IP.
-  app.set('trust proxy', 1)
-
-  // Explicit body limit — prevents payload amplification attacks.
-  app.use(express.json({ limit: '100kb' }))
-
-  // CORS configuration
-  const configService = app.get<ConfigService<Env, true>>(ConfigService)
-  const allowedOrigins = configService.get('ALLOWED_ORIGINS', { infer: true })
-  app.enableCors(createCorsConfig(allowedOrigins))
-
-  // Global route prefix
-  app.setGlobalPrefix('api', {
-    exclude: [
-      // Exclude Swagger well-known endpoints
-      { path: '.well-known', method: RequestMethod.ALL },
-      { path: '.well-known/{*path}', method: RequestMethod.ALL },
-      // Exclude health / liveness / readiness probe endpoints (no /api prefix)
-      { path: 'health', method: RequestMethod.ALL },
-      { path: 'health/{*path}', method: RequestMethod.ALL },
-      { path: 'livez', method: RequestMethod.ALL },
-      { path: 'readyz', method: RequestMethod.ALL },
-    ],
-  })
-
-  // Global exception filters — Nest invokes them in REVERSE registration order
-  // (last-registered runs first as the outer catch). Order below is therefore
-  // outermost → innermost when read top-down: AllExceptionsFilter is the
-  // ultimate fallback, ProblemDetailsFilter shapes HttpException responses,
-  // ThrottlerExceptionFilter is most specific (catches ThrottlerException only).
-  app.useGlobalFilters(
-    app.get(ThrottlerExceptionFilter),
-    app.get(ProblemDetailsFilter),
-    app.get(AllExceptionsFilter),
-  )
-
-  // Global interceptors (in execution order)
-  app.useGlobalInterceptors(
-    // 1. Request context (add tracing headers to response)
-    app.get(RequestContextInterceptor),
-    app.get(CorrelationIdInterceptor),
-    app.get(TraceContextInterceptor),
-
-    // 2. Timeout control (30 seconds)
-    new TimeoutInterceptor(30_000),
-
-    // 3. Location header (201 Created)
-    new LocationHeaderInterceptor(),
-
-    // 4. Link header (pagination links)
-    new LinkHeaderInterceptor(),
-
-    // 5. Response formatting (executed last)
-    new TransformInterceptor(app.get(Reflector)),
-  )
-
-  // Global validation pipe
-  app.useGlobalPipes(createValidationPipe())
-
-  // Swagger documentation (non-production only — prevents API schema exposure in prod)
-  const nodeEnv = configService.get('NODE_ENV', { infer: true })
-  if (nodeEnv !== 'production') {
-    setupSwagger(app)
-  }
-
-  // Enable graceful SIGTERM/SIGINT lifecycle (calls onModuleDestroy on providers)
-  app.enableShutdownHooks()
-
-  const port = configService.get('PORT', { infer: true })
+  const port = httpCfg.port
   await app.listen(port)
 
   const logger = app.get(Logger)
-  const env = configService.get('NODE_ENV', { infer: true })
-  const nodeVersion = process.version
   const baseUrl = `http://localhost:${port}`
 
   const startupMessage = `
 ┌─────────────────────────────────────────────────────┐
 │              NestJS Boilerplate Server              │
 ├─────────────────────────────────────────────────────┤
-│  Environment:  ${env.padEnd(35)}  │
+│  Environment:  ${appCfg.nodeEnv.padEnd(35)}  │
 │  Port:         ${String(port).padEnd(35)}  │
-│  Node:         ${nodeVersion.padEnd(35)}  │
+│  Node:         ${process.version.padEnd(35)}  │
 ├─────────────────────────────────────────────────────┤
 │  Endpoints:                                         │
 │  - App:        ${baseUrl.padEnd(35)}  │

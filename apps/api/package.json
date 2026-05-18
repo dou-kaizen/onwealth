@@ -43,6 +43,8 @@
     "@nestjs/throttler": "^6.5.0",
     "@scalar/nestjs-api-reference": "^1.1.4",
     "@onwealth/database": "workspace:*",
+    "@onwealth/nest-http": "workspace:*",
+    "@onwealth/shared-kernel": "workspace:*",
     "bcrypt": "^6.0.0",
     "cache-manager": "^7.2.8",
     "class-transformer": "0.5.1",

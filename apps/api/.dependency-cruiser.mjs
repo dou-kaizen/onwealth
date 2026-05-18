@@ -27,18 +27,12 @@ export default {
       },
     },
     {
-      name: 'shared-kernel-no-modules',
+      name: 'api-uses-packages-not-internal-copies',
       severity: 'error',
-      comment: 'shared-kernel must not import business modules.',
-      from: { path: '^src/shared-kernel/' },
-      to: { path: '^src/modules/' },
-    },
-    {
-      name: 'app-no-modules',
-      severity: 'error',
-      comment: 'The app layer must not directly depend on business modules.',
-      from: { path: '^src/app/' },
-      to: { path: '^src/modules/' },
+      comment:
+        'Cross-cutting code (database, events, logger, filters, interceptors, middleware) lives in @onwealth/shared-kernel and @onwealth/nest-http. apps/api must not reintroduce internal copies under src/app/.',
+      from: { path: '^src/' },
+      to: { path: '^src/app/(database|events|logger|filters|interceptors|middleware)/' },
     },
     {
       name: 'service-no-database-runtime',

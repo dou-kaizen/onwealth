@@ -1,25 +1,45 @@
 import type { MiddlewareConsumer, NestModule } from '@nestjs/common'
-import { Module } from '@nestjs/common'
-import { ConfigModule, ConfigService } from '@nestjs/config'
+import { Module, RequestMethod } from '@nestjs/common'
+import { ConfigModule, type ConfigType } from '@nestjs/config'
 import { APP_GUARD } from '@nestjs/core'
 import { EventEmitterModule } from '@nestjs/event-emitter'
 import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler'
+import {
+  appConfig,
+  CacheModule,
+  DomainEventsModule,
+  DrizzleModule,
+  databaseConfig,
+  LoggerModule,
+  redisConfig,
+  validateEnv,
+} from '@onwealth/shared-kernel'
+import {
+  AllExceptionsFilter,
+  CorrelationIdInterceptor,
+  createClsConfig,
+  ETagMiddleware,
+  HealthModule,
+  httpConfig,
+  ProblemDetailsFilter,
+  RequestContextInterceptor,
+  throttleConfig,
+  ThrottlerExceptionFilter,
+  TraceContextInterceptor,
+} from '@onwealth/nest-http'
 import { ClsModule } from 'nestjs-cls'
-import { createClsConfig } from '@/app/config/cls.config'
-import type { Env } from '@/app/config/env.schema'
-import { validateEnv } from '@/app/config/env.schema'
-import { DrizzleModule } from '@/app/database/db.module'
-import { DomainEventsModule } from '@/app/events/domain-events.module'
-import { AllExceptionsFilter } from '@/app/filters/all-exceptions.filter'
-import { ProblemDetailsFilter } from '@/app/filters/problem-details.filter'
-import { ThrottlerExceptionFilter } from '@/app/filters/throttler-exception.filter'
-import { CorrelationIdInterceptor } from '@/app/interceptors/correlation-id.interceptor'
-import { RequestContextInterceptor } from '@/app/interceptors/request-context.interceptor'
-import { TraceContextInterceptor } from '@/app/interceptors/trace-context.interceptor'
-import { LoggerModule } from '@/app/logger/logger.module'
-import { ETagMiddleware } from '@/app/middleware/etag.middleware'
-import { CacheModule } from '@/modules/cache/cache.module'
-import { HealthModule } from '@/modules/health/health.module'
+
+/**
+ * High-frequency probe routes excluded from Pino access logs.
+ * Kept in sync with the main.ts global-prefix exclusions and health.controller routes.
+ */
+const LOG_EXCLUDED_ROUTES = [
+  { method: RequestMethod.GET, path: 'health' },
+  { method: RequestMethod.GET, path: 'health/live' },
+  { method: RequestMethod.GET, path: 'health/ready' },
+  { method: RequestMethod.GET, path: 'livez' },
+  { method: RequestMethod.GET, path: 'readyz' },
+] as const
 
 /**
  * Root module: infrastructure-only boilerplate
@@ -35,13 +55,16 @@ import { HealthModule } from '@/modules/health/health.module'
     ConfigModule.forRoot({
       isGlobal: true,
       envFilePath: ['.env'],
+      // Full fail-closed Zod gate (HTTP app only)
       validate: validateEnv,
+      // Typed per-namespace config factories (each validates its own env subset)
+      load: [appConfig, databaseConfig, redisConfig, httpConfig, throttleConfig],
       cache: true,
     }),
     // CLS module: request context management (Request ID, tracing, etc.)
     ClsModule.forRoot(createClsConfig()),
     // Logger module: high-performance structured logging (Pino)
-    LoggerModule,
+    LoggerModule.forRoot({ excludePaths: [...LOG_EXCLUDED_ROUTES] }),
     // Event module: domain events and integration events
     EventEmitterModule.forRoot({
       wildcard: true,
@@ -56,14 +79,8 @@ import { HealthModule } from '@/modules/health/health.module'
     DomainEventsModule,
     // Rate limiting module: prevent API abuse
     ThrottlerModule.forRootAsync({
-      imports: [ConfigModule],
-      useFactory: (configService: ConfigService<Env, true>) => [
-        {
-          ttl: configService.get('THROTTLE_TTL', { infer: true }),
-          limit: configService.get('THROTTLE_LIMIT', { infer: true }),
-        },
-      ],
-      inject: [ConfigService],
+      useFactory: (cfg: ConfigType<typeof throttleConfig>) => [{ ttl: cfg.ttl, limit: cfg.limit }],
+      inject: [throttleConfig.KEY],
     }),
     HealthModule,
     CacheModule,
