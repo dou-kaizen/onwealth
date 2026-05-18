@@ -29,14 +29,14 @@
     "db:studio": "drizzle-kit studio"
   },
   "devDependencies": {
-    "@types/pg": "8.15.6",
-    "dotenv": "^17.3.1",
+    "@types/pg": "catalog:",
+    "dotenv": "catalog:",
     "drizzle-kit": "0.31.6",
-    "drizzle-orm": "0.44.7",
-    "pg": "8.16.3",
-    "tsdown": "^0.21.4",
+    "drizzle-orm": "catalog:",
+    "pg": "catalog:",
+    "tsdown": "catalog:",
     "tsx": "^4.21.0",
-    "typescript": "^5.9.3"
+    "typescript": "catalog:"
   },
   "peerDependencies": {
     "drizzle-orm": "0.44.7",

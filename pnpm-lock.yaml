@@ -4,6 +4,99 @@ settings:
   autoInstallPeers: true
   excludeLinksFromLockfile: false
 
+catalogs:
+  default:
+    '@keyv/redis':
+      specifier: ^5.1.6
+      version: 5.1.6
+    '@nestjs/cache-manager':
+      specifier: ^3.1.0
+      version: 3.1.0
+    '@nestjs/common':
+      specifier: ^11.1.17
+      version: 11.1.17
+    '@nestjs/config':
+      specifier: 4.0.2
+      version: 4.0.2
+    '@nestjs/core':
+      specifier: ^11.1.17
+      version: 11.1.17
+    '@nestjs/event-emitter':
+      specifier: ^3.0.1
+      version: 3.0.1
+    '@nestjs/platform-express':
+      specifier: ^11.1.17
+      version: 11.1.17
+    '@nestjs/swagger':
+      specifier: 11.2.1
+      version: 11.2.1
+    '@nestjs/terminus':
+      specifier: ^11.1.1
+      version: 11.1.1
+    '@nestjs/throttler':
+      specifier: ^6.5.0
+      version: 6.5.0
+    '@scalar/nestjs-api-reference':
+      specifier: ^1.1.4
+      version: 1.1.4
+    '@types/express':
+      specifier: ^5.0.6
+      version: 5.0.6
+    '@types/node':
+      specifier: ^25.5.0
+      version: 25.5.0
+    '@types/pg':
+      specifier: 8.15.6
+      version: 8.15.6
+    cache-manager:
+      specifier: ^7.2.8
+      version: 7.2.8
+    class-transformer:
+      specifier: 0.5.1
+      version: 0.5.1
+    class-validator:
+      specifier: 0.14.2
+      version: 0.14.2
+    dependency-cruiser:
+      specifier: ^17.0.0
+      version: 17.3.10
+    dotenv:
+      specifier: ^17.3.1
+      version: 17.3.1
+    drizzle-orm:
+      specifier: 0.44.7
+      version: 0.44.7
+    helmet:
+      specifier: ^8.1.0
+      version: 8.1.0
+    keyv:
+      specifier: ^5.6.0
+      version: 5.6.0
+    nestjs-cls:
+      specifier: ^6.2.0
+      version: 6.2.0
+    nestjs-pino:
+      specifier: ^4.6.1
+      version: 4.6.1
+    pg:
+      specifier: 8.16.3
+      version: 8.16.3
+    rxjs:
+      specifier: ^7.8.2
+      version: 7.8.2
+    tsdown:
+      specifier: ^0.21.4
+      version: 0.21.4
+    typescript:
+      specifier: ^5.9.3
+      version: 5.9.3
+    vitest:
+      specifier: ^4.1.0
+      version: 4.1.0
+    zod:
+      specifier: ^4.3.6
+      version: 4.3.6
+
 importers:
 
   .:
@@ -18,22 +111,22 @@ importers:
   apps/api:
     dependencies:
       '@keyv/redis':
-        specifier: ^5.1.6
+        specifier: 'catalog:'
         version: 5.1.6(keyv@5.6.0)
       '@nestjs/cache-manager':
-        specifier: ^3.1.0
+        specifier: 'catalog:'
         version: 3.1.0(@nestjs/common@11.1.17(class-transformer@0.5.1)(class-validator@0.14.2)(reflect-metadata@0.2.2)(rxjs@7.8.2))(@nestjs/core@11.1.17)(cache-manager@7.2.8)(keyv@5.6.0)(rxjs@7.8.2)
       '@nestjs/common':
-        specifier: ^11.1.17
+        specifier: 'catalog:'
         version: 11.1.17(class-transformer@0.5.1)(class-validator@0.14.2)(reflect-metadata@0.2.2)(rxjs@7.8.2)
       '@nestjs/config':
-        specifier: 4.0.2
+        specifier: 'catalog:'
         version: 4.0.2(@nestjs/common@11.1.17(class-transformer@0.5.1)(class-validator@0.14.2)(reflect-metadata@0.2.2)(rxjs@7.8.2))(rxjs@7.8.2)
       '@nestjs/core':
-        specifier: ^11.1.17
+        specifier: 'catalog:'
         version: 11.1.17(@nestjs/common@11.1.17(class-transformer@0.5.1)(class-validator@0.14.2)(reflect-metadata@0.2.2)(rxjs@7.8.2))(@nestjs/platform-express@11.1.17)(reflect-metadata@0.2.2)(rxjs@7.8.2)
       '@nestjs/event-emitter':
-        specifier: ^3.0.1
+        specifier: 'catalog:'
         version: 3.0.1(@nestjs/common@11.1.17(class-transformer@0.5.1)(class-validator@0.14.2)(reflect-metadata@0.2.2)(rxjs@7.8.2))(@nestjs/core@11.1.17)
       '@nestjs/jwt':
         specifier: ^11.0.2
@@ -42,19 +135,19 @@ importers:
         specifier: ^11.0.5
         version: 11.0.5(@nestjs/common@11.1.17(class-transformer@0.5.1)(class-validator@0.14.2)(reflect-metadata@0.2.2)(rxjs@7.8.2))(passport@0.7.0)
       '@nestjs/platform-express':
-        specifier: ^11.1.17
+        specifier: 'catalog:'
         version: 11.1.17(@nestjs/common@11.1.17(class-transformer@0.5.1)(class-validator@0.14.2)(reflect-metadata@0.2.2)(rxjs@7.8.2))(@nestjs/core@11.1.17)
       '@nestjs/schedule':
         specifier: ^6.1.1
         version: 6.1.1(@nestjs/common@11.1.17(class-transformer@0.5.1)(class-validator@0.14.2)(reflect-metadata@0.2.2)(rxjs@7.8.2))(@nestjs/core@11.1.17)
       '@nestjs/swagger':
-        specifier: 11.2.1
+        specifier: 'catalog:'
         version: 11.2.1(@nestjs/common@11.1.17(class-transformer@0.5.1)(class-validator@0.14.2)(reflect-metadata@0.2.2)(rxjs@7.8.2))(@nestjs/core@11.1.17)(class-transformer@0.5.1)(class-validator@0.14.2)(reflect-metadata@0.2.2)
       '@nestjs/terminus':
-        specifier: ^11.1.1
+        specifier: 'catalog:'
         version: 11.1.1(@nestjs/common@11.1.17(class-transformer@0.5.1)(class-validator@0.14.2)(reflect-metadata@0.2.2)(rxjs@7.8.2))(@nestjs/core@11.1.17)(reflect-metadata@0.2.2)(rxjs@7.8.2)
       '@nestjs/throttler':
-        specifier: ^6.5.0
+        specifier: 'catalog:'
         version: 6.5.0(@nestjs/common@11.1.17(class-transformer@0.5.1)(class-validator@0.14.2)(reflect-metadata@0.2.2)(rxjs@7.8.2))(@nestjs/core@11.1.17)(reflect-metadata@0.2.2)
       '@onwealth/database':
         specifier: workspace:*
@@ -66,40 +159,40 @@ importers:
         specifier: workspace:*
         version: link:../../packages/shared-kernel
       '@scalar/nestjs-api-reference':
-        specifier: ^1.1.4
+        specifier: 'catalog:'
         version: 1.1.4
       bcrypt:
         specifier: ^6.0.0
         version: 6.0.0
       cache-manager:
-        specifier: ^7.2.8
+        specifier: 'catalog:'
         version: 7.2.8
       class-transformer:
-        specifier: 0.5.1
+        specifier: 'catalog:'
         version: 0.5.1
       class-validator:
-        specifier: 0.14.2
+        specifier: 'catalog:'
         version: 0.14.2
       dayjs:
         specifier: ^1.11.20
         version: 1.11.20
       drizzle-orm:
-        specifier: 0.44.7
+        specifier: 'catalog:'
         version: 0.44.7(@opentelemetry/api@1.9.0)(@types/pg@8.15.6)(pg@8.16.3)(postgres@3.4.8)
       helmet:
-        specifier: ^8.1.0
+        specifier: 'catalog:'
         version: 8.1.0
       keyv:
-        specifier: ^5.6.0
+        specifier: 'catalog:'
         version: 5.6.0
       multer:
         specifier: ^2.1.1
         version: 2.1.1
       nestjs-cls:
-        specifier: ^6.2.0
+        specifier: 'catalog:'
         version: 6.2.0(@nestjs/common@11.1.17(class-transformer@0.5.1)(class-validator@0.14.2)(reflect-metadata@0.2.2)(rxjs@7.8.2))(@nestjs/core@11.1.17)(reflect-metadata@0.2.2)(rxjs@7.8.2)
       nestjs-pino:
-        specifier: ^4.6.1
+        specifier: 'catalog:'
         version: 4.6.1(@nestjs/common@11.1.17(class-transformer@0.5.1)(class-validator@0.14.2)(reflect-metadata@0.2.2)(rxjs@7.8.2))(pino-http@11.0.0)(pino@10.3.1)(rxjs@7.8.2)
       passport:
         specifier: ^0.7.0
@@ -114,7 +207,7 @@ importers:
         specifier: ^4.0.1
         version: 4.0.1
       pg:
-        specifier: 8.16.3
+        specifier: 'catalog:'
         version: 8.16.3
       pino-http:
         specifier: ^11.0.0
@@ -126,10 +219,10 @@ importers:
         specifier: ^0.2.2
         version: 0.2.2
       rxjs:
-        specifier: ^7.8.2
+        specifier: 'catalog:'
         version: 7.8.2
       zod:
-        specifier: ^4.3.6
+        specifier: 'catalog:'
         version: 4.3.6
     devDependencies:
       '@golevelup/ts-vitest':
@@ -154,13 +247,13 @@ importers:
         specifier: ^6.0.0
         version: 6.0.0
       '@types/express':
-        specifier: ^5.0.6
+        specifier: 'catalog:'
         version: 5.0.6
       '@types/multer':
         specifier: ^2.1.0
         version: 2.1.0
       '@types/node':
-        specifier: ^25.5.0
+        specifier: 'catalog:'
         version: 25.5.0
       '@types/passport-github2':
         specifier: ^1.2.9
@@ -175,7 +268,7 @@ importers:
         specifier: ^1.8.0
         version: 1.8.0
       '@types/pg':
-        specifier: 8.15.6
+        specifier: 'catalog:'
         version: 8.15.6
       '@types/supertest':
         specifier: ^7.2.0
@@ -187,10 +280,10 @@ importers:
         specifier: ^4.1.0
         version: 4.1.0(vitest@4.1.0)
       dependency-cruiser:
-        specifier: ^17.0.0
+        specifier: 'catalog:'
         version: 17.3.10
       dotenv:
-        specifier: ^17.3.1
+        specifier: 'catalog:'
         version: 17.3.1
       pino-pretty:
         specifier: ^13.1.3
@@ -199,7 +292,7 @@ importers:
         specifier: ^7.2.2
         version: 7.2.2
       typescript:
-        specifier: ^5.9.3
+        specifier: 'catalog:'
         version: 5.9.3
       unplugin-swc:
         specifier: ^1.5.9
@@ -208,169 +301,169 @@ importers:
         specifier: ^6.1.1
         version: 6.1.1(typescript@5.9.3)(vite@8.0.1(@emnapi/core@1.8.1)(@emnapi/runtime@1.8.1)(@types/node@25.5.0)(esbuild@0.27.7)(jiti@2.6.1)(terser@5.46.0)(tsx@4.21.0)(yaml@2.8.2))
       vitest:
-        specifier: ^4.1.0
+        specifier: 'catalog:'
         version: 4.1.0(@opentelemetry/api@1.9.0)(@types/node@25.5.0)(@vitest/ui@4.1.0)(jsdom@29.0.1(@noble/hashes@1.8.0))(msw@2.12.14(@types/node@25.5.0)(typescript@5.9.3))(vite@8.0.1(@emnapi/core@1.8.1)(@emnapi/runtime@1.8.1)(@types/node@25.5.0)(esbuild@0.27.7)(jiti@2.6.1)(terser@5.46.0)(tsx@4.21.0)(yaml@2.8.2))
 
   packages/database:
     devDependencies:
       '@types/pg':
-        specifier: 8.15.6
+        specifier: 'catalog:'
         version: 8.15.6
       dotenv:
-        specifier: ^17.3.1
+        specifier: 'catalog:'
         version: 17.3.1
       drizzle-kit:
         specifier: 0.31.6
         version: 0.31.6
       drizzle-orm:
-        specifier: 0.44.7
+        specifier: 'catalog:'
         version: 0.44.7(@opentelemetry/api@1.9.0)(@types/pg@8.15.6)(pg@8.16.3)(postgres@3.4.8)
       pg:
-        specifier: 8.16.3
+        specifier: 'catalog:'
         version: 8.16.3
       tsdown:
-        specifier: ^0.21.4
-        version: 0.21.4(synckit@0.11.12)(typescript@5.9.3)
+        specifier: 'catalog:'
+        version: 0.21.4(@emnapi/core@1.8.1)(@emnapi/runtime@1.8.1)(synckit@0.11.12)(typescript@5.9.3)
       tsx:
         specifier: ^4.21.0
         version: 4.21.0
       typescript:
-        specifier: ^5.9.3
+        specifier: 'catalog:'
         version: 5.9.3
 
   packages/nest-http:
     devDependencies:
       '@nestjs/common':
-        specifier: ^11.1.17
+        specifier: 'catalog:'
         version: 11.1.17(class-transformer@0.5.1)(class-validator@0.14.2)(reflect-metadata@0.2.2)(rxjs@7.8.2)
       '@nestjs/config':
-        specifier: 4.0.2
+        specifier: 'catalog:'
         version: 4.0.2(@nestjs/common@11.1.17(class-transformer@0.5.1)(class-validator@0.14.2)(reflect-metadata@0.2.2)(rxjs@7.8.2))(rxjs@7.8.2)
       '@nestjs/core':
-        specifier: ^11.1.17
+        specifier: 'catalog:'
         version: 11.1.17(@nestjs/common@11.1.17(class-transformer@0.5.1)(class-validator@0.14.2)(reflect-metadata@0.2.2)(rxjs@7.8.2))(@nestjs/platform-express@11.1.17)(reflect-metadata@0.2.2)(rxjs@7.8.2)
       '@nestjs/platform-express':
-        specifier: ^11.1.17
+        specifier: 'catalog:'
         version: 11.1.17(@nestjs/common@11.1.17(class-transformer@0.5.1)(class-validator@0.14.2)(reflect-metadata@0.2.2)(rxjs@7.8.2))(@nestjs/core@11.1.17)
       '@nestjs/swagger':
-        specifier: 11.2.1
+        specifier: 'catalog:'
         version: 11.2.1(@nestjs/common@11.1.17(class-transformer@0.5.1)(class-validator@0.14.2)(reflect-metadata@0.2.2)(rxjs@7.8.2))(@nestjs/core@11.1.17)(class-transformer@0.5.1)(class-validator@0.14.2)(reflect-metadata@0.2.2)
       '@nestjs/terminus':
-        specifier: ^11.1.1
+        specifier: 'catalog:'
         version: 11.1.1(@nestjs/common@11.1.17(class-transformer@0.5.1)(class-validator@0.14.2)(reflect-metadata@0.2.2)(rxjs@7.8.2))(@nestjs/core@11.1.17)(reflect-metadata@0.2.2)(rxjs@7.8.2)
       '@nestjs/throttler':
-        specifier: ^6.5.0
+        specifier: 'catalog:'
         version: 6.5.0(@nestjs/common@11.1.17(class-transformer@0.5.1)(class-validator@0.14.2)(reflect-metadata@0.2.2)(rxjs@7.8.2))(@nestjs/core@11.1.17)(reflect-metadata@0.2.2)
       '@onwealth/shared-kernel':
         specifier: workspace:*
         version: link:../shared-kernel
       '@scalar/nestjs-api-reference':
-        specifier: ^1.1.4
+        specifier: 'catalog:'
         version: 1.1.4
       '@types/express':
-        specifier: ^5.0.6
+        specifier: 'catalog:'
         version: 5.0.6
       '@types/node':
-        specifier: ^25.5.0
+        specifier: 'catalog:'
         version: 25.5.0
       '@types/pg':
-        specifier: 8.15.6
+        specifier: 'catalog:'
         version: 8.15.6
       class-transformer:
-        specifier: 0.5.1
+        specifier: 'catalog:'
         version: 0.5.1
       class-validator:
-        specifier: 0.14.2
+        specifier: 'catalog:'
         version: 0.14.2
       dependency-cruiser:
-        specifier: ^17.0.0
+        specifier: 'catalog:'
         version: 17.3.10
       drizzle-orm:
-        specifier: 0.44.7
+        specifier: 'catalog:'
         version: 0.44.7(@opentelemetry/api@1.9.0)(@types/pg@8.15.6)(pg@8.16.3)(postgres@3.4.8)
       express:
         specifier: ^5.2.1
         version: 5.2.1
       helmet:
-        specifier: ^8.1.0
+        specifier: 'catalog:'
         version: 8.1.0
       nestjs-cls:
-        specifier: ^6.2.0
+        specifier: 'catalog:'
         version: 6.2.0(@nestjs/common@11.1.17(class-transformer@0.5.1)(class-validator@0.14.2)(reflect-metadata@0.2.2)(rxjs@7.8.2))(@nestjs/core@11.1.17)(reflect-metadata@0.2.2)(rxjs@7.8.2)
       pg:
-        specifier: 8.16.3
+        specifier: 'catalog:'
         version: 8.16.3
       rxjs:
-        specifier: ^7.8.2
+        specifier: 'catalog:'
         version: 7.8.2
       tsdown:
-        specifier: ^0.21.4
-        version: 0.21.4(synckit@0.11.12)(typescript@5.9.3)
+        specifier: 'catalog:'
+        version: 0.21.4(@emnapi/core@1.8.1)(@emnapi/runtime@1.8.1)(synckit@0.11.12)(typescript@5.9.3)
       typescript:
-        specifier: ^5.9.3
+        specifier: 'catalog:'
         version: 5.9.3
       vitest:
-        specifier: ^4.1.0
+        specifier: 'catalog:'
         version: 4.1.0(@opentelemetry/api@1.9.0)(@types/node@25.5.0)(@vitest/ui@4.1.0)(jsdom@29.0.1(@noble/hashes@1.8.0))(msw@2.12.14(@types/node@25.5.0)(typescript@5.9.3))(vite@8.0.1(@emnapi/core@1.8.1)(@emnapi/runtime@1.8.1)(@types/node@25.5.0)(esbuild@0.27.7)(jiti@2.6.1)(terser@5.46.0)(tsx@4.21.0)(yaml@2.8.2))
 
   packages/shared-kernel:
     devDependencies:
       '@keyv/redis':
-        specifier: ^5.1.6
+        specifier: 'catalog:'
         version: 5.1.6(keyv@5.6.0)
       '@nestjs/cache-manager':
-        specifier: ^3.1.0
+        specifier: 'catalog:'
         version: 3.1.0(@nestjs/common@11.1.17(class-transformer@0.5.1)(class-validator@0.14.2)(reflect-metadata@0.2.2)(rxjs@7.8.2))(@nestjs/core@11.1.17)(cache-manager@7.2.8)(keyv@5.6.0)(rxjs@7.8.2)
       '@nestjs/common':
-        specifier: ^11.1.17
+        specifier: 'catalog:'
         version: 11.1.17(class-transformer@0.5.1)(class-validator@0.14.2)(reflect-metadata@0.2.2)(rxjs@7.8.2)
       '@nestjs/config':
-        specifier: 4.0.2
+        specifier: 'catalog:'
         version: 4.0.2(@nestjs/common@11.1.17(class-transformer@0.5.1)(class-validator@0.14.2)(reflect-metadata@0.2.2)(rxjs@7.8.2))(rxjs@7.8.2)
       '@nestjs/core':
-        specifier: ^11.1.17
+        specifier: 'catalog:'
         version: 11.1.17(@nestjs/common@11.1.17(class-transformer@0.5.1)(class-validator@0.14.2)(reflect-metadata@0.2.2)(rxjs@7.8.2))(@nestjs/platform-express@11.1.17)(reflect-metadata@0.2.2)(rxjs@7.8.2)
       '@nestjs/event-emitter':
-        specifier: ^3.0.1
+        specifier: 'catalog:'
         version: 3.0.1(@nestjs/common@11.1.17(class-transformer@0.5.1)(class-validator@0.14.2)(reflect-metadata@0.2.2)(rxjs@7.8.2))(@nestjs/core@11.1.17)
       '@onwealth/database':
         specifier: workspace:*
         version: link:../database
       '@types/node':
-        specifier: ^25.5.0
+        specifier: 'catalog:'
         version: 25.5.0
       '@types/pg':
-        specifier: 8.15.6
+        specifier: 'catalog:'
         version: 8.15.6
       cache-manager:
-        specifier: ^7.2.8
+        specifier: 'catalog:'
         version: 7.2.8
       dependency-cruiser:
-        specifier: ^17.0.0
+        specifier: 'catalog:'
         version: 17.3.10
       drizzle-orm:
-        specifier: 0.44.7
+        specifier: 'catalog:'
         version: 0.44.7(@opentelemetry/api@1.9.0)(@types/pg@8.15.6)(pg@8.16.3)(postgres@3.4.8)
       keyv:
-        specifier: ^5.6.0
+        specifier: 'catalog:'
         version: 5.6.0
       nestjs-pino:
-        specifier: ^4.6.1
+        specifier: 'catalog:'
         version: 4.6.1(@nestjs/common@11.1.17(class-transformer@0.5.1)(class-validator@0.14.2)(reflect-metadata@0.2.2)(rxjs@7.8.2))(pino-http@11.0.0)(pino@10.3.1)(rxjs@7.8.2)
       pg:
-        specifier: 8.16.3
+        specifier: 'catalog:'
         version: 8.16.3
       tsdown:
-        specifier: ^0.21.4
-        version: 0.21.4(synckit@0.11.12)(typescript@5.9.3)
+        specifier: 'catalog:'
+        version: 0.21.4(@emnapi/core@1.8.1)(@emnapi/runtime@1.8.1)(synckit@0.11.12)(typescript@5.9.3)
       typescript:
-        specifier: ^5.9.3
+        specifier: 'catalog:'
         version: 5.9.3
       vitest:
-        specifier: ^4.1.0
+        specifier: 'catalog:'
         version: 4.1.0(@opentelemetry/api@1.9.0)(@types/node@25.5.0)(@vitest/ui@4.1.0)(jsdom@29.0.1(@noble/hashes@1.8.0))(msw@2.12.14(@types/node@25.5.0)(typescript@5.9.3))(vite@8.0.1(@emnapi/core@1.8.1)(@emnapi/runtime@1.8.1)(@types/node@25.5.0)(esbuild@0.27.7)(jiti@2.6.1)(terser@5.46.0)(tsx@4.21.0)(yaml@2.8.2))
       zod:
-        specifier: ^4.3.6
+        specifier: 'catalog:'
         version: 4.3.6
 
 packages:
@@ -1496,9 +1589,6 @@ packages:
   '@napi-rs/nice@1.1.1':
     resolution: {integrity: sha512-xJIPs+bYuc9ASBl+cvGsKbGrJmS6fAKaSZCnT0lhahT5rhA2VVy9/EcIgd2JhtEuFOJNx7UHNn/qiTPTY4nrQw==}
     engines: {node: '>= 10'}
-
-  '@napi-rs/wasm-runtime@1.1.1':
-    resolution: {integrity: sha512-p64ah1M1ld8xjWv3qbvFwHiFVWrq1yFvV4f7w+mzaqiR4IlSgkqhcRdHwsGgomwzBH51sRY4NEowLxnaBjcW/A==}
 
   '@napi-rs/wasm-runtime@1.1.3':
     resolution: {integrity: sha512-xK9sGVbJWYb08+mTJt3/YV24WxvxpXcXtP6B172paPZ+Ts69Re9dAr7lKwJoeIx8OoeuimEiRZ7umkiUVClmmQ==}
@@ -4113,10 +4203,6 @@ packages:
     resolution: {integrity: sha512-M7BAV6Rlcy5u+m6oPhAPFgJTzAioX/6B0DxyvDlo9l8+T3nLKbrczg2WLUyzd45L8RqfUMyGPzekbMvX2Ldkwg==}
     engines: {node: '>=12'}
 
-  picomatch@4.0.3:
-    resolution: {integrity: sha512-5gTmgEY/sqK6gFXLIsQNH19lWb4ebPDLA4SdLP7dsWkIXHWlG66oPuVvXSGFPppYZz8ZDZq0dYYrbHfBCVUb1Q==}
-    engines: {node: '>=12'}
-
   picomatch@4.0.4:
     resolution: {integrity: sha512-QP88BAKvMam/3NxH6vj2o21R6MjxZUAd6nlwAS/pnGvN9IVLocLHxGYIzFhg6fUQ+5th6P4dv4eW9jX3DSIj7A==}
     engines: {node: '>=12'}
@@ -4579,10 +4665,6 @@ packages:
 
   tinybench@2.9.0:
     resolution: {integrity: sha512-0+DUvqWMValLmha6lr4kD8iAMK1HzV0/aKnCtWb9v9641TnP/MFb7Pc2bxoxQjTXAErryXVgUOfv2YqNllqGeg==}
-
-  tinyexec@1.0.2:
-    resolution: {integrity: sha512-W/KYk+NFhkmsYpuHq5JykngiOCnxeVL8v8dFnqxSD8qEEdRfXk1SDM6JzNqcERbcGYj9tMrDQBYV9cjgnunFIg==}
-    engines: {node: '>=18'}
 
   tinyexec@1.0.4:
     resolution: {integrity: sha512-u9r3uZC0bdpGOXtlxUIdwf9pkmvhqJdrVCH9fapQtgy/OeTTMZ1nqH7agtvEfmGui6e1XxjcdrlxvxJvc3sMqw==}
@@ -5783,13 +5865,6 @@ snapshots:
       '@napi-rs/nice-win32-x64-msvc': 1.1.1
     optional: true
 
-  '@napi-rs/wasm-runtime@1.1.1':
-    dependencies:
-      '@emnapi/core': 1.8.1
-      '@emnapi/runtime': 1.8.1
-      '@tybys/wasm-util': 0.10.1
-    optional: true
-
   '@napi-rs/wasm-runtime@1.1.3(@emnapi/core@1.8.1)(@emnapi/runtime@1.8.1)':
     dependencies:
       '@emnapi/core': 1.8.1
@@ -6087,9 +6162,12 @@ snapshots:
       - '@emnapi/runtime'
     optional: true
 
-  '@rolldown/binding-wasm32-wasi@1.0.0-rc.9':
+  '@rolldown/binding-wasm32-wasi@1.0.0-rc.9(@emnapi/core@1.8.1)(@emnapi/runtime@1.8.1)':
     dependencies:
-      '@napi-rs/wasm-runtime': 1.1.1
+      '@napi-rs/wasm-runtime': 1.1.3(@emnapi/core@1.8.1)(@emnapi/runtime@1.8.1)
+    transitivePeerDependencies:
+      - '@emnapi/core'
+      - '@emnapi/runtime'
     optional: true
 
   '@rolldown/binding-win32-arm64-msvc@1.0.0-rc.10':
@@ -8261,8 +8339,6 @@ snapshots:
 
   picomatch@4.0.2: {}
 
-  picomatch@4.0.3: {}
-
   picomatch@4.0.4: {}
 
   pino-abstract-transport@3.0.0:
@@ -8421,7 +8497,7 @@ snapshots:
   rettime@0.10.1:
     optional: true
 
-  rolldown-plugin-dts@0.22.5(rolldown@1.0.0-rc.9)(typescript@5.9.3):
+  rolldown-plugin-dts@0.22.5(rolldown@1.0.0-rc.9(@emnapi/core@1.8.1)(@emnapi/runtime@1.8.1))(typescript@5.9.3):
     dependencies:
       '@babel/generator': 8.0.0-rc.2
       '@babel/helper-validator-identifier': 8.0.0-rc.2
@@ -8432,7 +8508,7 @@ snapshots:
       dts-resolver: 2.1.3
       get-tsconfig: 4.13.6
       obug: 2.1.1
-      rolldown: 1.0.0-rc.9
+      rolldown: 1.0.0-rc.9(@emnapi/core@1.8.1)(@emnapi/runtime@1.8.1)
     optionalDependencies:
       typescript: 5.9.3
     transitivePeerDependencies:
@@ -8462,7 +8538,7 @@ snapshots:
       - '@emnapi/core'
       - '@emnapi/runtime'
 
-  rolldown@1.0.0-rc.9:
+  rolldown@1.0.0-rc.9(@emnapi/core@1.8.1)(@emnapi/runtime@1.8.1):
     dependencies:
       '@oxc-project/types': 0.115.0
       '@rolldown/pluginutils': 1.0.0-rc.9
@@ -8479,9 +8555,12 @@ snapshots:
       '@rolldown/binding-linux-x64-gnu': 1.0.0-rc.9
       '@rolldown/binding-linux-x64-musl': 1.0.0-rc.9
       '@rolldown/binding-openharmony-arm64': 1.0.0-rc.9
-      '@rolldown/binding-wasm32-wasi': 1.0.0-rc.9
+      '@rolldown/binding-wasm32-wasi': 1.0.0-rc.9(@emnapi/core@1.8.1)(@emnapi/runtime@1.8.1)
       '@rolldown/binding-win32-arm64-msvc': 1.0.0-rc.9
       '@rolldown/binding-win32-x64-msvc': 1.0.0-rc.9
+    transitivePeerDependencies:
+      - '@emnapi/core'
+      - '@emnapi/runtime'
 
   rollup@4.59.0:
     dependencies:
@@ -8824,8 +8903,6 @@ snapshots:
 
   tinybench@2.9.0: {}
 
-  tinyexec@1.0.2: {}
-
   tinyexec@1.0.4: {}
 
   tinyglobby@0.2.15:
@@ -8887,7 +8964,7 @@ snapshots:
       minimist: 1.2.8
       strip-bom: 3.0.0
 
-  tsdown@0.21.4(synckit@0.11.12)(typescript@5.9.3):
+  tsdown@0.21.4(@emnapi/core@1.8.1)(@emnapi/runtime@1.8.1)(synckit@0.11.12)(typescript@5.9.3):
     dependencies:
       ansis: 4.2.0
       cac: 7.0.0
@@ -8896,18 +8973,20 @@ snapshots:
       hookable: 6.1.0
       import-without-cache: 0.2.5
       obug: 2.1.1
-      picomatch: 4.0.3
-      rolldown: 1.0.0-rc.9
-      rolldown-plugin-dts: 0.22.5(rolldown@1.0.0-rc.9)(typescript@5.9.3)
+      picomatch: 4.0.4
+      rolldown: 1.0.0-rc.9(@emnapi/core@1.8.1)(@emnapi/runtime@1.8.1)
+      rolldown-plugin-dts: 0.22.5(rolldown@1.0.0-rc.9(@emnapi/core@1.8.1)(@emnapi/runtime@1.8.1))(typescript@5.9.3)
       semver: 7.7.4
       tinyexec: 1.0.4
-      tinyglobby: 0.2.15
+      tinyglobby: 0.2.16
       tree-kill: 1.2.2
       unconfig-core: 7.5.0
-      unrun: 0.2.32(synckit@0.11.12)
+      unrun: 0.2.32(@emnapi/core@1.8.1)(@emnapi/runtime@1.8.1)(synckit@0.11.12)
     optionalDependencies:
       typescript: 5.9.3
     transitivePeerDependencies:
+      - '@emnapi/core'
+      - '@emnapi/runtime'
       - '@ts-macro/tsc'
       - '@typescript/native-preview'
       - oxc-resolver
@@ -8996,11 +9075,14 @@ snapshots:
       picomatch: 4.0.4
       webpack-virtual-modules: 0.6.2
 
-  unrun@0.2.32(synckit@0.11.12):
+  unrun@0.2.32(@emnapi/core@1.8.1)(@emnapi/runtime@1.8.1)(synckit@0.11.12):
     dependencies:
-      rolldown: 1.0.0-rc.9
+      rolldown: 1.0.0-rc.9(@emnapi/core@1.8.1)(@emnapi/runtime@1.8.1)
     optionalDependencies:
       synckit: 0.11.12
+    transitivePeerDependencies:
+      - '@emnapi/core'
+      - '@emnapi/runtime'
 
   until-async@3.0.2:
     optional: true
@@ -9066,11 +9148,11 @@ snapshots:
       magic-string: 0.30.21
       obug: 2.1.1
       pathe: 2.0.3
-      picomatch: 4.0.3
+      picomatch: 4.0.4
       std-env: 4.0.0
       tinybench: 2.9.0
-      tinyexec: 1.0.2
-      tinyglobby: 0.2.15
+      tinyexec: 1.0.4
+      tinyglobby: 0.2.16
       tinyrainbow: 3.0.3
       vite: 8.0.1(@emnapi/core@1.8.1)(@emnapi/runtime@1.8.1)(@types/node@25.5.0)(esbuild@0.27.7)(jiti@2.6.1)(terser@5.46.0)(tsx@4.21.0)(yaml@2.8.2)
       why-is-node-running: 2.3.0
