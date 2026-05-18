@@ -261,4 +261,4 @@ All health routes are `@Public()` (bypass auth) and `@SkipThrottle()`.
 1. Repository pattern vs direct `DB_TOKEN` injection — decide before first domain module.
 2. Outbox pattern for domain events — required for reliable at-least-once delivery.
 3. CQRS adoption — evaluate when read models diverge significantly from write models.
-4. Auth module integration — passport/JWT/OAuth deps present, no guards wired.
+4. Auth module integration — no auth deps in `apps/api`; auth strategy and wiring are a future milestone.

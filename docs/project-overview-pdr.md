@@ -23,7 +23,7 @@ business schemas. The six phases below are merged and complete.
 | 03 | Runtime | DrizzleModule/DrizzleService with pool lifecycle, CacheModule (Port/Adapter), DomainEventsModule, health probes (livez/readyz/health) |
 | 04 | Cross-Cutting Correctness | RFC 9457 ProblemDetailsFilter, W3C traceparent in CLS, CorrelationId/TraceContext interceptors, ETag middleware |
 | 05 | Tooling & CI | Biome v2, Turborepo pipeline, dependency-cruiser arch guard, vitest + e2e harness, CI workflow (lint+typecheck+test+build+migration smoke) |
-| 06 | Minor Cleanups | Drop postgres.js dep (TODO — still in package.json), Swagger annotations, log exclusions, CORS `X-Request-Id` |
+| 06 | Minor Cleanups | Drop postgres.js dep (complete), Swagger annotations, log exclusions, CORS `X-Request-Id` |
 
 ---
 
@@ -96,7 +96,7 @@ business schemas. The six phases below are merged and complete.
 
 ## Out of Scope (This Branch)
 
-- Auth/users module (passport/JWT/OAuth deps present but no module wired).
+- Auth/users module (no auth deps wired; passport/JWT/OAuth not in `apps/api` dependencies).
 - Business domain schemas (packages/database exports empty placeholder).
 - Outbox pattern for domain events (at-most-once is current behavior).
 - Frontend / mobile clients.
