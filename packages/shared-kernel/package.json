@@ -1,0 +1,64 @@
+{
+  "name": "@onwealth/shared-kernel",
+  "version": "1.0.0",
+  "files": [
+    "dist"
+  ],
+  "type": "module",
+  "main": "./dist/index.mjs",
+  "types": "./dist/index.d.mts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.mts",
+      "import": "./dist/index.mjs"
+    }
+  },
+  "scripts": {
+    "build": "tsdown",
+    "lint": "biome lint .",
+    "lint:fix": "biome lint --write .",
+    "format": "biome format --write .",
+    "format:check": "biome format .",
+    "check": "biome check .",
+    "check:fix": "biome check --write .",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "deps": "depcruise src --config .dependency-cruiser.mjs"
+  },
+  "devDependencies": {
+    "@keyv/redis": "^5.1.6",
+    "dependency-cruiser": "^17.0.0",
+    "@nestjs/cache-manager": "^3.1.0",
+    "@nestjs/common": "^11.1.17",
+    "@nestjs/config": "4.0.2",
+    "@nestjs/core": "^11.1.17",
+    "@nestjs/event-emitter": "^3.0.1",
+    "@onwealth/database": "workspace:*",
+    "@types/node": "^25.5.0",
+    "@types/pg": "8.15.6",
+    "cache-manager": "^7.2.8",
+    "drizzle-orm": "0.44.7",
+    "keyv": "^5.6.0",
+    "nestjs-pino": "^4.6.1",
+    "pg": "8.16.3",
+    "tsdown": "^0.21.4",
+    "typescript": "^5.9.3",
+    "vitest": "^4.1.0",
+    "zod": "^4.3.6"
+  },
+  "peerDependencies": {
+    "@keyv/redis": "^5",
+    "@nestjs/cache-manager": "^3",
+    "@nestjs/common": "^11",
+    "@nestjs/config": "^4",
+    "@nestjs/core": "^11",
+    "@nestjs/event-emitter": "^3",
+    "@onwealth/database": "workspace:*",
+    "cache-manager": "^7",
+    "drizzle-orm": "0.44.7",
+    "keyv": "^5",
+    "nestjs-pino": "^4",
+    "pg": "8.16.3",
+    "zod": "^4"
+  }
+}
