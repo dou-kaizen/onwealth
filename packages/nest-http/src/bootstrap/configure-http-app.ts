@@ -81,15 +81,17 @@ export async function configureHttpApp(
     ],
   })
 
-  // Global exception filters — Nest invokes them in REVERSE registration order
-  // (last-registered runs first as the outer catch). Order below is therefore
-  // outermost → innermost when read top-down: AllExceptionsFilter is the
-  // ultimate fallback, ProblemDetailsFilter shapes HttpException responses,
-  // ThrottlerExceptionFilter is most specific (catches ThrottlerException only).
+  // Global exception filters — NestJS RouterExceptionFilters.create() calls
+  // filters.reverse() internally, then ExceptionsHandler.invokeCustomFilters
+  // does first-match .find(). Registration order (All, Problem, Throttler)
+  // → internal reversed array [Throttler, Problem, All] → ThrottlerException
+  // matches ThrottlerExceptionFilter (@Catch(ThrottlerException)) first, so
+  // Retry-After / X-RateLimit-* headers are always applied. AllExceptionsFilter
+  // remains the catch-all fallback for anything not matched upstream.
   app.useGlobalFilters(
-    app.get(ThrottlerExceptionFilter),
-    app.get(ProblemDetailsFilter),
     app.get(AllExceptionsFilter),
+    app.get(ProblemDetailsFilter),
+    app.get(ThrottlerExceptionFilter),
   )
 
   // Global interceptors (in execution order)

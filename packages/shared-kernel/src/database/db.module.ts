@@ -1,6 +1,7 @@
 import type { DynamicModule } from '@nestjs/common'
 import { Global, Module } from '@nestjs/common'
 import type { ConfigType } from '@nestjs/config'
+import { ConfigModule } from '@nestjs/config'
 import { databaseConfig } from '../config/database.config.js'
 import type { DrizzleAsyncOptions } from './db.port.js'
 import { DB_TOKEN } from './db.port.js'
@@ -28,6 +29,10 @@ export class DrizzleModule {
   static forRoot(): DynamicModule {
     return {
       module: DrizzleModule,
+      // ConfigModule ensures databaseConfig.KEY resolves when DrizzleModule is
+      // bootstrapped standalone (e.g. integration tests). If ConfigModule is
+      // already global in the host app, NestJS dedupes silently — no side effect.
+      imports: [ConfigModule],
       providers: [
         {
           provide: DrizzleService,

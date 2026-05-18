@@ -28,8 +28,12 @@ export function createDrizzleInstance(options: DrizzleModuleOptions): {
   })
 
   // Prevent process crash from unhandled EventEmitter error on idle client drop.
+  // process.stderr.write is used instead of console.error: the handler runs
+  // outside DI scope so no injected logger is available, and console.* is
+  // intercepted/filtered by structured-log pipelines (pino) which may suppress
+  // it. A raw stderr write is always visible in crash logs.
   pool.on('error', (err: Error) => {
-    console.error('[pg-pool] Unexpected idle client error:', err.message)
+    process.stderr.write(`[pg-pool] Unexpected idle client error: ${err.message}\n`)
   })
 
   const db = drizzle({ client: pool, schema })

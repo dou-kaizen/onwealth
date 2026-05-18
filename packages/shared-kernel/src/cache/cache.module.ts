@@ -2,6 +2,7 @@ import KeyvRedis from '@keyv/redis'
 import { CacheModule as NestCacheModule } from '@nestjs/cache-manager'
 import { Global, Module } from '@nestjs/common'
 import type { ConfigType } from '@nestjs/config'
+import { ConfigModule } from '@nestjs/config'
 import { redisConfig } from '../config/redis.config.js'
 import { CACHE_PORT } from './cache.port.js'
 import { CacheService } from './cache.service.js'
@@ -18,8 +19,11 @@ import { CacheService } from './cache.service.js'
 @Global() // @global-approved: Redis 缓存，所有需要缓存的 context 都依赖
 @Module({
   imports: [
-    // Configure cache-manager to use Redis (via the Keyv adapter)
+    // Configure cache-manager to use Redis (via the Keyv adapter).
+    // imports: [ConfigModule] ensures redisConfig.KEY resolves when CacheModule
+    // is bootstrapped standalone. NestJS dedupes if ConfigModule is already global.
     NestCacheModule.registerAsync({
+      imports: [ConfigModule],
       useFactory: (cfg: ConfigType<typeof redisConfig>) => ({
         stores: [new KeyvRedis(cfg.url)],
         ttl: cfg.ttl * 1000,
