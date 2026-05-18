@@ -58,7 +58,13 @@
     "drizzle-orm": "0.44.7",
     "keyv": "^5",
     "nestjs-pino": "^4",
-    "pg": "8.16.3",
+    "pg": "^8.16.3",
+    "pino-pretty": ">=11",
     "zod": "^4"
+  },
+  "peerDependenciesMeta": {
+    "pino-pretty": {
+      "optional": true
+    }
   }
 }

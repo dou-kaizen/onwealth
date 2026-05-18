@@ -25,7 +25,8 @@
     "format:check": {},
     "test": {
       "dependsOn": ["^build"],
-      "outputs": ["coverage/**"]
+      "outputs": ["coverage/**"],
+      "env": ["NODE_ENV", "DATABASE_URL", "REDIS_URL", "JWT_SECRET", "API_BASE_URL", "ALLOWED_ORIGINS"]
     },
     "dev": {
       "dependsOn": ["^build"],

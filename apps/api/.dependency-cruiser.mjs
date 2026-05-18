@@ -27,14 +27,6 @@ export default {
       },
     },
     {
-      name: 'api-uses-packages-not-internal-copies',
-      severity: 'error',
-      comment:
-        'Cross-cutting code (database, events, logger, filters, interceptors, middleware) lives in @onwealth/shared-kernel and @onwealth/nest-http. apps/api must not reintroduce internal copies under src/app/.',
-      from: { path: '^src/' },
-      to: { path: '^src/app/(database|events|logger|filters|interceptors|middleware)/' },
-    },
-    {
       name: 'service-no-database-runtime',
       severity: 'error',
       comment:
@@ -63,6 +55,14 @@ export default {
         'Presentation layer must not access the database directly. Go through application services.',
       from: { path: '^src/modules/[^/]+/presentation/' },
       to: { path: '^(@onwealth/database|drizzle-orm|pg|postgres)($|/)' },
+    },
+    {
+      name: 'api-uses-packages-not-internal-copies',
+      severity: 'error',
+      comment:
+        'apps/api must consume cross-cutting concerns (filters, interceptors, middleware, health checks, logger config) from @onwealth/nest-http and @onwealth/shared-kernel — not re-implement local copies. Retargeted from the obsolete src/app/ path to guard the post-extraction layout.',
+      from: { path: '^src/' },
+      to: { path: '^src/(filters|interceptors|middleware|health|logger)/' },
     },
   ],
   options: {

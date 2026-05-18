@@ -33,7 +33,7 @@ export const swaggerCustomOptions: SwaggerCustomOptions = {
 function addDefaultErrorResponses(document: OpenAPIObject): void {
   if (!document.paths) return
 
-  for (const path in document.paths) {
+  for (const path of Object.keys(document.paths)) {
     const pathItem = document.paths[path]
     if (!pathItem) continue
 

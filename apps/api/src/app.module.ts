@@ -64,7 +64,8 @@ const LOG_EXCLUDED_ROUTES = [
     // CLS module: request context management (Request ID, tracing, etc.)
     ClsModule.forRoot(createClsConfig()),
     // Logger module: high-performance structured logging (Pino)
-    LoggerModule.forRoot({ excludePaths: [...LOG_EXCLUDED_ROUTES] }),
+    // autoLoggingUrlPrefix suppresses access logs for non-/api/ paths (container probes, etc.)
+    LoggerModule.forRoot({ excludePaths: [...LOG_EXCLUDED_ROUTES], autoLoggingUrlPrefix: '/api/' }),
     // Event module: domain events and integration events
     EventEmitterModule.forRoot({
       wildcard: true,

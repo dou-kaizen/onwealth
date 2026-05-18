@@ -12,14 +12,6 @@ export interface ValidationErrorItem {
 }
 
 /**
- * Extended Express Response type
- */
-export interface TypedResponse {
-  statusCode: number
-  get(name: string): string | undefined
-}
-
-/**
  * Flat representation of a single validation failure used in RFC 9457 error responses.
  */
 export interface FlatValidationError {

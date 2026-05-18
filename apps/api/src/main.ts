@@ -9,15 +9,16 @@ async function bootstrap() {
   const app = await createHttpApp(AppModule)
 
   // Use nestjs-pino Logger — flushes the buffered bootstrap logs.
-  app.useLogger(app.get(Logger))
+  const logger = app.get(Logger)
+  app.useLogger(logger)
 
   const httpCfg = app.get<ConfigType<typeof httpConfig>>(httpConfig.KEY)
   const appCfg = app.get<ConfigType<typeof appConfig>>(appConfig.KEY)
 
   const port = httpCfg.port
-  await app.listen(port)
-
-  const logger = app.get(Logger)
+  // Bind to 0.0.0.0 for container environments (Docker, Kubernetes) where
+  // localhost-only binding makes the port unreachable from outside the pod.
+  await app.listen(port, '0.0.0.0')
   const baseUrl = `http://localhost:${port}`
 
   const startupMessage = `

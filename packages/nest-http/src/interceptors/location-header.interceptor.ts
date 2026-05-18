@@ -46,14 +46,21 @@ export class LocationHeaderInterceptor implements NestInterceptor {
           return
         }
 
-        // Check whether the response data contains an id field
-        if (!data || typeof data !== 'object' || !('id' in data) || typeof data.id !== 'string') {
+        // Check whether the response data contains an id field.
+        // Coerce numeric ids to string (e.g. auto-increment PKs) — RFC 9110 §15.3.2
+        // requires a URI, so numeric ids are valid once stringified.
+        if (!data || typeof data !== 'object' || !('id' in data)) {
           return
         }
+        const rawId = (data as Record<string, unknown>).id
+        if (rawId === null || rawId === undefined || (typeof rawId !== 'string' && typeof rawId !== 'number')) {
+          return
+        }
+        const resourceId = String(rawId)
 
         // Build Location header; buildResourcePath applies encodeURIComponent on the id
         const baseUrl = `${request.protocol}://${request.get('host')}`
-        const resourcePath = this.buildResourcePath(request.path, data.id)
+        const resourcePath = this.buildResourcePath(request.path, resourceId)
 
         response.setHeader('Location', `${baseUrl}${resourcePath}`)
       }),
@@ -70,8 +77,8 @@ export class LocationHeaderInterceptor implements NestInterceptor {
   private buildResourcePath(requestPath: string, resourceId: string): string {
     // Remove trailing slash
     const cleanPath = requestPath.replace(/\/$/, '')
-    // encodeURIComponent prevents path traversal via ../  or special chars in the id
-    const safeId = encodeURIComponent(String(resourceId))
+    // encodeURIComponent prevents path traversal via ../ or special chars in the id
+    const safeId = encodeURIComponent(resourceId)
     return `${cleanPath}/${safeId}`
   }
 }
