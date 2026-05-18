@@ -6,6 +6,38 @@
 **DDD-lite** primitives. No microservices, no CQRS framework — a deliberate starting point
 that can be evolved incrementally.
 
+Cross-cutting code is extracted into two pnpm workspace packages:
+`@onwealth/shared-kernel` (transport-agnostic) and `@onwealth/nest-http` (HTTP layer).
+`apps/api` is the composition root — it imports from both packages and owns only
+business modules (`AppModule`, `main.ts`, `modules/`).
+
+---
+
+## Workspace Package Inventory
+
+| Package | Path | Layer |
+|---------|------|-------|
+| `@onwealth/database` | `packages/database/` | Drizzle ORM schema + migrations |
+| `@onwealth/shared-kernel` | `packages/shared-kernel/` | Transport-agnostic NestJS modules: config namespaces, DB module + `DB_TOKEN`, cache port + `CACHE_PORT`, domain events, logger, `Env`/zod schema |
+| `@onwealth/nest-http` | `packages/nest-http/` | HTTP cross-cutting: exception filters, interceptors, ETag middleware, health module, HTTP configs, `configureHttpApp` / `createHttpApp` bootstrap, decorators, DTOs |
+| `apps/api` | `apps/api/` | Composition root — `AppModule`, `main.ts`, business `modules/` |
+
+### Package Dependency DAG
+
+```
+apps/api ──────────────────────────────────────────────────► @onwealth/nest-http
+                                                                      │
+                                                                      ▼
+future-worker ──────────────────────────────────────► @onwealth/shared-kernel
+                                                                      │
+                                                                      ▼
+                                                          @onwealth/database
+```
+
+Edges are one-directional and enforced by per-package dependency-cruiser configs.
+A future NestJS worker app can depend on `@onwealth/shared-kernel` directly
+without pulling in any HTTP dependencies.
+
 ---
 
 ## Layer Model
@@ -26,8 +58,8 @@ that can be evolved incrementally.
 └──────────────────────────────────────────────────┘
 ```
 
-Domain modules live under `src/modules/<domain>/<layer>/`.
-Cross-cutting concerns live under `src/app/` and `src/shared-kernel/`.
+Domain modules live under `apps/api/src/modules/<domain>/<layer>/`.
+Cross-cutting concerns live in `@onwealth/shared-kernel` and `@onwealth/nest-http`.
 
 ---
 
@@ -61,7 +93,7 @@ sequenceDiagram
 ### Filter Execution Order
 
 NestJS invokes exception filters in **reverse registration order**.
-Registration in `main.ts` (top → bottom):
+Filters are registered inside `configureHttpApp` in `@onwealth/nest-http` (top → bottom):
 
 ```
 ThrottlerExceptionFilter   ← most specific, runs first on ThrottlerException
@@ -170,19 +202,19 @@ No repository abstraction layer yet — handlers receive `DB_TOKEN` directly.
 
 ```
 AppModule
-├── ConfigModule (global)          ← Zod env validation
-├── ClsModule (global)             ← request-scoped context store
-├── LoggerModule                   ← nestjs-pino
+├── ConfigModule (global)          ← Zod env validation; loads appConfig, databaseConfig, redisConfig, httpConfig, throttleConfig
+├── ClsModule (global)             ← request-scoped context store  (@onwealth/nest-http createClsConfig)
+├── LoggerModule                   ← nestjs-pino  (@onwealth/shared-kernel)
 ├── EventEmitterModule             ← wildcard, delimiter "."
-├── DrizzleModule (global)         ← DB_TOKEN
-├── DomainEventsModule (global)    ← DomainEventPublisher
-├── ThrottlerModule                ← rate limiting
-├── HealthModule                   ← /livez /readyz /health
-└── CacheModule                    ← CACHE_PORT adapter
+├── DrizzleModule (global)         ← DB_TOKEN  (@onwealth/shared-kernel)
+├── DomainEventsModule (global)    ← DomainEventPublisher  (@onwealth/shared-kernel)
+├── ThrottlerModule                ← rate limiting  (throttleConfig from @onwealth/nest-http)
+├── HealthModule                   ← /livez /readyz /health  (@onwealth/nest-http)
+└── CacheModule                    ← CACHE_PORT adapter  (@onwealth/shared-kernel)
 ```
 
 All `@Global()` modules are enforced by the architecture guard test
-(`unit/global-modules.spec.ts`).
+(`packages/shared-kernel/src/__tests__/unit/global-modules.spec.ts`).
 
 ---
 

@@ -105,36 +105,48 @@ Full list in `apps/api/.env.example`.
 ```
 onwealth/
 ├── apps/
-│   └── api/                   # NestJS 11 application
+│   └── api/                   # NestJS 11 application — composition root
 │       └── src/
-│           ├── app/           # Cross-cutting infrastructure
-│           │   ├── config/    # Env schema (Zod), CLS, CORS, Swagger, Validation
-│           │   ├── database/  # DrizzleModule + DrizzleService
-│           │   ├── events/    # DomainEventsModule + DomainEventPublisher
-│           │   ├── filters/   # AllExceptions, ProblemDetails, ThrottlerException
-│           │   ├── interceptors/  # 7 global interceptors
-│           │   ├── logger/    # nestjs-pino setup + redaction
-│           │   └── middleware/    # ETagMiddleware
-│           ├── modules/       # Feature modules
-│           │   ├── cache/     # CacheModule (Port/Adapter pattern)
-│           │   └── health/    # HealthModule (/livez, /readyz, /health)
-│           ├── shared-kernel/ # DDD primitives + shared infrastructure
-│           │   ├── application/ports/    # CachePort interface + CACHE_PORT token
-│           │   ├── domain/    # BaseAggregateRoot, DomainEvent, IntegrationEvent
-│           │   └── infrastructure/      # Decorators, DTOs, ErrorCode enum
+│           ├── modules/       # Business feature modules (reserved, none yet)
 │           ├── __tests__/     # E2E specs + test helpers
-│           ├── app.module.ts
-│           └── main.ts
+│           ├── app.module.ts  # Root module — imports workspace packages
+│           └── main.ts        # Thin entrypoint: createHttpApp + listen
 ├── packages/
-│   └── database/              # Drizzle ORM schema package
-│       ├── src/schemas/       # Schema definitions (placeholder — TODO)
-│       ├── drizzle/           # Generated migration files
-│       └── sql/               # Raw SQL (role timeout init)
+│   ├── database/              # @onwealth/database — Drizzle ORM schema + migrations
+│   │   ├── src/schemas/       # Schema definitions (placeholder — TODO)
+│   │   ├── drizzle/           # Generated migration files
+│   │   └── sql/               # Raw SQL (role timeout init)
+│   ├── shared-kernel/         # @onwealth/shared-kernel — transport-agnostic NestJS modules
+│   │   └── src/
+│   │       ├── cache/         # CachePort interface + CACHE_PORT token + CacheService
+│   │       ├── config/        # appConfig, databaseConfig, redisConfig; Zod env schema
+│   │       ├── database/      # DB_TOKEN, DrizzleModule, DrizzleService
+│   │       ├── domain/        # BaseAggregateRoot, DomainEvent, IntegrationEvent
+│   │       ├── errors/        # ErrorCode enum, ValidationError
+│   │       ├── events/        # DomainEventsModule, DomainEventPublisher
+│   │       └── logger/        # LoggerModule (nestjs-pino) + redaction config
+│   └── nest-http/             # @onwealth/nest-http — HTTP cross-cutting layer
+│       └── src/
+│           ├── bootstrap/     # configureHttpApp / createHttpApp + HttpAppOptions
+│           ├── config/        # httpConfig, throttleConfig, CLS, CORS, Swagger, ValidationPipe
+│           ├── filters/       # AllExceptions, ProblemDetails, ThrottlerException
+│           ├── interceptors/  # 7 global interceptors
+│           ├── middleware/    # ETagMiddleware
+│           ├── health/        # HealthModule (/livez, /readyz, /health)
+│           ├── decorators/    # @Public, @UseEnvelope, @ApiProblemResponses, validators
+│           └── dtos/          # Pagination DTOs, ProblemDetailsDto, ListResponseDto
 ├── docs/                      # Project documentation
 ├── .github/workflows/ci.yml   # CI: lint + typecheck + test + build + migration smoke
 ├── biome.json                 # Lint + format config (Biome v2)
 ├── turbo.json                 # Turborepo task pipeline
 └── pnpm-workspace.yaml
+```
+
+### Package Dependency DAG
+
+```
+apps/api → @onwealth/nest-http → @onwealth/shared-kernel → @onwealth/database
+future-worker → @onwealth/shared-kernel
 ```
 
 ## Health Endpoints
