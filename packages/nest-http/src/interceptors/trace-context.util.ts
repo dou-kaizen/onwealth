@@ -69,6 +69,18 @@ export function parseTraceparent(traceparent: string): TraceContext | null {
     return null
   }
 
+  // W3C Trace Context §3.2.2 — reject values that the spec defines as invalid:
+  // - version 'ff' is reserved and MUST NOT be used
+  // - all-zero trace-id means the trace is not sampled / not identified
+  // - all-zero parent-id means no valid span ancestor exists
+  if (
+    version === 'ff' ||
+    traceId === '0'.repeat(32) ||
+    parentId === '0'.repeat(16)
+  ) {
+    return null
+  }
+
   return {
     version,
     traceId,

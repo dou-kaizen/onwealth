@@ -7,6 +7,7 @@ import {
   DrizzleModule,
   databaseConfig,
   redisConfig,
+  withTimeout,
 } from '@onwealth/shared-kernel'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -21,9 +22,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
  * catch this; only a runtime resolve can.
  *
  * The `registerAs` config factories parse `process.env` directly, so the
- * values below are stubbed in. They are syntactically valid but never used to
- * open a connection — pg.Pool and @keyv/redis both connect lazily, so
- * `.compile()` never touches the network.
+ * values below are stubbed in. Neither backend is actually contacted:
+ * `@keyv/redis` v5 lazy-connects — `new KeyvRedis(url)` opens no socket until
+ * the first cache operation — and `pg.Pool` defers its first connection until a
+ * query is issued. Both URLs only need to be syntactically valid; this test
+ * requires no live Redis or Postgres.
  */
 describe('[H6] shared-kernel DI token identity', () => {
   beforeEach(() => {
@@ -52,5 +55,22 @@ describe('[H6] shared-kernel DI token identity', () => {
     expect(moduleRef.get(CACHE_PORT, { strict: false })).toBeDefined()
 
     await moduleRef.close()
+  })
+
+  it('withTimeout rejects ms <= 0 before issuing any SQL', async () => {
+    // A db object with a transaction spy — verifies we throw before calling db.transaction
+    const transactionSpy = vi.fn()
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- test-only stub for DrizzleDb interface
+    const fakeDb: any = { transaction: transactionSpy }
+
+    await expect(withTimeout(fakeDb, 0, async () => 'result')).rejects.toThrow(
+      'withTimeout: ms must be > 0, got 0',
+    )
+    await expect(withTimeout(fakeDb, -1, async () => 'result')).rejects.toThrow(
+      'withTimeout: ms must be > 0, got -1',
+    )
+
+    // transaction must never be called when ms <= 0
+    expect(transactionSpy).not.toHaveBeenCalled()
   })
 })

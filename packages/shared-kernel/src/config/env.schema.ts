@@ -118,6 +118,16 @@ export const envObjectSchema = z.object({
 export const envSchema = envObjectSchema.superRefine((data, ctx) => {
   const isProd = data.NODE_ENV === 'production'
 
+  // Reject illogical pool bounds — min > max means the pool can never satisfy its
+  // minimum connection requirement, leading to immediate startup failure.
+  if (data.DB_POOL_MIN > data.DB_POOL_MAX) {
+    ctx.addIssue({
+      code: 'custom',
+      path: ['DB_POOL_MIN'],
+      message: `DB_POOL_MIN (${data.DB_POOL_MIN}) must be ≤ DB_POOL_MAX (${data.DB_POOL_MAX})`,
+    })
+  }
+
   // Reject THROTTLE_LIMIT >10 000 in prod — values this high effectively disable rate limiting
   if (isProd && data.THROTTLE_LIMIT > 10_000) {
     ctx.addIssue({

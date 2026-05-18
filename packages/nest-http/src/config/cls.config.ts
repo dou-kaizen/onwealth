@@ -66,10 +66,10 @@ function setupClsContext(cls: ClsService, request: Request) {
   }
 
   // Store Tracestate (optional distributed tracing state)
-  // W3C trace context permits up to 512 chars; cap at 1024 to defend against
-  // pathological/abusive headers while leaving headroom for valid multi-vendor lists.
+  // W3C Trace Context §3.3.2 mandates a 512-byte maximum for the tracestate header.
+  // Truncate at the spec limit to reject non-conformant oversized values.
   const tracestate = request.headers.tracestate as string
   if (tracestate) {
-    cls.set('tracestate', tracestate.slice(0, 1024))
+    cls.set('tracestate', tracestate.slice(0, 512))
   }
 }

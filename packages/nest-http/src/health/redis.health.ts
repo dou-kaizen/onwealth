@@ -50,9 +50,13 @@ export class RedisHealthIndicator {
 
   /** Performs a set+get round-trip with a hard 3 s deadline. */
   private async checkRedis(): Promise<void> {
-    const timeout = new Promise<never>((_, reject) =>
-      setTimeout(() => reject(new Error('Redis health check timed out')), HEALTH_TIMEOUT_MS),
-    )
+    let timerId: ReturnType<typeof setTimeout> | undefined
+    const timeout = new Promise<never>((_, reject) => {
+      timerId = setTimeout(
+        () => reject(new Error('Redis health check timed out')),
+        HEALTH_TIMEOUT_MS,
+      )
+    })
     const probe = async () => {
       await this.cache.set(PROBE_KEY, PROBE_VALUE, 5)
       const readback = await this.cache.get(PROBE_KEY)
@@ -62,6 +66,12 @@ export class RedisHealthIndicator {
         throw new Error('Redis health check readback mismatch')
       }
     }
-    await Promise.race([probe(), timeout])
+    try {
+      await Promise.race([probe(), timeout])
+    } finally {
+      // Clear the timer so the Node.js event loop is not held open when the
+      // probe wins the race and the timeout callback is no longer needed.
+      clearTimeout(timerId)
+    }
   }
 }

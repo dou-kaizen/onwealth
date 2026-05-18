@@ -18,6 +18,17 @@ export interface LoggerConfigOptions {
    * Accepts the nestjs-pino `exclude` shape (`string | RouteInfo`).
    */
   excludePaths?: Params['exclude']
+
+  /**
+   * URL prefix allowlist for pino-http `autoLogging.ignore`.
+   * Requests whose URL does NOT start with this prefix are suppressed from
+   * access logs — useful to silence non-API traffic (e.g. static assets,
+   * container probe paths) while keeping `/api/` request logs intact.
+   *
+   * Defaults to `'/api/'` when omitted so callers that don't care get the
+   * standard HTTP-API behaviour without configuration.
+   */
+  autoLoggingUrlPrefix?: string
 }
 
 /**
@@ -35,17 +46,21 @@ export function createLoggerConfig(
   const isProduction = nodeEnv === 'production'
   const logLevel = getLogLevel(nodeEnv)
 
+  // Allow prefix for auto-logging: requests not matching this prefix are suppressed.
+  // Defaults to '/api/' so plain HTTP apps get useful access logs with no config.
+  const autoLoggingUrlPrefix = options.autoLoggingUrlPrefix ?? '/api/'
+
   return {
     pinoHttp: {
       // Log level
       level: logLevel,
 
-      // Only log requests to /api/ paths (allowlist approach)
+      // Suppress access logs for requests outside the API prefix (e.g. container
+      // probes, static assets) to reduce log noise in high-frequency environments.
       autoLogging: {
-        ignore: (req) => {
+        ignore: (req: IncomingMessage) => {
           const url = req.url ?? ''
-          // Only log requests starting with /api/
-          return !url.startsWith('/api/')
+          return !url.startsWith(autoLoggingUrlPrefix)
         },
       },
 
@@ -130,10 +145,15 @@ function getLogLevel(nodeEnv: 'development' | 'production' | 'test'): string {
 }
 
 /**
- * Extract trace-id from the W3C Trace Context traceparent header
+ * Extract trace-id from the W3C Trace Context traceparent header.
  *
  * traceparent format: version-trace_id-parent_id-trace_flags
  * Example: 00-0af7651916cd43dd8448eb211c80319c-b7ad6b7169203331-01
+ *
+ * Applies the same W3C validity checks as parseTraceparent in trace-context.util.ts:
+ * - version 'ff' is reserved
+ * - all-zero trace-id is invalid (no active trace)
+ * - header must have 4 dash-separated segments of correct hex length
  */
 function extractTraceId(traceparent: string | undefined): string | undefined {
   if (!traceparent) {
@@ -141,5 +161,26 @@ function extractTraceId(traceparent: string | undefined): string | undefined {
   }
 
   const parts = traceparent.split('-')
-  return parts[1] // trace-id is the second part
+  if (parts.length !== 4) {
+    return undefined
+  }
+
+  const [version, traceId] = parts
+
+  // Basic structural and hex validation
+  if (
+    version?.length !== 2 ||
+    traceId?.length !== 32 ||
+    !/^[0-9a-f]+$/i.test(version) ||
+    !/^[0-9a-f]+$/i.test(traceId)
+  ) {
+    return undefined
+  }
+
+  // W3C §3.2.2 reserved / invalid sentinel values
+  if (version === 'ff' || traceId === '0'.repeat(32)) {
+    return undefined
+  }
+
+  return traceId
 }

@@ -20,8 +20,13 @@ export async function createHttpApp(
   module: Type,
   options?: HttpAppOptions,
 ): Promise<NestExpressApplication> {
+  // bodyParser: false — disables NestJS's built-in body parser so the explicit
+  // express.json({ limit: BODY_LIMIT }) registered in configureHttpApp is the
+  // sole parser. Without this, two body parsers run in sequence and the limit
+  // on the first (NestJS default: no cap) can be hit before ours fires.
   const app = await NestFactory.create<NestExpressApplication>(module, {
     bufferLogs: true,
+    bodyParser: false,
   })
   return configureHttpApp(app, options)
 }

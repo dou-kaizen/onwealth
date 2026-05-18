@@ -164,13 +164,13 @@ export function ApiConflictResponse(description?: string) {
 }
 
 /**
- * 422 Unprocessable Entity - request validation failed
+ * 422 Unprocessable Entity - request validation or constraint violation
  *
  * Use cases:
- * - Request data fails business rule validation
- * - class-validator validation failed
+ * - Request data fails business rule validation (class-validator)
+ * - FK violation (23503), not-null violation (23502), check violation (23514)
  *
- * Note: includes field-level error details in the errors array
+ * Note: includes field-level error details in the errors array for validation failures
  */
 export function ApiValidationFailedResponse(description?: string) {
   return ApiResponse({
@@ -179,29 +179,34 @@ export function ApiValidationFailedResponse(description?: string) {
     type: ProblemDetailsDto,
     content: {
       'application/problem+json': {
-        example: {
-          type: 'https://api.example.com/errors/validation-failed',
-          title: 'Unprocessable Entity',
-          status: 422,
-          instance: '/users/register',
-          request_id: 'req_abc123',
-          timestamp: '2024-11-03T10:30:00Z',
-          code: 'VALIDATION_FAILED',
-          detail: 'Request validation failed',
-          errors: [
-            {
-              field: 'email',
-              pointer: '/email',
-              code: 'INVALID_EMAIL',
-              message: 'email must be an email',
+        examples: {
+          validationFailed: {
+            summary: 'Request data failed validation (class-validator)',
+            value: {
+              type: 'https://api.example.com/errors/validation-failed',
+              title: 'Unprocessable Entity',
+              status: 422,
+              instance: '/users/register',
+              request_id: 'req_abc123',
+              timestamp: '2024-11-03T10:30:00Z',
+              code: 'VALIDATION_FAILED',
+              detail: 'One or more fields failed validation',
+              errors: [{ field: 'email', message: 'must be a valid email' }],
             },
-            {
-              field: 'password',
-              pointer: '/password',
-              code: 'INVALID_LENGTH',
-              message: 'password must be longer than or equal to 8 characters',
+          },
+          constraintViolation: {
+            summary: 'Database constraint rejected the request (FK/not-null/check)',
+            value: {
+              type: 'https://api.example.com/errors/constraint-violation',
+              title: 'Unprocessable Entity',
+              status: 422,
+              instance: '/users/register',
+              request_id: 'req_abc123',
+              timestamp: '2024-11-03T10:30:00Z',
+              code: 'CONSTRAINT_VIOLATION',
+              detail: 'Referenced resource does not exist',
             },
-          ],
+          },
         },
       },
     },

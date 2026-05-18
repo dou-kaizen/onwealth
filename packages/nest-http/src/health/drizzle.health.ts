@@ -45,9 +45,16 @@ export class DrizzleHealthIndicator {
 
   /** Executes SELECT 1 with a hard 3 s deadline to detect half-open TCP connections. */
   private async checkDb(): Promise<void> {
-    const timeout = new Promise<never>((_, reject) =>
-      setTimeout(() => reject(new Error('DB health check timed out')), HEALTH_TIMEOUT_MS),
-    )
-    await Promise.race([this.db.execute(sql`SELECT 1`), timeout])
+    let timerId: ReturnType<typeof setTimeout> | undefined
+    const timeout = new Promise<never>((_, reject) => {
+      timerId = setTimeout(() => reject(new Error('DB health check timed out')), HEALTH_TIMEOUT_MS)
+    })
+    try {
+      await Promise.race([this.db.execute(sql`SELECT 1`), timeout])
+    } finally {
+      // Clear the timer so the Node.js event loop is not held open when the
+      // query wins the race and the timeout callback is no longer needed.
+      clearTimeout(timerId)
+    }
   }
 }

@@ -37,23 +37,24 @@ function mapDatabaseError(error: DatabaseError): HttpException {
       })
     }
     case '23503': {
-      // foreign_key_violation
+      // foreign_key_violation — referenced row does not exist; this is a data
+      // integrity constraint, not a uniqueness conflict (23505).
       return new UnprocessableEntityException({
-        code: 'RESOURCE_CONFLICT',
+        code: 'CONSTRAINT_VIOLATION',
         message: 'Referenced resource does not exist',
       })
     }
     case '23502': {
-      // not_null_violation
+      // not_null_violation — a required column was omitted; integrity constraint.
       return new UnprocessableEntityException({
-        code: 'RESOURCE_CONFLICT',
+        code: 'CONSTRAINT_VIOLATION',
         message: 'A required field is missing',
       })
     }
     case '23514': {
-      // check_violation
+      // check_violation — data failed a CHECK constraint; integrity constraint.
       return new UnprocessableEntityException({
-        code: 'RESOURCE_CONFLICT',
+        code: 'CONSTRAINT_VIOLATION',
         message: 'Data failed a database constraint check',
       })
     }
