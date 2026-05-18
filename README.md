@@ -1,0 +1,166 @@
+# onwealth
+
+Production-grade NestJS API skeleton for the onwealth financial/wealth platform.
+Current state: infrastructure-only (no business domain yet). Provides the DDD-lite foundation,
+security hardening, observability, and CI pipeline that all future domain modules build on.
+
+## Prerequisites
+
+| Tool | Version |
+|------|---------|
+| Node.js | 22.x (LTS "Jod") — see `.nvmrc` |
+| pnpm | 10.x (`packageManager` field) |
+| PostgreSQL | 16+ |
+| Redis | 7+ |
+
+> CI pins `pnpm@9` — see [open issue](#known-issues).
+
+## Quick Start
+
+```bash
+# 1. Install deps (also copies .env.example → .env for each package)
+pnpm install
+
+# 2. Fill in required env vars
+#    apps/api/.env and packages/database/.env
+#    See "Environment Variables" section below
+
+# 3. Init DB roles + run migrations
+pnpm db:dev
+
+# 4. Start API in watch mode
+pnpm dev
+```
+
+API is available at `http://localhost:3000`.
+Swagger UI (non-prod only): `http://localhost:3000/docs`
+
+## Environment Variables
+
+### apps/api/.env (required)
+
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `DATABASE_URL` | yes | `postgresql://` connection string |
+| `REDIS_URL` | yes | `redis://` (dev) or `rediss://` (prod) |
+| `JWT_SECRET` | yes | Min 32 chars, not the placeholder value |
+| `API_BASE_URL` | yes | Base URL for RFC 9457 error type URIs |
+| `PORT` | no | Default `3000` |
+| `ALLOWED_ORIGINS` | no | Comma-separated; required in production |
+| `THROTTLE_TTL` | no | Default `60000` ms |
+| `THROTTLE_LIMIT` | no | Default `100`; max `10000` in production |
+| `GOOGLE_CLIENT_ID/SECRET` | no | OAuth — disabled if not set |
+| `GITHUB_CLIENT_ID/SECRET` | no | OAuth — disabled if not set |
+
+Full list in `apps/api/.env.example`.
+
+### packages/database/.env (required for db:* scripts)
+
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `DATABASE_URL` | yes | Same format as API |
+
+## Scripts
+
+### Root (Turborepo — runs across all workspaces)
+
+| Script | Description |
+|--------|-------------|
+| `pnpm dev` | Start all apps in watch mode |
+| `pnpm build` | Build all packages + apps |
+| `pnpm typecheck` | TypeScript type-check across workspaces |
+| `pnpm lint` | Biome lint across workspaces |
+| `pnpm lint:fix` | Auto-fix lint issues |
+| `pnpm format` | Biome format (write) |
+| `pnpm format:check` | Biome format check (no write) |
+| `pnpm db:dev` | Init DB roles then run pending migrations |
+
+### apps/api (run with `pnpm --filter api <script>`)
+
+| Script | Description |
+|--------|-------------|
+| `dev` | Build then start in watch mode |
+| `build` | NestJS CLI build |
+| `start:prod` | `node dist/main` |
+| `test` | Vitest (unit) |
+| `test:cov` | Vitest with v8 coverage |
+| `test:e2e` | Vitest with `vitest.e2e.config.mts` |
+| `typecheck` | `tsc -b --noEmit` |
+| `deps` | dependency-cruiser architecture check |
+
+### packages/database (run with `pnpm --filter @onwealth/database <script>`)
+
+| Script | Description |
+|--------|-------------|
+| `db:init-roles` | Apply `sql/00-init-role-timeouts.sql` via psql |
+| `db:generate` | drizzle-kit generate (new migration) |
+| `db:migrate` | drizzle-kit migrate (apply pending) |
+| `db:push` | drizzle-kit push (dev prototype, no migration file) |
+| `db:studio` | Drizzle Studio UI |
+| `build` | tsdown ESM build |
+| `typecheck` | `tsc --noEmit` |
+
+## Workspace Layout
+
+```
+onwealth/
+├── apps/
+│   └── api/                   # NestJS 11 application
+│       └── src/
+│           ├── app/           # Cross-cutting infrastructure
+│           │   ├── config/    # Env schema (Zod), CLS, CORS, Swagger, Validation
+│           │   ├── database/  # DrizzleModule + DrizzleService
+│           │   ├── events/    # DomainEventsModule + DomainEventPublisher
+│           │   ├── filters/   # AllExceptions, ProblemDetails, ThrottlerException
+│           │   ├── interceptors/  # 7 global interceptors
+│           │   ├── logger/    # nestjs-pino setup + redaction
+│           │   └── middleware/    # ETagMiddleware
+│           ├── modules/       # Feature modules
+│           │   ├── cache/     # CacheModule (Port/Adapter pattern)
+│           │   └── health/    # HealthModule (/livez, /readyz, /health)
+│           ├── shared-kernel/ # DDD primitives + shared infrastructure
+│           │   ├── application/ports/    # CachePort interface + CACHE_PORT token
+│           │   ├── domain/    # BaseAggregateRoot, DomainEvent, IntegrationEvent
+│           │   └── infrastructure/      # Decorators, DTOs, ErrorCode enum
+│           ├── __tests__/     # E2E specs + test helpers
+│           ├── app.module.ts
+│           └── main.ts
+├── packages/
+│   └── database/              # Drizzle ORM schema package
+│       ├── src/schemas/       # Schema definitions (placeholder — TODO)
+│       ├── drizzle/           # Generated migration files
+│       └── sql/               # Raw SQL (role timeout init)
+├── docs/                      # Project documentation
+├── .github/workflows/ci.yml   # CI: lint + typecheck + test + build + migration smoke
+├── biome.json                 # Lint + format config (Biome v2)
+├── turbo.json                 # Turborepo task pipeline
+└── pnpm-workspace.yaml
+```
+
+## Health Endpoints
+
+| Endpoint | Purpose | I/O Dependencies |
+|----------|---------|-----------------|
+| `GET /livez` | Process liveness | None |
+| `GET /readyz` | Readiness (orchestrator probe) | DB + Redis |
+| `GET /health` | Full component detail | DB + Redis + heap + disk |
+
+All return `503` with sanitized body on degraded state.
+
+## Documentation
+
+| Doc | Description |
+|-----|-------------|
+| [docs/project-overview-pdr.md](./docs/project-overview-pdr.md) | Product context + requirements |
+| [docs/system-architecture.md](./docs/system-architecture.md) | Architecture, layers, request lifecycle |
+| [docs/codebase-summary.md](./docs/codebase-summary.md) | File map, key modules |
+| [docs/code-standards.md](./docs/code-standards.md) | Conventions, error model, TypeScript config |
+| [docs/deployment-guide.md](./docs/deployment-guide.md) | Migration runner patterns |
+| [docs/project-roadmap.md](./docs/project-roadmap.md) | Phase status + upcoming work |
+
+## Known Issues
+
+- CI uses `pnpm@9`; `packageManager` field specifies `pnpm@10.32.1` — reconciliation pending.
+- Coverage thresholds set to 0 — target 80/70/80/80 once domain modules land.
+- `postgres` (postgres.js) remains in `apps/api` deps but is unused — pending removal.
+- No domain business modules yet (auth, users, etc.) — infrastructure skeleton only.

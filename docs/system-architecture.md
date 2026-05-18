@@ -1,0 +1,232 @@
+# System Architecture
+
+## Overview
+
+`apps/api` is a NestJS 11 monolith using a **Modular Layered Architecture** with
+**DDD-lite** primitives. No microservices, no CQRS framework — a deliberate starting point
+that can be evolved incrementally.
+
+---
+
+## Layer Model
+
+```
+┌──────────────────────────────────────────────────┐
+│  Presentation Layer                              │
+│  Controllers · DTOs · Swagger decorators         │
+├──────────────────────────────────────────────────┤
+│  Application Layer                               │
+│  Use-case services · Ports (interfaces)          │
+├──────────────────────────────────────────────────┤
+│  Domain Layer                                    │
+│  Aggregate roots · Domain events · Value objects │
+├──────────────────────────────────────────────────┤
+│  Infrastructure Layer                            │
+│  Adapters · DB · Cache · HTTP clients            │
+└──────────────────────────────────────────────────┘
+```
+
+Domain modules live under `src/modules/<domain>/<layer>/`.
+Cross-cutting concerns live under `src/app/` and `src/shared-kernel/`.
+
+---
+
+## Request Lifecycle
+
+```mermaid
+sequenceDiagram
+    participant C as Client
+    participant MW as Middleware (ETag)
+    participant G as Guard (ThrottlerGuard)
+    participant I as Interceptors (7)
+    participant P as ValidationPipe
+    participant H as Handler (Controller)
+    participant S as Service / Use Case
+    participant DB as DrizzleService
+
+    C->>MW: HTTP request
+    MW->>G: After ETag check
+    G->>I: Rate limit OK
+    Note over I: 1. RequestContext<br/>2. CorrelationId<br/>3. TraceContext<br/>4. Timeout(30s)<br/>5. LocationHeader<br/>6. LinkHeader<br/>7. Transform
+    I->>P: Pre-handler
+    P->>H: Validated + typed DTO
+    H->>S: Call use case
+    S->>DB: Query via DB_TOKEN
+    DB-->>S: Result
+    S-->>H: Domain object / DTO
+    H-->>I: Response
+    I-->>C: Enveloped JSON { data, meta }
+```
+
+### Filter Execution Order
+
+NestJS invokes exception filters in **reverse registration order**.
+Registration in `main.ts` (top → bottom):
+
+```
+ThrottlerExceptionFilter   ← most specific, runs first on ThrottlerException
+ProblemDetailsFilter       ← shapes all HttpException → RFC 9457
+AllExceptionsFilter        ← ultimate fallback (catch-all)
+```
+
+---
+
+## Cross-Cutting Pipeline
+
+### Middleware (NestJS `configure()`)
+
+| Middleware | Applied To | Effect |
+|-----------|-----------|--------|
+| `ETagMiddleware` | `{*path}` | Adds ETag header for cache revalidation |
+
+### Guards (Global, via `APP_GUARD`)
+
+| Guard | Trigger |
+|-------|---------|
+| `ThrottlerGuard` | Every request; skip with `@SkipThrottle()` |
+
+### Interceptors (Global, execution order)
+
+| # | Interceptor | Responsibility |
+|---|------------|---------------|
+| 1 | `RequestContextInterceptor` | Seeds CLS store with traceparent, writes tracing headers to response |
+| 2 | `CorrelationIdInterceptor` | Reads/generates `X-Request-Id`, stores in CLS |
+| 3 | `TraceContextInterceptor` | W3C `traceparent` + `tracestate` propagation |
+| 4 | `TimeoutInterceptor` | Cancels handler after 30 s with 408 |
+| 5 | `LocationHeaderInterceptor` | Adds `Location` header on 201 Created |
+| 6 | `LinkHeaderInterceptor` | Adds `Link` header for paginated responses |
+| 7 | `TransformInterceptor` | Wraps successful responses in `{ data, meta }` envelope |
+
+### Pipes (Global)
+
+| Pipe | Config |
+|------|--------|
+| `ValidationPipe` | `whitelist`, `forbidNonWhitelisted`, `enableImplicitConversion: false` |
+
+---
+
+## DDD-Lite Patterns
+
+### Aggregate Root
+
+```
+BaseAggregateRoot (abstract)
+  #domainEvents: DomainEvent[]   ← private, encapsulated
+  + addDomainEvent(event)
+  + getDomainEvents(): DomainEvent[]
+  + clearDomainEvents()
+```
+
+Domain modules extend `BaseAggregateRoot`. Use-case services call
+`DomainEventPublisher.publish(aggregate)` after persisting.
+
+### Domain Event Flow
+
+```
+Use Case Service
+  │ 1. persist aggregate (Drizzle)
+  │ 2. DomainEventPublisher.publish(aggregate)
+  │      └─ clearDomainEvents() → emit each via EventEmitter2
+  │              └─ @OnEvent() listeners react
+  └─ (no outbox — at-most-once, in-process only)
+```
+
+### Integration Events
+
+`IntegrationEvent` base class exists for cross-service events.
+No transport wired yet (outbox / message broker is a future milestone).
+
+### Port / Adapter (Dependency Inversion)
+
+```
+Application Layer defines:
+  CachePort interface + CACHE_PORT Symbol
+
+Infrastructure Layer provides:
+  CacheService (cache-manager + @keyv/redis) registered as { provide: CACHE_PORT, useClass: CacheService }
+
+Consumers inject:
+  @Inject(CACHE_PORT) private readonly cache: CachePort
+```
+
+---
+
+## Database Connection Model
+
+```
+DrizzleModule.forRoot() [Global Dynamic Module]
+  └─ db.provider.ts: new Pool({ connectionString, max, min, ... })
+       └─ drizzle(pool, { schema })  ← DB_TOKEN value
+            └─ DrizzleService.db / DrizzleService.pool
+                 └─ onModuleDestroy → pool.end()  (SIGTERM drain)
+```
+
+Schema types imported from `@onwealth/database` workspace package.
+No repository abstraction layer yet — handlers receive `DB_TOKEN` directly.
+
+---
+
+## Module Dependency Graph (Infrastructure)
+
+```
+AppModule
+├── ConfigModule (global)          ← Zod env validation
+├── ClsModule (global)             ← request-scoped context store
+├── LoggerModule                   ← nestjs-pino
+├── EventEmitterModule             ← wildcard, delimiter "."
+├── DrizzleModule (global)         ← DB_TOKEN
+├── DomainEventsModule (global)    ← DomainEventPublisher
+├── ThrottlerModule                ← rate limiting
+├── HealthModule                   ← /livez /readyz /health
+└── CacheModule                    ← CACHE_PORT adapter
+```
+
+All `@Global()` modules are enforced by the architecture guard test
+(`unit/global-modules.spec.ts`).
+
+---
+
+## Health Probe Architecture
+
+| Endpoint | Route | Checks | Orchestrator Use |
+|----------|-------|--------|-----------------|
+| `GET /livez` | No `/api` prefix | Memory heap only | Liveness probe |
+| `GET /readyz` | No `/api` prefix | DB (SELECT 1) + Redis (SET/GET readback), 3 s timeout | Readiness probe |
+| `GET /health` | No `/api` prefix | All of readyz + heap + RSS + disk | Debugging only |
+
+503 responses have sanitized bodies (no internal details exposed).
+All health routes are `@Public()` (bypass auth) and `@SkipThrottle()`.
+
+---
+
+## Security Layers
+
+| Layer | Mechanism |
+|-------|-----------|
+| Headers | Helmet (HSTS, X-Content-Type-Options, X-Frame-Options, …) |
+| CORS | Env-driven `ALLOWED_ORIGINS`; exposes `X-Request-Id` |
+| Rate limiting | `ThrottlerGuard` as `APP_GUARD`; configurable TTL + limit |
+| Payload | 100 KB JSON body limit (express.json) |
+| Env validation | Zod rejects placeholder secrets and insecure config in production |
+| Logging | Sensitive field redaction in pino config |
+
+---
+
+## Observability Stack
+
+| Concern | Tool |
+|---------|------|
+| Structured logging | `nestjs-pino` (pino) |
+| Request tracing | W3C `traceparent` via `nestjs-cls` + `TraceContextInterceptor` |
+| Correlation | `X-Request-Id` via `CorrelationIdInterceptor` |
+| Health | `@nestjs/terminus` (Drizzle + Redis indicators) |
+| API docs | `@nestjs/swagger` + `@scalar/nestjs-api-reference` (non-prod) |
+
+---
+
+## Unresolved Architectural Questions
+
+1. Repository pattern vs direct `DB_TOKEN` injection — decide before first domain module.
+2. Outbox pattern for domain events — required for reliable at-least-once delivery.
+3. CQRS adoption — evaluate when read models diverge significantly from write models.
+4. Auth module integration — passport/JWT/OAuth deps present, no guards wired.

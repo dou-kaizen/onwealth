@@ -1,0 +1,112 @@
+# Project Overview & PDR
+
+## Product Context
+
+**onwealth** is a financial/wealth platform (domain TBD — no business modules exist yet).
+The current codebase is a production-grade NestJS API skeleton that establishes the DDD-lite
+foundation, security posture, and CI pipeline on which all business domains will be built.
+
+**Description from `apps/api/package.json`:** _"meme token trading platform backend"_ —
+final product scope to be confirmed by product team.
+
+---
+
+## Current State: `init-infrastructure` branch
+
+This branch delivers a hardened API skeleton. No domain endpoints. No auth flows wired. No
+business schemas. The six phases below are merged and complete.
+
+| Phase | Name | Summary |
+|-------|------|---------|
+| 01 | Security Criticals | Helmet, CORS, body-size limit, trust-proxy, throttler guard |
+| 02 | Env & Secrets | Zod env schema with prod superRefine (rejects placeholder secrets, forces rediss://, enforces THROTTLE_LIMIT ≤ 10 000) |
+| 03 | Runtime | DrizzleModule/DrizzleService with pool lifecycle, CacheModule (Port/Adapter), DomainEventsModule, health probes (livez/readyz/health) |
+| 04 | Cross-Cutting Correctness | RFC 9457 ProblemDetailsFilter, W3C traceparent in CLS, CorrelationId/TraceContext interceptors, ETag middleware |
+| 05 | Tooling & CI | Biome v2, Turborepo pipeline, dependency-cruiser arch guard, vitest + e2e harness, CI workflow (lint+typecheck+test+build+migration smoke) |
+| 06 | Minor Cleanups | Drop postgres.js dep (TODO — still in package.json), Swagger annotations, log exclusions, CORS `X-Request-Id` |
+
+---
+
+## Functional Requirements (Infrastructure Layer)
+
+### FR-01 — Env Validation
+- All env vars parsed and validated at startup via Zod schema.
+- Production mode: rejects placeholder `JWT_SECRET`, `api.example.com` base URL, `redis://` scheme, `THROTTLE_LIMIT > 10000`.
+- App refuses to start if validation fails.
+
+### FR-02 — Security Headers
+- Helmet applied globally (CSP + COEP disabled — JSON API only).
+- CORS: env-driven `ALLOWED_ORIGINS`, exposes `X-Request-Id`.
+- Rate limiting: configurable TTL + limit via env; ThrottlerGuard as `APP_GUARD`.
+
+### FR-03 — Observability
+- Structured JSON logging via pino. Dev: pino-pretty. Prod: JSON.
+- Sensitive fields redacted (`password`, tokens, auth headers).
+- High-frequency probe paths excluded from access logs.
+- W3C `traceparent` propagated via CLS; `X-Request-Id` correlation.
+
+### FR-04 — Error Responses
+- All errors: RFC 9457 `application/problem+json`.
+- Throttle violations: 429 with standard problem body.
+- Validation errors: flattened dotted-path `errors[]` array.
+
+### FR-05 — Health Probes
+- `/livez` — process-only, no I/O.
+- `/readyz` — DB + Redis with 3 s race deadline; 503 on degraded.
+- `/health` — full component breakdown + heap/RSS/disk metrics.
+
+### FR-06 — Database
+- Drizzle ORM + `node-postgres` Pool.
+- Pool drains on `SIGTERM` via `onModuleDestroy`.
+- Migration role has `lock_timeout` / `statement_timeout` set before migrations run.
+- Idempotent migrations verified in CI smoke test.
+
+### FR-07 — Domain Events (Infrastructure)
+- `DomainEventPublisher`: clears aggregate's event queue, emits each event via `EventEmitter2`.
+- At-most-once delivery (no outbox, no persistence).
+- `BaseAggregateRoot` accumulates events in private `#domainEvents[]`.
+
+### FR-08 — Cache
+- Port/Adapter: `CachePort` interface injected via `CACHE_PORT` symbol.
+- Adapter: `cache-manager` + `@keyv/redis`.
+- Consumers depend on interface, not implementation.
+
+---
+
+## Non-Functional Requirements
+
+| NFR | Target | Status |
+|-----|--------|--------|
+| Request timeout | 30 s global | Implemented (`TimeoutInterceptor`) |
+| Payload limit | 100 KB JSON body | Implemented |
+| Rate limiting | Configurable (default 100/min) | Implemented |
+| Test coverage | 80 % statements / 70 % branches / 80 % functions / 80 % lines | Thresholds at 0 — TODO |
+| Migration idempotency | Second run must be no-op | Verified in CI |
+
+---
+
+## Architectural Constraints
+
+- NestJS 11, ESM (`"type": "module"`), `nodenext` module resolution.
+- No CQRS module, no repository abstraction yet (DB_TOKEN injected directly).
+- Every `@Global()` module must have `@global-approved` comment + appear in architecture guard whitelist.
+- Drizzle is the only ORM. postgres.js must be removed (tracked).
+
+---
+
+## Out of Scope (This Branch)
+
+- Auth/users module (passport/JWT/OAuth deps present but no module wired).
+- Business domain schemas (packages/database exports empty placeholder).
+- Outbox pattern for domain events (at-most-once is current behavior).
+- Frontend / mobile clients.
+
+---
+
+## Unresolved Questions
+
+1. Final product domain — "meme token trading" or broader wealth/fintech? Affects schema design.
+2. Multi-tenancy requirements, if any?
+3. Target deployment platform (Docker/k8s, Railway, Fly.io, etc.)?
+4. Auth strategy choice — JWT-only, OAuth-only, or combined?
+5. Coverage gate timeline — when does 0 → 80/70/80/80 ramp begin?
