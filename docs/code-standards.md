@@ -23,6 +23,23 @@ Both packages keep:
 - `noUncheckedIndexedAccess` (in api) — array/record access returns `T | undefined`
 - `exactOptionalPropertyTypes` — distinguishes "missing" from "explicit undefined"
 
+## Testing Conventions
+
+### CI-Guarded Integration Tests
+
+Use `describe.skipIf(!process.env.VAR)` for integration tests that require a real backing service (DB, Redis). The test exists in the suite, runs in CI where the env var is present via service containers, and skips cleanly in offline local runs — no fake passes, no mocks.
+
+```ts
+// Example: apps/api/src/__tests__/integration/with-timeout.spec.ts
+describe.skipIf(!process.env.DATABASE_URL)('withTimeout integration', () => {
+  // real DB transaction tests
+})
+```
+
+This is the canonical pattern for any spec that requires a live `DATABASE_URL` or `REDIS_URL`.
+
+---
+
 ## File Naming
 
 - kebab-case for `.ts`/`.js`/`.py`/`.sh`

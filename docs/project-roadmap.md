@@ -36,16 +36,22 @@ without pulling in any HTTP dependencies (`@onwealth/nest-http`).
 
 ---
 
+## Codebase Review Findings Fix — COMPLETE
+
+24 correctness bugs fixed across 3 phases (1 Critical, 4 High, 13 Medium, 6 Low). 51 test cases added across 10 spec files. CI/tooling hardening applied (pnpm 10.32.1 pinned both CI jobs).
+
+Ref: `plans/260518-1712-fix-codebase-review-findings/`, journal `docs/journals/2026-05-19-codebase-review-findings-fix.md`.
+
+---
+
 ## Upcoming Milestones
 
-### M1 — Cleanup & Reconciliation
+### M1 — Cleanup & Reconciliation — Substantially Complete
 
-Small housekeeping tasks before domain work begins.
-
-| Task | Notes |
-|------|-------|
-| Remove `postgres` (postgres.js) dep from `apps/api` | Unused; drizzle uses `pg` only |
-| Reconcile pnpm version (CI `@9` vs `packageManager` `@10.32.1`) | Prevents lock file drift |
+| Task | Status |
+|------|--------|
+| Remove `postgres` (postgres.js) dep from `apps/api` | Done |
+| Reconcile pnpm version (CI vs `packageManager` field) | Done — CI pins `pnpm@10.32.1` on both jobs |
 
 ---
 
@@ -78,14 +84,16 @@ Wire the existing passport/JWT/OAuth dependencies into a working auth module.
 
 Ramp test coverage thresholds from placeholder `0` to production targets.
 
-| Metric | Current | Target |
-|--------|---------|--------|
-| Statements | 0 % | 80 % |
-| Branches | 0 % | 70 % |
-| Functions | 0 % | 80 % |
-| Lines | 0 % | 80 % |
+51 test cases exist across 10 spec files. Vitest thresholds remain at `0` — gate not yet enforced.
 
-Blocked on M2/M3 — meaningful coverage requires domain code to test.
+| Metric | Threshold | Target |
+|--------|-----------|--------|
+| Statements | 0 % (unenforced) | 80 % |
+| Branches | 0 % (unenforced) | 70 % |
+| Functions | 0 % (unenforced) | 80 % |
+| Lines | 0 % (unenforced) | 80 % |
+
+Enforcement blocked on M2/M3 — meaningful coverage requires domain code to test.
 
 ---
 
@@ -118,4 +126,4 @@ Wire `IntegrationEvent` base class to an actual message broker.
 - Product scope confirmation ("meme token trading" vs broader wealth platform) gates M2 schema design.
 - Deployment platform decision gates container/infra work.
 - Auth strategy (JWT-only vs OAuth-only vs combined) gates M3 design.
-- pnpm version reconciliation (M1) should happen before next merge to `main`.
+- Coverage gate enforcement timeline — when to ramp thresholds from 0 to 80/70/80/80.

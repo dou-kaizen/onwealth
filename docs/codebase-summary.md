@@ -41,10 +41,17 @@ Currently empty (business modules land in future milestones). Reserved path: `sr
 
 ### __tests__/ — Test Infrastructure
 
+51 test cases across 10 spec files (50 run locally; 1 CI-guarded skip).
+
 | File | Purpose |
 |------|---------|
+| `setup.ts` | Global test setup (Vitest) |
 | `helpers/create-app.ts` | Creates `TestingModule`, calls `configureHttpApp(app, { testMode: true })` from `@onwealth/nest-http` |
-| `unit/global-modules.spec.ts` | Architecture guard: every `@Global()` must be in approved whitelist |
+| `helpers/create-request.ts` | Supertest request factory for integration tests |
+| `unit/global-modules.spec.ts` | Architecture guard: every `@Global()` must be in approved whitelist (3 cases) |
+| `integration/di-token-identity.spec.ts` | Verifies DI token singletons across module boundaries (2 cases) |
+| `integration/throttler-headers.spec.ts` | Asserts throttler response headers present (1 case) |
+| `integration/with-timeout.spec.ts` | DB transaction timeout via `withTimeout`; `describe.skipIf(!DATABASE_URL)` — skips offline, runs in CI (1 case) |
 
 ### Config Files (apps/api root)
 
@@ -72,6 +79,14 @@ Currently empty (business modules land in future milestones). Reserved path: `sr
 | `events/` | `domain-events.module.ts`, `domain-event-publisher.ts` | Global `DomainEventsModule`; clear-then-emit via EventEmitter2 (at-most-once) |
 | `logger/` | `logger.module.ts`, `logger.config.ts`, `redaction.config.ts` | nestjs-pino `LoggerModule`; sensitive field redaction |
 
+### __tests__/ — Specs (packages/shared-kernel)
+
+| File | Purpose |
+|------|---------|
+| `__tests__/unit/global-modules.spec.ts` | Architecture guard for shared-kernel globals (3 cases) |
+| `cache/__tests__/cache.service.spec.ts` | CacheService unit tests (5 cases) |
+| `config/__tests__/env-pool-validation.spec.ts` | Env schema validation unit tests (6 cases) |
+
 Build: `tsdown` → `dist/index.mjs` + `dist/index.d.mts`. All NestJS + infra deps are `peerDependencies`.
 
 ---
@@ -90,6 +105,14 @@ Build: `tsdown` → `dist/index.mjs` + `dist/index.d.mts`. All NestJS + infra de
 | `health/` | `health.module.ts`, `health.controller.ts`, `drizzle.health.ts`, `redis.health.ts` | `HealthModule`; `/livez`, `/readyz`, `/health`; Terminus indicators |
 | `decorators/` | `public.decorator.ts`, `use-envelope.decorator.ts`, `api-problem-responses.decorator.ts`, `validators/` | `@Public`, `@UseEnvelope`, `@ApiProblemResponses`, typed validators |
 | `dtos/` | `cursor-pagination.dto.ts`, `offset-pagination.dto.ts`, `list-response.dto.ts`, `problem-details.dto.ts` | Shared HTTP DTOs |
+
+### __tests__/ — Specs (packages/nest-http)
+
+| File | Purpose |
+|------|---------|
+| `health/__tests__/health.controller.spec.ts` | HealthController unit tests (9 cases) |
+| `interceptors/__tests__/trace-context.util.spec.ts` | TraceContext utility unit tests (14 cases) |
+| `interceptors/__tests__/transform.interceptor.spec.ts` | TransformInterceptor unit tests (7 cases) |
 
 Build: `tsdown` → `dist/index.mjs` + `dist/index.d.mts`. All NestJS + infra deps are `peerDependencies`.
 
@@ -116,8 +139,8 @@ This package exports schema types only.
 
 Two GitHub Actions jobs on push to `main`/`init-infrastructure` and PR to `main`:
 
-**`ci` job** (Node 22, pnpm 9):
-`typecheck` → `lint` → `test` (api unit only) → `deps` (arch check) → `build`
+**`ci` job** (Node 22, pnpm 10.32.1):
+`typecheck` → `lint` → `turbo test` (all packages) → `deps` (arch check) → `build`
 
 **`migration-smoke` job** (postgres:16-alpine service):
 `build database package` → `db:init-roles` → `db:migrate` × 2 (second asserts idempotency)

@@ -14,7 +14,7 @@ final product scope to be confirmed by product team.
 ## Current State: `init-infrastructure` branch
 
 This branch delivers a hardened API skeleton. No domain endpoints. No auth flows wired. No
-business schemas. The six phases below are merged and complete.
+business schemas. Infrastructure phases and subsequent codebase-review bug-fix effort are all complete.
 
 | Phase | Name | Summary |
 |-------|------|---------|
@@ -24,6 +24,7 @@ business schemas. The six phases below are merged and complete.
 | 04 | Cross-Cutting Correctness | RFC 9457 ProblemDetailsFilter, W3C traceparent in CLS, CorrelationId/TraceContext interceptors, ETag middleware |
 | 05 | Tooling & CI | Biome v2, Turborepo pipeline, dependency-cruiser arch guard, vitest + e2e harness, CI workflow (lint+typecheck+test+build+migration smoke) |
 | 06 | Minor Cleanups | Drop postgres.js dep (complete), Swagger annotations, log exclusions, CORS `X-Request-Id` |
+| CR | Codebase Review Fix | 24 correctness bugs fixed (1 Critical, 4 High, 13 Medium, 6 Low); 51 test cases added; CI/tooling hardening (pnpm 10.32.1 both jobs) |
 
 ---
 
@@ -80,7 +81,7 @@ business schemas. The six phases below are merged and complete.
 | Request timeout | 30 s global | Implemented (`TimeoutInterceptor`) |
 | Payload limit | 100 KB JSON body | Implemented |
 | Rate limiting | Configurable (default 100/min) | Implemented |
-| Test coverage | 80 % statements / 70 % branches / 80 % functions / 80 % lines | Thresholds at 0 — TODO |
+| Test coverage | 80 % statements / 70 % branches / 80 % functions / 80 % lines | 51 test cases exist; thresholds remain 0 (gate pending) |
 | Migration idempotency | Second run must be no-op | Verified in CI |
 
 ---
@@ -90,7 +91,7 @@ business schemas. The six phases below are merged and complete.
 - NestJS 11, ESM (`"type": "module"`), `nodenext` module resolution.
 - No CQRS module, no repository abstraction yet (DB_TOKEN injected directly).
 - Every `@Global()` module must have `@global-approved` comment + appear in architecture guard whitelist.
-- Drizzle is the only ORM. postgres.js must be removed (tracked).
+- Drizzle is the only ORM. postgres.js has been removed; Drizzle + `pg` only.
 
 ---
 
@@ -109,4 +110,4 @@ business schemas. The six phases below are merged and complete.
 2. Multi-tenancy requirements, if any?
 3. Target deployment platform (Docker/k8s, Railway, Fly.io, etc.)?
 4. Auth strategy choice — JWT-only, OAuth-only, or combined?
-5. Coverage gate timeline — when does 0 → 80/70/80/80 ramp begin?
+5. Coverage gate enforcement timeline — 51 test cases exist; when to raise thresholds from 0 to 80/70/80/80?

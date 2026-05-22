@@ -13,8 +13,6 @@ security hardening, observability, and CI pipeline that all future domain module
 | PostgreSQL | 16+ |
 | Redis | 7+ |
 
-> CI pins `pnpm@9` — see [open issue](#known-issues).
-
 ## Quick Start
 
 ```bash
@@ -108,7 +106,7 @@ onwealth/
 │   └── api/                   # NestJS 11 application — composition root
 │       └── src/
 │           ├── modules/       # Business feature modules (reserved, none yet)
-│           ├── __tests__/     # E2E specs + test helpers
+│           ├── __tests__/     # unit + integration specs + test helpers
 │           ├── app.module.ts  # Root module — imports workspace packages
 │           └── main.ts        # Thin entrypoint: createHttpApp + listen
 ├── packages/
@@ -172,7 +170,5 @@ All return `503` with sanitized body on degraded state.
 
 ## Known Issues
 
-- CI uses `pnpm@9`; `packageManager` field specifies `pnpm@10.32.1` — reconciliation pending.
 - Coverage thresholds set to 0 — target 80/70/80/80 once domain modules land.
-- `postgres` (postgres.js) remains in `apps/api` deps but is unused — pending removal.
 - No domain business modules yet (auth, users, etc.) — infrastructure skeleton only.
