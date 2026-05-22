@@ -34,7 +34,7 @@ future-worker ──────────────────────
                                                           @onwealth/database
 ```
 
-Edges are one-directional and enforced by per-package dependency-cruiser configs.
+Edges are one-directional and enforced by per-package dependency-cruiser configs that extend a shared root base (`.dependency-cruiser.base.mjs`).
 A future NestJS worker app can depend on `@onwealth/shared-kernel` directly
 without pulling in any HTTP dependencies.
 

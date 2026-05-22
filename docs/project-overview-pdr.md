@@ -22,7 +22,7 @@ business schemas. Infrastructure phases and subsequent codebase-review bug-fix e
 | 02 | Env & Secrets | Zod env schema with prod superRefine (rejects placeholder secrets, forces rediss://, enforces THROTTLE_LIMIT ≤ 10 000) |
 | 03 | Runtime | DrizzleModule/DrizzleService with pool lifecycle, CacheModule (Port/Adapter), DomainEventsModule, health probes (livez/readyz/health) |
 | 04 | Cross-Cutting Correctness | RFC 9457 ProblemDetailsFilter, W3C traceparent in CLS, CorrelationId/TraceContext interceptors, ETag middleware |
-| 05 | Tooling & CI | Biome v2, Turborepo pipeline, dependency-cruiser arch guard, vitest + e2e harness, CI workflow (lint+typecheck+test+build+migration smoke) |
+| 05 | Tooling & CI | Biome v2, Turborepo pipeline, dependency-cruiser arch guard (shared base + per-package extends), lefthook git hooks (pre-commit/commit-msg/pre-push), vitest + e2e harness, CI workflow (lint+typecheck+test+build+migration smoke) |
 | 06 | Minor Cleanups | Drop postgres.js dep (complete), Swagger annotations, log exclusions, CORS `X-Request-Id` |
 | CR | Codebase Review Fix | 24 correctness bugs fixed (1 Critical, 4 High, 13 Medium, 6 Low); 51 test cases added; CI/tooling hardening (pnpm 10.32.1 both jobs) |
 

@@ -53,6 +53,11 @@ This is the canonical pattern for any spec that requires a live `DATABASE_URL` o
 - Reference stable external IDs (RFC numbers, PostgreSQL `SQLSTATE`, CVE IDs) — never plan artifacts (phase numbers, finding codes, audit labels).
 - Migration filenames carry domain slugs only — no `phase_*` prefixes.
 
+## Commit Messages
+
+Use Conventional Commits format (`feat:`, `fix:`, `refactor:`, `test:`, `chore:`, `docs:`).
+Enforced locally by the lefthook `commit-msg` hook; CI is the hard gate.
+
 ## Modules & File Size
 
 - Keep files ≤ 200 lines where practical.

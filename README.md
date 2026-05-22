@@ -71,7 +71,20 @@ Full list in `apps/api/.env.example`.
 | `pnpm lint:fix` | Auto-fix lint issues |
 | `pnpm format` | Biome format (write) |
 | `pnpm format:check` | Biome format check (no write) |
+| `pnpm test` | Run all package test suites via Turborepo |
 | `pnpm db:dev` | Init DB roles then run pending migrations |
+
+### Git Hooks (lefthook)
+
+Installed automatically on `pnpm install` via the `prepare` script.
+
+| Hook | Trigger | Action |
+|------|---------|--------|
+| `pre-commit` | `git commit` | `biome check --write` on staged JS/TS/JSON files; auto-restages fixes |
+| `commit-msg` | `git commit` | Validates Conventional Commits format on subject line |
+| `pre-push` | `git push` | `turbo run typecheck test` |
+
+Bypass (emergency only): `git commit --no-verify`. CI remains the hard gate.
 
 ### apps/api (run with `pnpm --filter api <script>`)
 
@@ -136,7 +149,9 @@ onwealth/
 ├── docs/                      # Project documentation
 ├── .github/workflows/ci.yml   # CI: lint + typecheck + test + build + migration smoke
 ├── biome.json                 # Lint + format config (Biome v2)
+├── lefthook.yml               # Git hooks: pre-commit, commit-msg, pre-push
 ├── turbo.json                 # Turborepo task pipeline
+├── .dependency-cruiser.base.mjs  # Shared dependency-cruiser base (no-circular + cruise options)
 └── pnpm-workspace.yaml
 ```
 

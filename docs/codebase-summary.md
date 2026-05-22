@@ -13,9 +13,11 @@ onwealth/
 ├── packages/shared-kernel/            @onwealth/shared-kernel — transport-agnostic NestJS modules
 ├── packages/nest-http/                @onwealth/nest-http — HTTP cross-cutting layer
 ├── biome.json                         Root lint + format config (Biome v2)
-├── turbo.json                         Task pipeline (build, test, typecheck, lint, dev)
+├── lefthook.yml                       Git hooks: pre-commit (biome), commit-msg (Conventional Commits), pre-push (typecheck+test)
+├── turbo.json                         Task pipeline (build, test, typecheck, lint, dev); globalDependencies includes .dependency-cruiser.base.mjs
+├── .dependency-cruiser.base.mjs       Shared dependency-cruiser base: no-circular rule + cruise options; extended by each package
 ├── pnpm-workspace.yaml                Workspace globs: apps/*, packages/*
-├── package.json                       Root scripts + pnpm config
+├── package.json                       Root scripts (incl. "test": turbo run test) + pnpm config; lefthook in devDependencies + onlyBuiltDependencies
 └── .github/workflows/ci.yml           CI: two jobs (ci, migration-smoke)
 ```
 
@@ -59,7 +61,7 @@ Currently empty (business modules land in future milestones). Reserved path: `sr
 |------|---------|
 | `vitest.config.mts` | SWC + vite-tsconfig-paths, v8 coverage, thresholds at 0 |
 | `vitest.e2e.config.mts` | E2E vitest config |
-| `.dependency-cruiser.mjs` | Architecture rules enforced via `pnpm deps` |
+| `.dependency-cruiser.mjs` | Per-package layer-specific forbidden rules; extends root `.dependency-cruiser.base.mjs` |
 | `nest-cli.json` | NestJS CLI build config |
 | `tsconfig.json` | `strict: true`, `noUncheckedIndexedAccess`, `emitDecoratorMetadata`, `nodenext` |
 
