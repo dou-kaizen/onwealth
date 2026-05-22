@@ -9,13 +9,15 @@
     "format": "turbo run format",
     "format:check": "turbo run format:check",
     "typecheck": "turbo run typecheck",
+    "test": "turbo run test",
     "deps": "turbo run deps",
     "db:dev": "pnpm --filter @onwealth/database run db:init-roles && pnpm --filter @onwealth/database run db:migrate",
-    "prepare": "pnpm run setup:env",
+    "prepare": "lefthook install && pnpm run setup:env",
     "setup:env": "pnpm --filter api --filter @onwealth/database exec sh -c 'test -f .env || cp .env.example .env'"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.0.0",
+    "lefthook": "^2.1.8",
     "turbo": "^2.8.20"
   },
   "packageManager": "pnpm@10.32.1",
@@ -32,7 +34,8 @@
       "bcrypt",
       "better-sqlite3",
       "@swc/core",
-      "esbuild"
+      "esbuild",
+      "lefthook"
     ]
   }
 }
