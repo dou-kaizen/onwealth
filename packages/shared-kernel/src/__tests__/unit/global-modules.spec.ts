@@ -18,6 +18,7 @@ const APPROVED_GLOBAL_MODULES = new Set([
   'src/database/db.module.ts',
   'src/events/domain-events.module.ts',
   'src/cache/cache.module.ts',
+  'src/queue/queue.module.ts', // [Red Team C2] BullMQ root connections
 ])
 
 const PKG_ROOT = path.resolve(import.meta.dirname, '../../../')

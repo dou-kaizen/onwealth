@@ -9,6 +9,7 @@ packages:
 # compatibility ranges (e.g. `^11`) distinct from the pinned dev/runtime version.
 catalog:
   '@keyv/redis': ^5.1.6
+  '@nestjs/bullmq': ^11.0.4
   '@nestjs/cache-manager': ^3.1.0
   '@nestjs/common': ^11.1.17
   '@nestjs/config': 4.0.2
@@ -22,6 +23,7 @@ catalog:
   '@types/express': ^5.0.6
   '@types/node': ^25.5.0
   '@types/pg': 8.15.6
+  bullmq: ^5.77.0
   cache-manager: ^7.2.8
   class-transformer: 0.5.1
   class-validator: 0.14.2

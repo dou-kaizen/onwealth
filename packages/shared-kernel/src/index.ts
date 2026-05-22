@@ -32,3 +32,13 @@ export { DomainEventsModule } from './events/domain-events.module.js'
 export type { LoggerConfigOptions } from './logger/logger.config.js'
 export { createLoggerConfig } from './logger/logger.config.js'
 export { LoggerModule } from './logger/logger.module.js'
+
+// queue
+export { queueConfig } from './queue/queue.config.js'
+export { QueueConfigKey, QueueProcessorConfigKey } from './queue/queue.constant.js'
+export { QueueProcessor } from './queue/queue.decorator.js'
+export { EnumQueuePriority } from './queue/queue.enum.js'
+export { QueueException } from './queue/queue.exception.js'
+export { QueueModule } from './queue/queue.module.js'
+export type { QueueJobResult } from './queue/queue-job-result.type.js'
+export { QueueProcessorBase } from './queue/queue-processor.base.js'

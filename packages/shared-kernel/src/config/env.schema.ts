@@ -86,6 +86,16 @@ export const envObjectSchema = z.object({
       message: 'REDIS_TTL must be greater than 0',
     }),
 
+  // Optional dedicated Redis URL for BullMQ queues.
+  // Falls back to REDIS_URL when absent.
+  // Must start with redis:// or rediss://; prod enforces TLS (see superRefine below).
+  QUEUE_REDIS_URL: z
+    .string()
+    .refine((value) => /^rediss?:\/\/.+/.test(value), {
+      message: 'QUEUE_REDIS_URL must start with redis:// or rediss://',
+    })
+    .optional(),
+
   // JWT secret — REQUIRED, min 32 chars to prevent trivially brute-forceable secrets
   JWT_SECRET: z.string().min(32, 'JWT_SECRET must be at least 32 characters'),
 
@@ -143,6 +153,15 @@ export const envSchema = envObjectSchema.superRefine((data, ctx) => {
       code: 'custom',
       path: ['REDIS_URL'],
       message: 'REDIS_URL must use rediss:// (TLS) in production',
+    })
+  }
+
+  // Reject plain redis:// for queue connection in prod
+  if (isProd && data.QUEUE_REDIS_URL?.startsWith('redis://')) {
+    ctx.addIssue({
+      code: 'custom',
+      path: ['QUEUE_REDIS_URL'],
+      message: 'QUEUE_REDIS_URL must use rediss:// (TLS) in production',
     })
   }
 
