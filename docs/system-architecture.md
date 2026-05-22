@@ -181,6 +181,33 @@ Consumers inject:
   @Inject(CACHE_PORT) private readonly cache: CachePort
 ```
 
+### Domain Module Structure
+
+Each business feature is a self-contained module under
+`apps/api/src/modules/<domain>/`, split into the four layers above.
+Dependencies point inward — infrastructure depends on application ports,
+never the reverse.
+
+```
+modules/<domain>/
+├── <domain>.module.ts     ← wires providers, controllers, port→impl bindings
+├── domain/                ← aggregates · value-objects · enums · events  (pure)
+├── application/           ← services (use cases) · ports · listeners
+├── infrastructure/        ← repositories · adapters  (implements ports)
+└── presentation/          ← controllers · dtos · guards
+```
+
+```
+presentation ──► application ──► domain
+                     ▲
+infrastructure ──────┘   (implements application/ports via DI tokens)
+```
+
+Simple CRUD modules may omit `domain/`. Rich modules enforce invariants in an
+aggregate that extends `BaseAggregateRoot` and emits domain events. See
+`docs/code-standards.md` → "DDD Module Pattern" for file-naming and the
+port/token convention.
+
 ---
 
 ## Database Connection Model
@@ -258,7 +285,7 @@ All health routes are `@Public()` (bypass auth) and `@SkipThrottle()`.
 
 ## Unresolved Architectural Questions
 
-1. Repository pattern vs direct `DB_TOKEN` injection — decide before first domain module.
+1. **Resolved** — Repository pattern: domain modules define per-module repository ports in `application/ports/` (DIP); implementations under `infrastructure/repositories/` inject `DB_TOKEN`. Infrastructure-only code (e.g. health indicators) may use `DB_TOKEN` directly.
 2. Outbox pattern for domain events — required for reliable at-least-once delivery.
 3. CQRS adoption — evaluate when read models diverge significantly from write models.
 4. Auth module integration — no auth deps in `apps/api`; auth strategy and wiring are a future milestone.

@@ -57,7 +57,103 @@ This is the canonical pattern for any spec that requires a live `DATABASE_URL` o
 
 - Keep files ≤ 200 lines where practical.
 - Split by logical concern (one responsibility per module).
-- Domain code under `apps/api/src/modules/<domain>/<layer>/` — `application`, `domain`, `infrastructure`, `presentation`.
+
+## DDD Module Pattern
+
+Business features live under `apps/api/src/modules/<domain>/`, each split into four
+layers. Add only the layer folders a module actually needs — not every module uses
+every folder.
+
+```
+modules/<domain>/
+├── <domain>.module.ts          # wires the module: providers, controllers, port bindings
+├── domain/                     # pure business — zero framework / IO imports
+│   ├── aggregates/             # aggregate roots (extend BaseAggregateRoot)
+│   ├── entities/               # entities owned by an aggregate
+│   ├── value-objects/          # immutable VOs (Money, Slug, …)
+│   ├── enums/                  # domain enums / state types
+│   └── events/                 # domain events (extend DomainEvent)
+├── application/                # use-case orchestration
+│   ├── ports/                  # interfaces + Symbol DI tokens (the module owns these)
+│   ├── services/               # application services (use cases)
+│   └── listeners/              # @OnEvent domain-event listeners
+├── infrastructure/             # adapters — the only layer that touches IO
+│   ├── repositories/           # port implementations (Drizzle, via DB_TOKEN)
+│   ├── adapters/               # other port implementations (external APIs, …)
+│   └── strategies/             # passport strategies, etc.
+└── presentation/               # HTTP edge
+    ├── controllers/            # route handlers — thin, delegate to services
+    ├── dtos/                   # request/response DTOs (class-validator)
+    └── guards/                 # module-scoped guards
+```
+
+### Dependency Rule
+
+Imports point inward only:
+
+```
+presentation ─► application ─► domain
+infrastructure ─► application (implements ports) ─► domain
+```
+
+`domain/` imports nothing outside itself, except domain primitives from
+`@onwealth/shared-kernel` (`BaseAggregateRoot`, `DomainEvent`). Infrastructure
+depends on application, never the reverse — that inversion is the whole point of
+the `ports/` folder.
+
+### Ports & Tokens (Dependency Inversion)
+
+The application layer **defines** a port; the infrastructure layer **implements** it.
+A port file exports an interface plus a `Symbol` token:
+
+```ts
+// application/ports/article.repository.port.ts
+export interface ArticleRepository {
+  findById(id: string): Promise<Article | null>
+  save(article: Article): Promise<void>
+}
+export const ARTICLE_REPOSITORY = Symbol('ARTICLE_REPOSITORY')
+```
+
+```ts
+// article.module.ts
+providers: [
+  ArticleService,
+  { provide: ARTICLE_REPOSITORY, useClass: ArticleRepositoryImpl },
+]
+```
+
+Consumers inject by token: `@Inject(ARTICLE_REPOSITORY) private readonly repo: ArticleRepository`.
+
+### Two Complexity Tiers
+
+Not every module needs a full domain layer. Match the structure to the problem:
+
+| Tier | When | Layers used |
+|------|------|-------------|
+| Simple CRUD | Pass-through resource, no invariants | `application` (service + port), `infrastructure`, `presentation` — skip `domain/` |
+| Rich domain | Business invariants, state machine, events | All four — aggregate enforces rules, emits domain events |
+
+A simple-CRUD service may stay a thin pass-through for consistency; non-trivial
+logic (e.g. `NotFoundException` mapping) belongs in the service, never the
+controller or repository.
+
+### Naming
+
+| Artifact | File | Symbol |
+|----------|------|--------|
+| Module | `<domain>.module.ts` | `<Domain>Module` |
+| Port | `<name>.repository.port.ts` | `interface <Name>Repository` + `<NAME>_REPOSITORY` token |
+| Repository impl | `infrastructure/repositories/<name>.repository.ts` | `<Name>RepositoryImpl` |
+| Service | `application/services/<name>.service.ts` | `<Name>Service` |
+| Aggregate | `domain/aggregates/<name>.aggregate.ts` | `<Name>` |
+| Value object | `domain/value-objects/<name>.vo.ts` | `<Name>` |
+| Domain event | `domain/events/<name>.event.ts` | `<Name>Event` |
+
+Register each module in `AppModule.imports`. A domain's DB schema goes in
+`packages/database/src/schemas/<domain>.schema.ts` with a matching migration.
+Domain-specific `ErrorCode` values are added to `@onwealth/shared-kernel` alongside
+the module that uses them — not pre-declared.
 
 ## Validation
 
