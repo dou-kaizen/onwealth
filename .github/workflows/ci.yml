@@ -119,12 +119,24 @@ jobs:
         env:
           DATABASE_URL: postgresql://postgres:postgres@localhost:5432/smoke
 
+      - name: Detect generated migrations
+        id: migrations
+        run: |
+          if [ -f packages/database/drizzle/meta/_journal.json ]; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::No migrations generated yet (empty schema) -- skipping migrate steps."
+          fi
+
       - name: Run migrations
+        if: steps.migrations.outputs.exists == 'true'
         run: pnpm --filter @onwealth/database db:migrate
         env:
           DATABASE_URL: postgresql://postgres:postgres@localhost:5432/smoke
 
       - name: Assert idempotent (second run must be no-op)
+        if: steps.migrations.outputs.exists == 'true'
         run: pnpm --filter @onwealth/database db:migrate
         env:
           DATABASE_URL: postgresql://postgres:postgres@localhost:5432/smoke

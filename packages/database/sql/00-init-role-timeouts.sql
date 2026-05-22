@@ -1,17 +1,20 @@
--- Role-level timeout defaults for the application DB user.
--- Run once per environment BEFORE the first migration:
+-- Role-level timeout defaults for the application DB role.
+-- Run once per environment BEFORE the first migration, connected via DATABASE_URL:
 --   pnpm --filter @onwealth/database db:init-roles
 --
--- Replace 'app_user' with the actual role from DATABASE_URL.
--- To parameterise across environments:
---   psql "$DATABASE_URL" -v role=myuser -f sql/00-init-role-timeouts.sql
---   ... then use :role in place of app_user below.
+-- Applies to current_user -- the role embedded in DATABASE_URL -- so no
+-- parameterisation is needed across environments. statement_timeout,
+-- lock_timeout and idle_in_transaction_session_timeout are USERSET settings:
+-- a role may set them on itself without superuser privileges.
 --
 -- Why role-level rather than pool.on('connect') SET:
 --   pool.on('connect') silently breaks under PgBouncer transaction mode
 --   (each statement may arrive on a different server connection).
 --   Role-level defaults are inherited by every connection regardless of
 --   pooler mode (session / transaction / statement).
-ALTER ROLE app_user SET statement_timeout = '30s';
-ALTER ROLE app_user SET idle_in_transaction_session_timeout = '60s';
-ALTER ROLE app_user SET lock_timeout = '10s';
+DO $$
+BEGIN
+  EXECUTE format('ALTER ROLE %I SET statement_timeout = %L', current_user, '30s');
+  EXECUTE format('ALTER ROLE %I SET idle_in_transaction_session_timeout = %L', current_user, '60s');
+  EXECUTE format('ALTER ROLE %I SET lock_timeout = %L', current_user, '10s');
+END $$;
