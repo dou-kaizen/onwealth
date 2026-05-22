@@ -44,6 +44,27 @@ Ref: `plans/260518-1712-fix-codebase-review-findings/`, journal `docs/journals/2
 
 ---
 
+## BullMQ Queue Scaffold — COMPLETE
+
+BullMQ abstraction layer added to `packages/shared-kernel`. Export-only scaffold — no concrete queues, no `apps/api` wiring.
+
+| Deliverable | Status |
+|-------------|--------|
+| Deps (`@nestjs/bullmq@^11`, `bullmq@^5`) in workspace catalog + shared-kernel | Done |
+| `QUEUE_REDIS_URL` + prod-TLS guard in `env.schema.ts` | Done |
+| `queueConfig` namespace factory | Done |
+| 7 queue source files under `packages/shared-kernel/src/queue/` | Done |
+| Barrel exports in `index.ts` (named, no `export *`) | Done |
+| `QueueModule` whitelisted in `global-modules.spec.ts` | Done |
+| 3 spec files / 19 cases (exception, config, evaluateJobFailure) | Done |
+| `docs/codebase-summary.md` updated | Done |
+
+All gates green: typecheck (0 errors), build (33.5 kB), test (6 files / 33 cases), dep-cruiser clean, biome clean, `apps/api/src/app.module.ts` not modified.
+
+Ref: `plans/260522-1522-bullmq-queue-scaffold/`
+
+---
+
 ## Upcoming Milestones
 
 ### M1 — Cleanup & Reconciliation — Substantially Complete

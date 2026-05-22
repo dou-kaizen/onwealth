@@ -18,7 +18,7 @@ business modules (`AppModule`, `main.ts`, `modules/`).
 | Package | Path | Layer |
 |---------|------|-------|
 | `@onwealth/database` | `packages/database/` | Drizzle ORM schema + migrations |
-| `@onwealth/shared-kernel` | `packages/shared-kernel/` | Transport-agnostic NestJS modules: config namespaces, DB module + `DB_TOKEN`, cache port + `CACHE_PORT`, domain events, logger, `Env`/zod schema |
+| `@onwealth/shared-kernel` | `packages/shared-kernel/` | Transport-agnostic NestJS modules: config namespaces, DB module + `DB_TOKEN`, cache port + `CACHE_PORT`, domain events, logger, `Env`/zod schema, BullMQ queue scaffold (`QueueModule` — no concrete queues registered yet) |
 | `@onwealth/nest-http` | `packages/nest-http/` | HTTP cross-cutting: exception filters, interceptors, ETag middleware, health module, HTTP configs, `configureHttpApp` / `createHttpApp` bootstrap, decorators, DTOs |
 | `apps/api` | `apps/api/` | Composition root — `AppModule`, `main.ts`, business `modules/` |
 

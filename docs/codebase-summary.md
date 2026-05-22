@@ -80,6 +80,18 @@ Currently empty (business modules land in future milestones). Reserved path: `sr
 | `errors/` | `error-code.ts`, `validation-error.ts` | `ErrorCode` enum for problem type URIs |
 | `events/` | `domain-events.module.ts`, `domain-event-publisher.ts` | Global `DomainEventsModule`; clear-then-emit via EventEmitter2 (at-most-once) |
 | `logger/` | `logger.module.ts`, `logger.config.ts`, `redaction.config.ts` | nestjs-pino `LoggerModule`; sensitive field redaction |
+| `queue/` | `queue.module.ts`, `queue-processor.base.ts`, `queue.decorator.ts`, `queue.config.ts`, `queue.constant.ts`, `queue.enum.ts`, `queue.exception.ts`, `queue-job-result.type.ts` | BullMQ abstraction — scaffold only (see Queue Scaffold below) |
+
+### Queue Scaffold (`packages/shared-kernel/src/queue/`)
+
+BullMQ abstraction layer — scaffold only, no concrete queues registered. `apps/api` does NOT import `QueueModule` until a concrete queue is introduced.
+
+- **`QueueModule`** — `@Global()` static module; registers two named BullMQ root connections (`queue` producer key, `queue-processor` worker key), self-loads `queueConfig` via `ConfigModule.forFeature`.
+- **`QueueProcessorBase`** — abstract `WorkerHost` subclass; `onFailed` emits structured NestJS `Logger` output. Failure-log branching extracted to the pure `evaluateJobFailure(job, error)`.
+- **`QueueProcessor`** — decorator wrapping `@Processor` with the shared processor connection key. No `process.env` reads at decoration time.
+- **`QueueException`** — domain error with optional `isFatal` flag for dead-letter routing.
+- **`QueueJobResult`** — return type contract for all processors. **`EnumQueuePriority`** — job priority levels.
+- **`queueConfig`** — `registerAs('queue', ...)` namespace; resolves `QUEUE_REDIS_URL ?? REDIS_URL`. Redis connection for queues is kept fully separate from the cache `@keyv/redis` client.
 
 ### __tests__/ — Specs (packages/shared-kernel)
 
@@ -88,6 +100,9 @@ Currently empty (business modules land in future milestones). Reserved path: `sr
 | `__tests__/unit/global-modules.spec.ts` | Architecture guard for shared-kernel globals (3 cases) |
 | `cache/__tests__/cache.service.spec.ts` | CacheService unit tests (5 cases) |
 | `config/__tests__/env-pool-validation.spec.ts` | Env schema validation unit tests (6 cases) |
+| `queue/__tests__/queue.exception.spec.ts` | QueueException unit tests (3 cases) |
+| `queue/__tests__/queue.config.spec.ts` | queueEnvSchema parsing + prod-TLS guard (10 cases) |
+| `queue/__tests__/queue-processor-base.spec.ts` | evaluateJobFailure pure-function tests (6 cases) |
 
 Build: `tsdown` → `dist/index.mjs` + `dist/index.d.mts`. All NestJS + infra deps are `peerDependencies`.
 
@@ -169,3 +184,4 @@ These are the only modules permitted to be `@Global()` — enforced by `packages
 - `ClsModule` (via `nestjs-cls`)
 - `ConfigModule` (via `@nestjs/config`)
 - `LoggerModule` (from `@onwealth/shared-kernel`, via `nestjs-pino`)
+- `QueueModule` (from `@onwealth/shared-kernel`)
