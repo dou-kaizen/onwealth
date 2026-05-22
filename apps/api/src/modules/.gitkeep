@@ -1,0 +1,4 @@
+# Business feature modules live here, one folder per domain.
+# Each module follows the 4-layer DDD pattern documented in
+# docs/code-standards.md → "DDD Module Pattern".
+# This file only keeps the (otherwise empty) directory under version control.
