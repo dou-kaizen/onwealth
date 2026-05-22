@@ -1,294 +1,291 @@
 # System Architecture
 
-_Last updated: 2026-05-15 | Branch: init-infrastructure (Foundation Hardening)_
-
 ## Overview
 
-onwealth is a NestJS monorepo structured around strict layer separation. The foundation phase ships the HTTP runtime, observability, error handling, and database connectivity. Feature bounded contexts are not yet present.
+`apps/api` is a NestJS 11 monolith using a **Modular Layered Architecture** with
+**DDD-lite** primitives. No microservices, no CQRS framework — a deliberate starting point
+that can be evolved incrementally.
 
-## Package Dependency Graph
+Cross-cutting code is extracted into two pnpm workspace packages:
+`@onwealth/shared-kernel` (transport-agnostic) and `@onwealth/nest-http` (HTTP layer).
+`apps/api` is the composition root — it imports from both packages and owns only
+business modules (`AppModule`, `main.ts`, `modules/`).
 
-```
-apps/api
-  └── @onwealth/platform/{config,cls,logger,filters,interceptors,decorators,pipes,
-                          throttler,database,error-codes,problem-details,.}
-        └── @onwealth/database   (Drizzle schemas barrel)
+---
 
-@onwealth/core                   (no dependencies on other workspace packages)
-```
+## Workspace Package Inventory
 
-Dependency direction is strictly downward. `@onwealth/core` has zero runtime dependencies on NestJS or infrastructure libs — enforced by `dependency-cruiser` rules `core-no-nestjs` and `core-no-runtime-libs`. `ProblemDetailsDto`, `FieldError`, and `ValidationErrorItem` live in `@onwealth/platform/problem-details` (collapsed from the former `@onwealth/contract` package). `ErrorCode` const object and union type live in `@onwealth/platform/error-codes`.
+| Package | Path | Layer |
+|---------|------|-------|
+| `@onwealth/database` | `packages/database/` | Drizzle ORM schema + migrations |
+| `@onwealth/shared-kernel` | `packages/shared-kernel/` | Transport-agnostic NestJS modules: config namespaces, DB module + `DB_TOKEN`, cache port + `CACHE_PORT`, domain events, logger, `Env`/zod schema |
+| `@onwealth/nest-http` | `packages/nest-http/` | HTTP cross-cutting: exception filters, interceptors, ETag middleware, health module, HTTP configs, `configureHttpApp` / `createHttpApp` bootstrap, decorators, DTOs |
+| `apps/api` | `apps/api/` | Composition root — `AppModule`, `main.ts`, business `modules/` |
 
-## Architectural Boundaries (dependency-cruiser rules)
-
-| Rule | Enforcement |
-|---|---|
-| `no-circular` | No circular deps anywhere |
-| `core-no-nestjs` | `packages/core/` cannot import `@nestjs/*` |
-| `core-no-runtime-libs` | `packages/core/` cannot import ioredis, pino, bcrypt, drizzle-orm, pg, **zod, class-validator, class-transformer** |
-| `database-no-nestjs` | `packages/database/` cannot import `@nestjs/*` |
-| `platform-no-feature` | `packages/platform/` cannot import feature symbols (auth/user/telegram/bot) |
-| `api-no-platform-internal` | `apps/api/` must use `@onwealth/platform/*` subpath, never `packages/platform/src/` relative path |
-
-`core-no-runtime-libs` banlist extended in Foundation Hardening to include `zod | class-validator | class-transformer` — core stays validation/serialization-agnostic (`.dependency-cruiser.cjs`).
-
-6 error-severity rules total. DDD layer rules (presentation-no-database, etc.) deferred until first feature module exists.
-
-Run: `pnpm depcruise:check` (included in `pnpm lint`).
-
-## API Documentation Surface
-
-Routes are only mounted when `swaggerEnabled` is true (see env `ENABLE_SWAGGER`).
-
-| Route | UI / Format | Notes |
-|---|---|---|
-| `/docs` | Scalar API Reference | Default interactive UI; pulls bundle from `cdn.jsdelivr.net` |
-| `/swagger` | Swagger UI | Fallback UI; `persistAuthorization: true` |
-| `/swagger-json` | OpenAPI JSON | Machine-readable spec (auto-mounted by `SwaggerModule.setup`) |
-| `/openapi.yaml` | OpenAPI YAML | Codegen-friendly; registered via `yamlDocumentUrl` option |
-
-### Default error response injection
-
-`setupSwagger` calls `addDefaultErrorResponses(document)` post-build: every operation that lacks a `default` response key gets one added, referencing `#/components/schemas/ProblemDetailsDto` with content-type `application/problem+json`. This lets FE codegen (orval, openapi-typescript) emit a single error type per operation instead of N status-keyed branches.
-
-### OpenAPI server URL
-
-`DocumentBuilder.addServer(API_BASE_URL, NODE_ENV)` — `API_BASE_URL` env (default `https://api.example.com`) is used so codegen tools always target the correct base regardless of which host serves the spec.
-
-### CSP trade-off
-
-Strict helmet runs globally first. When swagger is enabled, two scoped helmet middlewares mount per-path:
-
-- `/swagger` → adds `'unsafe-inline'` + `'unsafe-eval'` (Swagger UI try-it-out). No third-party origins — Swagger UI ships bundled by `@nestjs/swagger` v11.
-- `/docs` → adds `https://cdn.scalar.com` only. Scalar's bundle is pinned to the vendor-controlled CDN via the `cdn` option in `apiReference()` (default upstream is `cdn.jsdelivr.net` which would expand the typosquat surface).
-
-Express path matching: `app.use('/swagger', mw)` matches `/swagger` and `/swagger/*` but NOT `/swagger-json` (next character after prefix is `-`, not `/`), so the JSON spec endpoint stays under strict CSP without an explicit exclusion (`apps/api/src/main.ts`). The global `helmet()` runs first; path-mounted middleware overrides `Content-Security-Policy` per request via Express last-writer-wins.
+### Package Dependency DAG
 
 ```
-swaggerExplicit = ENABLE_SWAGGER env (boolean | undefined after Zod transform)
-swaggerEnabled  = swaggerExplicit ?? (NODE_ENV !== 'production')
+apps/api ──────────────────────────────────────────────────► @onwealth/nest-http
+                                                                      │
+                                                                      ▼
+future-worker ──────────────────────────────────────► @onwealth/shared-kernel
+                                                                      │
+                                                                      ▼
+                                                          @onwealth/database
 ```
 
-`persistAuthorization: false` in Swagger UI options prevents JWT token persistence in browser localStorage (`apps/api/src/config/swagger.config.ts`).
+Edges are one-directional and enforced by per-package dependency-cruiser configs that extend a shared root base (`.dependency-cruiser.base.mjs`).
+A future NestJS worker app can depend on `@onwealth/shared-kernel` directly
+without pulling in any HTTP dependencies.
+
+---
+
+## Layer Model
+
+```
+┌──────────────────────────────────────────────────┐
+│  Presentation Layer                              │
+│  Controllers · DTOs · Swagger decorators         │
+├──────────────────────────────────────────────────┤
+│  Application Layer                               │
+│  Use-case services · Ports (interfaces)          │
+├──────────────────────────────────────────────────┤
+│  Domain Layer                                    │
+│  Aggregate roots · Domain events · Value objects │
+├──────────────────────────────────────────────────┤
+│  Infrastructure Layer                            │
+│  Adapters · DB · Cache · HTTP clients            │
+└──────────────────────────────────────────────────┘
+```
+
+Domain modules live under `apps/api/src/modules/<domain>/<layer>/`.
+Cross-cutting concerns live in `@onwealth/shared-kernel` and `@onwealth/nest-http`.
+
+---
 
 ## Request Lifecycle
 
-```
-HTTP Request
-  │
-  ├─ CLS middleware (nestjs-cls)
-  │    request_id: x-request-id header — capped at 128 chars; replaced with randomUUID() if
-  │                missing, array (smuggling), empty, or oversized
-  │    correlation_id: x-correlation-id — same sanitization rules
-  │    traceId: ALWAYS a fresh CSPRNG value (crypto.randomBytes(16)) — inbound traceparent.traceId
-  │             is NEVER trusted (dashboard-poisoning / collision risk)
-  │    parentId / traceFlags: preserved from inbound traceparent for downstream propagation
-  │    tracestate: capped at 512 chars; CR/LF stripped (prevents header smuggling once outbound
-  │                HTTP propagation is wired)
-  │    parseTraceparent() rejects: version=ff, all-zero traceId/parentId, non-hex chars;
-  │                                normalises hex to lowercase per W3C spec
-  │
-  ├─ pino-http (nestjs-pino)
-  │    autoLogging: only /api/* paths
-  │    excluded: GET /health, /health/live, /health/ready
-  │    mixin (per-log, inside CLS async hook): requestId, correlationId, traceId on every log line
-  │    Note: mixin replaced customProps — runs inside CLS scope so regenerated IDs are visible
-  │
-  ├─ helmet (security headers)
-  │    strict CSP global default (always applied)
-  │    loose CSP path-mounted on /swagger and /docs ONLY when swaggerEnabled
-  │    /swagger-json stays under strict CSP (Express path match excludes it)
-  │    trust proxy = 1 (single LB hop; bump to 2 for CDN→LB→API topologies)
-  │
-  ├─ ThrottlerGuard (APP_GUARD — global)
-  │    config: THROTTLE_TTL / THROTTLE_LIMIT from env (default limit: 300 req/window)
-  │    HealthController carries @SkipThrottle() — K8s liveness probes must not consume quota
-  │
-  ├─ body parser (10kb JSON + urlencoded limit; financial-webhook routes must opt into rawBody)
-  │
-  ├─ ValidationPipe (whitelist=true, forbidNonWhitelisted=true, errorHttpStatusCode=422,
-  │    transform=true, enableImplicitConversion=false — explicit @Type() required per field)
-  │
-  ├─ Route Handler
-  │
-  ├─ Interceptor chain (bind order = execution order on the way out):
-  │    TimeoutInterceptor       — aborts at TIMEOUT_MS (default 30 s)
-  │    RequestContextInterceptor — stamps X-Request-Id response header from CLS requestId
-  │    CorrelationIdInterceptor  — stamps X-Correlation-Id from CLS correlationId
-  │    TraceContextInterceptor   — stamps Trace-Id from CLS traceId (W3C traceparent)
-  │    TransformInterceptor      — Google AIP-193 envelope when @UseEnvelope()
-  │         @UseEnvelope() → { data, meta: { request_id, correlation_id, trace_id, timestamp } }
-  │         { object: 'list', data: [...] } → returned as-is
-  │         everything else → returned naked
-  │
-  │  Note: interceptors fire only on matched routes. Unmatched-route 404s bypass
-  │  the chain; trace/correlation IDs flow via RFC 9457 body only on that path.
-  │
-  └─ Exception Filters (LIFO: ThrottlerExceptionFilter → ProblemDetailsFilter → AllExceptionsFilter)
-       ThrottlerExceptionFilter: 429 + Retry-After / X-RateLimit-* headers
-       ProblemDetailsFilter: HttpException → RFC 9457 application/problem+json
-         extractValidationErrors recurses into item.children (depth cap 5, total errors cap 100)
-         parentPath threaded through nesting so pointers read /address/city not /city
-         constraint codes resolve via contexts[name].code for domain code injection
-       AllExceptionsFilter: catch-all
-         DrizzleQueryError(cause: pg.DatabaseError) → mapDatabaseError → delegate to ProblemDetailsFilter
-         everything else → 500 Problem Details (message hidden in production)
+```mermaid
+sequenceDiagram
+    participant C as Client
+    participant MW as Middleware (ETag)
+    participant G as Guard (ThrottlerGuard)
+    participant I as Interceptors (7)
+    participant P as ValidationPipe
+    participant H as Handler (Controller)
+    participant S as Service / Use Case
+    participant DB as DrizzleService
+
+    C->>MW: HTTP request
+    MW->>G: After ETag check
+    G->>I: Rate limit OK
+    Note over I: 1. RequestContext<br/>2. CorrelationId<br/>3. TraceContext<br/>4. Timeout(30s)<br/>5. LocationHeader<br/>6. LinkHeader<br/>7. Transform
+    I->>P: Pre-handler
+    P->>H: Validated + typed DTO
+    H->>S: Call use case
+    S->>DB: Query via DB_TOKEN
+    DB-->>S: Result
+    S-->>H: Domain object / DTO
+    H-->>I: Response
+    I-->>C: Enveloped JSON { data, meta }
 ```
 
-## Error Response Shape (RFC 9457)
+### Filter Execution Order
 
-```json
-{
-  "type": "https://api.example.com/errors/not-found",
-  "title": "Not Found",
-  "status": 404,
-  "instance": "/api/users/123",
-  "request_id": "<uuid>",
-  "correlation_id": "<uuid>",
-  "trace_id": "<w3c-trace-id>",
-  "timestamp": "2026-05-03T00:00:00.000Z",
-  "code": "RESOURCE_NOT_FOUND",
-  "detail": "The requested resource was not found"
-}
+NestJS invokes exception filters in **reverse registration order**.
+Filters are registered inside `configureHttpApp` in `@onwealth/nest-http` (top → bottom):
+
+```
+ThrottlerExceptionFilter   ← most specific, runs first on ThrottlerException
+ProblemDetailsFilter       ← shapes all HttpException → RFC 9457
+AllExceptionsFilter        ← ultimate fallback (catch-all)
 ```
 
-Validation errors (400/422) additionally carry:
-```json
-{
-  "errors": [
-    { "field": "email", "pointer": "/email", "code": "VALIDATION_ERROR", "message": "..." }
-  ]
-}
+---
+
+## Cross-Cutting Pipeline
+
+### Middleware (NestJS `configure()`)
+
+| Middleware | Applied To | Effect |
+|-----------|-----------|--------|
+| `ETagMiddleware` | `{*path}` | Adds ETag header for cache revalidation |
+
+### Guards (Global, via `APP_GUARD`)
+
+| Guard | Trigger |
+|-------|---------|
+| `ThrottlerGuard` | Every request; skip with `@SkipThrottle()` |
+
+### Interceptors (Global, execution order)
+
+| # | Interceptor | Responsibility |
+|---|------------|---------------|
+| 1 | `RequestContextInterceptor` | Seeds CLS store with traceparent, writes tracing headers to response |
+| 2 | `CorrelationIdInterceptor` | Reads/generates `X-Request-Id`, stores in CLS |
+| 3 | `TraceContextInterceptor` | W3C `traceparent` + `tracestate` propagation |
+| 4 | `TimeoutInterceptor` | Cancels handler after 30 s with 408 |
+| 5 | `LocationHeaderInterceptor` | Adds `Location` header on 201 Created |
+| 6 | `LinkHeaderInterceptor` | Adds `Link` header for paginated responses |
+| 7 | `TransformInterceptor` | Wraps successful responses in `{ data, meta }` envelope |
+
+### Pipes (Global)
+
+| Pipe | Config |
+|------|--------|
+| `ValidationPipe` | `whitelist`, `forbidNonWhitelisted`, `enableImplicitConversion: false` |
+
+---
+
+## DDD-Lite Patterns
+
+### Aggregate Root
+
+```
+BaseAggregateRoot (abstract)
+  #domainEvents: DomainEvent[]   ← private, encapsulated
+  + addDomainEvent(event)
+  + getDomainEvents(): DomainEvent[]
+  + clearDomainEvents()
 ```
 
-## Success Response Shape (Google AIP-193)
+Domain modules extend `BaseAggregateRoot`. Use-case services call
+`DomainEventPublisher.publish(aggregate)` after persisting.
 
-Handlers decorated with `@UseEnvelope()`:
-```json
-{
-  "data": { "status": "ok", "uptime": 42.1, "timestamp": "..." },
-  "meta": { "request_id": "...", "correlation_id": "...", "trace_id": "...", "timestamp": "..." }
-}
+### Domain Event Flow
+
+```
+Use Case Service
+  │ 1. persist aggregate (Drizzle)
+  │ 2. DomainEventPublisher.publish(aggregate)
+  │      └─ clearDomainEvents() → emit each via EventEmitter2
+  │              └─ @OnEvent() listeners react
+  └─ (no outbox — at-most-once, in-process only)
 ```
 
-Collection handlers should return `{ object: 'list', data: [...] }` — `TransformInterceptor` passes it through unchanged.
+### Integration Events
 
-## Database Layer
+`IntegrationEvent` base class exists for cross-service events.
+No transport wired yet (outbox / message broker is a future milestone).
 
-- Driver: `pg` (node-postgres) via `Pool`
-- ORM: `drizzle-orm/node-postgres`
-- Schema: `@onwealth/database` barrel — empty in foundation phase, typed as `typeof schema`
-- Connection config from env: `DATABASE_URL`, `DB_POOL_MAX` (default 20), `DB_POOL_MIN` (default 5), `DB_POOL_IDLE_TIMEOUT` (default 30 000 ms), `DB_POOL_CONNECTION_TIMEOUT` (default 10 000 ms)
-- Injected via `DatabaseModule.forRoot()` or `DatabaseModule.forRootAsync(options)` using `DRIZZLE_TOKEN` (Symbol, exported from `@onwealth/platform/database`)
-- `POOL_TOKEN` (Symbol) also exported — allows future direct `pg.Pool` injection without going through Drizzle
+### Port / Adapter (Dependency Inversion)
 
-### Graceful Shutdown
+```
+Application Layer defines:
+  CachePort interface + CACHE_PORT Symbol
 
-`DatabaseModule implements OnModuleDestroy`. On SIGTERM (`app.enableShutdownHooks()` must be called before `app.listen()`):
+Infrastructure Layer provides:
+  CacheService (cache-manager + @keyv/redis) registered as { provide: CACHE_PORT, useClass: CacheService }
 
-1. NestJS calls `httpServer.close()` — drains in-flight HTTP requests
-2. NestJS fires `onModuleDestroy` on each module
-3. `DatabaseModule.onModuleDestroy()` calls `pool.end()` wrapped in `Promise.race()` with an 8 s timeout
-4. Timeout exceeded → logs to stderr and continues, preventing a hung idle client from blocking past the K8s `terminationGracePeriodSeconds` (default 30 s)
-
-`pool.on('error')` is wired in `createDrizzleInstance()` to prevent Node's uncaught-event default from killing the process on idle-client disconnect (`packages/platform/src/database/drizzle.factory.ts:31`).
-
-### Factory Return Shape
-
-`createDrizzleInstance()` returns `DrizzleInstance { db: DrizzleDb, pool: Pool }`. `DatabaseModule` stores `pool` on a static field and exposes `db` via `DRIZZLE_TOKEN`, `pool` via `POOL_TOKEN` (`packages/platform/src/database/database.module.ts`).
-
-## Database Error Mapping (`mapDatabaseError`)
-
-`AllExceptionsFilter` unwraps `DrizzleQueryError` → `pg.DatabaseError` and calls `mapDatabaseError`. SQLSTATE → HTTP mapping (`packages/platform/src/filters/postgres-error-mapper.ts`):
-
-| SQLSTATE | Class | HTTP | ErrorCode | Note |
-|---|---|---|---|---|
-| `23505` | unique violation | 409 | `RESOURCE_CONFLICT` | |
-| `23503` | FK violation | 422 | `RESOURCE_NOT_FOUND` | Referenced row missing; 422 not 404 — clients MUST branch on `status` first, `code` second |
-| `23502` | not-null violation | 422 | `REQUIRED_FIELD` | |
-| `23514` | check constraint | 422 | `CONSTRAINT_VIOLATION` | Distinct from conflict; use for domain rule failures |
-| `08000`, `08001`, `08003`, `08004`, `08006` | connection errors | 503 | `INTERNAL_SERVER_ERROR` | |
-| `57014` | statement_timeout | 503 | `INTERNAL_SERVER_ERROR` | |
-| (default) | all other codes | 500 | `INTERNAL_SERVER_ERROR` | |
-
-**`RESOURCE_NOT_FOUND` + HTTP 422 pairing** (SQLSTATE `23503`): FK violation means the referenced row is missing — semantically a not-found. Status 422 signals the request body was invalid, not that the target URL was absent. If future feature modules need an unambiguous symbol, introduce a domain-specific code (e.g. `REFERENCE_NOT_FOUND`) rather than overloading this one.
-
-## TypeScript Compile Strategy
-
-| Target | Compiler | Config |
-|---|---|---|
-| `packages/*` | `tsc -b` (emit) | `packages/tsconfig/library.json` or `nest.json` |
-| `apps/api` typecheck | `tsc -b --noEmit` | `module: ESNext`, `moduleResolution: Bundler` |
-| `apps/api` emit | SWC (`.swcrc` `module.type=commonjs`) | via `nest build` |
-
-Base `tsconfig` (all packages): `target: ES2023`, `strict: true`, `noUncheckedIndexedAccess: true`, `noImplicitOverride: true`, `isolatedModules: true`.
-
-## Observability
-
-| Signal | Implementation |
-|---|---|
-| Structured logs | nestjs-pino; JSON in prod, pino-pretty single-line in dev/test |
-| Log levels | prod: `info`, dev: `debug`, test: `warn` |
-| Trace propagation | W3C traceparent header → CLS → log `traceId` + error response `trace_id`; local traceId always CSPRNG-fresh |
-| Correlation | `x-correlation-id` (≤128 chars, else randomUUID()) → CLS → log `correlationId` + error response `correlation_id` |
-| Request ID | `x-request-id` (≤128 chars, else randomUUID()) → `cls.getId()` → error response `request_id` |
-| Log injection | `mixin` (per-log, CLS async-hook scope) → requestId/correlationId/traceId on every line including jobs and shutdown |
-| Secrets redaction | `redaction.config.ts` path list applied by pino-http |
-
-## DDD Primitives (`@onwealth/core`)
-
-Framework-agnostic, no runtime deps. Provides:
-
-- `DomainEvent` — abstract base; `eventId` (UUID v4), `occurredOn` (Date), `abstract readonly eventName: string`
-- `IntegrationEvent extends DomainEvent` — adds `source` (string), `version` (number); re-declares `abstract override readonly eventName` to satisfy `noImplicitOverride`
-- `BaseAggregateRoot` — private domain-event queue with `addDomainEvent()`, `getDomainEvents()`, `clearDomainEvents()`
-
-**`eventName` must be an explicit literal** (`packages/core/src/base/domain-event.ts:40`). Relying on `this.constructor.name` is unsafe under SWC/Terser class-name mangling. Every subclass must declare:
-```ts
-override readonly eventName = 'bounded-context.event-happened'
+Consumers inject:
+  @Inject(CACHE_PORT) private readonly cache: CachePort
 ```
 
-Not yet wired to an event bus — reserved for Phase 3.
+### Domain Module Structure
 
-## ErrorCode (`@onwealth/platform/error-codes`)
+Each business feature is a self-contained module under
+`apps/api/src/modules/<domain>/`, split into the four layers above.
+Dependencies point inward — infrastructure depends on application ports,
+never the reverse.
 
-`ErrorCode` is a `const` object (not a TypeScript enum) of opaque string literals grouped by category:
+```
+modules/<domain>/
+├── <domain>.module.ts     ← wires providers, controllers, port→impl bindings
+├── domain/                ← aggregates · value-objects · enums · events  (pure)
+├── application/           ← services (use cases) · ports · listeners
+├── infrastructure/        ← repositories · adapters  (implements ports)
+└── presentation/          ← controllers · dtos · guards
+```
 
-| Category | Examples |
-|---|---|
-| validation | `VALIDATION_ERROR`, `VALIDATION_FAILED`, `REQUIRED_FIELD`, `CONSTRAINT_VIOLATION`, `INVALID_FORMAT`, `OUT_OF_RANGE` |
-| resource | `RESOURCE_NOT_FOUND`, `USER_NOT_FOUND` |
-| conflict | `RESOURCE_CONFLICT`, `EMAIL_EXISTS`, `IDEMPOTENCY_KEY_REUSE_CONFLICT` |
-| auth | `UNAUTHORIZED`, `TOKEN_EXPIRED`, `TOKEN_INVALID`, `INVALID_CREDENTIALS` |
-| authz | `FORBIDDEN`, `INSUFFICIENT_SCOPE`, `ACCOUNT_BANNED` |
-| general | `INTERNAL_SERVER_ERROR`, `RATE_LIMIT_EXCEEDED`, `REQUEST_TIMEOUT` |
+```
+presentation ──► application ──► domain
+                     ▲
+infrastructure ──────┘   (implements application/ports via DI tokens)
+```
 
-`CONSTRAINT_VIOLATION` is new in Foundation Hardening — mapped from SQLSTATE `23514` (check constraint). Distinct from `RESOURCE_CONFLICT` (unique violation).
+Simple CRUD modules may omit `domain/`. Rich modules enforce invariants in an
+aggregate that extends `BaseAggregateRoot` and emits domain events. See
+`docs/code-standards.md` → "DDD Module Pattern" for file-naming and the
+port/token convention.
 
-The `code` field in `ProblemDetailsDto` is typed `string` so feature modules may register domain-specific codes alongside the platform constants.
+---
 
-## Throttler
+## Database Connection Model
 
-Storage: `@nest-lab/throttler-storage-redis` backed by `ioredis`. Cluster-safe across replicas — rate-limit counters live in Redis, not per-process memory.
+```
+DrizzleModule.forRoot() [Global Dynamic Module]
+  └─ db.provider.ts: new Pool({ connectionString, max, min, ... })
+       └─ drizzle(pool, { schema })  ← DB_TOKEN value
+            └─ DrizzleService.db / DrizzleService.pool
+                 └─ onModuleDestroy → pool.end()  (SIGTERM drain)
+```
 
-Boot posture: `REDIS_URL` MUST point to a reachable Redis instance. The storage factory awaits a `ready` event (or rejects on `error` / 5s connect timeout); if Redis is unreachable, the NestJS init throws and the process exits before serving traffic. Localhost default is rejected at boot when `NODE_ENV=production`.
+Schema types imported from `@onwealth/database` workspace package.
+No repository abstraction layer yet — handlers receive `DB_TOKEN` directly.
 
-Runtime posture: ioredis `enableOfflineQueue` left at its default (`true`) so transient blips (rolling Redis upgrade, ~10s outage) buffer throttler commands for up to `maxRetriesPerRequest: 3` attempts rather than 500-storming the API. Longer outages fall through to 500s; the alternative (`enableOfflineQueue: false`) would convert every blip into an outage.
+---
 
-Shutdown: `OnModuleDestroy` on `ThrottlerModule` races `client.quit()` against a 4s timeout (mirroring `DatabaseModule.POOL_DRAIN_TIMEOUT_MS` shape) so a dead Redis cannot hold the process past the K8s graceful-shutdown budget.
+## Module Dependency Graph (Infrastructure)
 
-## CI / Coverage
+```
+AppModule
+├── ConfigModule (global)          ← Zod env validation; loads appConfig, databaseConfig, redisConfig, httpConfig, throttleConfig
+├── ClsModule (global)             ← request-scoped context store  (@onwealth/nest-http createClsConfig)
+├── LoggerModule                   ← nestjs-pino  (@onwealth/shared-kernel)
+├── EventEmitterModule             ← wildcard, delimiter "."
+├── DrizzleModule (global)         ← DB_TOKEN  (@onwealth/shared-kernel)
+├── DomainEventsModule (global)    ← DomainEventPublisher  (@onwealth/shared-kernel)
+├── ThrottlerModule                ← rate limiting  (throttleConfig from @onwealth/nest-http)
+├── HealthModule                   ← /livez /readyz /health  (@onwealth/nest-http)
+└── CacheModule                    ← CACHE_PORT adapter  (@onwealth/shared-kernel)
+```
 
-Single `verify` job on `ubuntu-24.04`. Steps in order: checkout → setup pnpm → setup node → install → `pnpm audit` (prod high+) → `pnpm audit` (dev critical) → typecheck → lint (oxlint + depcruise) → format check → `turbo test:coverage` (vitest --coverage) → upload coverage artifact → build.
+All `@Global()` modules are enforced by the architecture guard test
+(`packages/shared-kernel/src/__tests__/unit/global-modules.spec.ts`).
 
-Coverage artifact is uploaded on every run; no numeric threshold gate yet (deferred). SHA pinning for GitHub Actions (currently @v4 tags) is also deferred.
+---
 
-## Planned (not yet implemented)
+## Health Probe Architecture
 
-- Feature modules under `apps/api/src/modules/{ctx}/`
-- Deeper `@nestjs/terminus` health indicators: DB + Redis readiness/liveness probes (`GET /health` liveness endpoint exists; terminus probes not yet wired)
-- Authentication (JWT / OAuth)
-- DDD layer rules in dependency-cruiser (presentation-no-database, etc.)
-- `@ApiResponse` / `@ApiOperation` decorators on individual route handlers (currently only the global default error response is injected)
-- Numeric coverage threshold gate in CI
-- GitHub Actions SHA pinning (currently @v4 tags)
+| Endpoint | Route | Checks | Orchestrator Use |
+|----------|-------|--------|-----------------|
+| `GET /livez` | No `/api` prefix | Memory heap only | Liveness probe |
+| `GET /readyz` | No `/api` prefix | DB (SELECT 1) + Redis (SET/GET readback), 3 s timeout | Readiness probe |
+| `GET /health` | No `/api` prefix | All of readyz + heap + RSS + disk | Debugging only |
+
+503 responses have sanitized bodies (no internal details exposed).
+All health routes are `@Public()` (bypass auth) and `@SkipThrottle()`.
+
+---
+
+## Security Layers
+
+| Layer | Mechanism |
+|-------|-----------|
+| Headers | Helmet (HSTS, X-Content-Type-Options, X-Frame-Options, …) |
+| CORS | Env-driven `ALLOWED_ORIGINS`; exposes `X-Request-Id` |
+| Rate limiting | `ThrottlerGuard` as `APP_GUARD`; configurable TTL + limit |
+| Payload | 100 KB JSON body limit (express.json) |
+| Env validation | Zod rejects placeholder secrets and insecure config in production |
+| Logging | Sensitive field redaction in pino config |
+
+---
+
+## Observability Stack
+
+| Concern | Tool |
+|---------|------|
+| Structured logging | `nestjs-pino` (pino) |
+| Request tracing | W3C `traceparent` via `nestjs-cls` + `TraceContextInterceptor` |
+| Correlation | `X-Request-Id` via `CorrelationIdInterceptor` |
+| Health | `@nestjs/terminus` (Drizzle + Redis indicators) |
+| API docs | `@nestjs/swagger` + `@scalar/nestjs-api-reference` (non-prod) |
+
+---
+
+## Unresolved Architectural Questions
+
+1. **Resolved** — Repository pattern: domain modules define per-module repository ports in `application/ports/` (DIP); implementations under `infrastructure/repositories/` inject `DB_TOKEN`. Infrastructure-only code (e.g. health indicators) may use `DB_TOKEN` directly.
+2. Outbox pattern for domain events — required for reliable at-least-once delivery.
+3. CQRS adoption — evaluate when read models diverge significantly from write models.
+4. Auth module integration — no auth deps in `apps/api`; auth strategy and wiring are a future milestone.

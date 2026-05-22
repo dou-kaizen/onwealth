@@ -1,36 +1,45 @@
 {
   "name": "@onwealth/database",
-  "version": "0.0.0",
-  "private": true,
+  "version": "1.0.0",
   "files": [
     "dist"
   ],
-  "type": "commonjs",
-  "main": "./dist/index.js",
-  "types": "./dist/index.d.ts",
+  "type": "module",
+  "main": "./dist/index.mjs",
+  "types": "./dist/index.d.mts",
   "exports": {
     ".": {
-      "types": "./dist/index.d.ts",
-      "default": "./dist/index.js"
+      "types": "./dist/index.d.mts",
+      "import": "./dist/index.mjs"
     }
   },
   "scripts": {
-    "build": "tsc -b",
-    "typecheck": "tsc -b",
-    "lint": "oxlint .",
-    "lint:fix": "oxlint . --fix",
-    "format": "oxfmt --write src",
-    "format:check": "oxfmt --check src",
-    "clean": "rm -rf dist .tsbuildinfo"
+    "build": "tsdown",
+    "lint": "biome lint .",
+    "lint:fix": "biome lint --write .",
+    "format": "biome format --write .",
+    "format:check": "biome format .",
+    "check": "biome check .",
+    "check:fix": "biome check --write .",
+    "typecheck": "tsc --noEmit",
+    "db:init-roles": "psql \"$DATABASE_URL\" -v ON_ERROR_STOP=1 -f sql/00-init-role-timeouts.sql",
+    "db:generate": "drizzle-kit generate",
+    "db:migrate": "drizzle-kit migrate",
+    "db:push": "drizzle-kit push",
+    "db:studio": "drizzle-kit studio"
   },
   "devDependencies": {
-    "@onwealth/tsconfig": "workspace:*",
+    "@types/pg": "catalog:",
+    "dotenv": "catalog:",
+    "drizzle-kit": "0.31.6",
     "drizzle-orm": "catalog:",
     "pg": "catalog:",
+    "tsdown": "catalog:",
+    "tsx": "^4.21.0",
     "typescript": "catalog:"
   },
   "peerDependencies": {
-    "drizzle-orm": "catalog:",
-    "pg": "catalog:"
+    "drizzle-orm": "0.44.7",
+    "pg": "^8.16.3"
   }
 }

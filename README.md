@@ -1,145 +1,189 @@
 # onwealth
 
-Backend platform for wealth management. Currently in the infrastructure-foundation phase: NestJS HTTP runtime, structured observability, RFC 9457 error handling, Drizzle + PostgreSQL connectivity, and strict architectural boundary enforcement via dependency-cruiser. No feature domains have shipped yet.
+Production-grade NestJS API skeleton for the onwealth financial/wealth platform.
+Current state: infrastructure-only (no business domain yet). Provides the DDD-lite foundation,
+security hardening, observability, and CI pipeline that all future domain modules build on.
 
-## Stack
+## Prerequisites
 
-| Layer | Technology |
-|---|---|
-| Runtime | Node.js 22 LTS (`.nvmrc: lts/jod`) |
-| Framework | NestJS 11 (Express adapter, SWC emit) |
-| Language | TypeScript 6 |
-| Database | PostgreSQL via Drizzle ORM + node-postgres pool |
-| Logging | Pino / nestjs-pino (JSON in prod, pino-pretty in dev) |
-| Validation | class-validator + class-transformer + Zod (env) |
-| Rate limiting | @nestjs/throttler + @nest-lab/throttler-storage-redis + ioredis (Redis-backed, cluster-safe) |
-| Build | Turborepo + pnpm 10 workspaces |
-| Linting | oxlint (single root config) + dependency-cruiser |
-| Formatting | oxfmt |
-| Testing | Vitest |
+| Tool | Version |
+|------|---------|
+| Node.js | 22.x (LTS "Jod") — see `.nvmrc` |
+| pnpm | 10.x (`packageManager` field) |
+| PostgreSQL | 16+ |
+| Redis | 7+ |
 
-## Repository Layout
+## Quick Start
+
+```bash
+# 1. Install deps (also copies .env.example → .env for each package)
+pnpm install
+
+# 2. Fill in required env vars
+#    apps/api/.env and packages/database/.env
+#    See "Environment Variables" section below
+
+# 3. Init DB roles + run migrations
+pnpm db:dev
+
+# 4. Start API in watch mode
+pnpm dev
+```
+
+API is available at `http://localhost:3000`.
+Swagger UI (non-prod only): `http://localhost:3000/docs`
+
+## Environment Variables
+
+### apps/api/.env (required)
+
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `DATABASE_URL` | yes | `postgresql://` connection string |
+| `REDIS_URL` | yes | `redis://` (dev) or `rediss://` (prod) |
+| `JWT_SECRET` | yes | Min 32 chars, not the placeholder value |
+| `API_BASE_URL` | yes | Base URL for RFC 9457 error type URIs |
+| `PORT` | no | Default `3000` |
+| `ALLOWED_ORIGINS` | no | Comma-separated; required in production |
+| `THROTTLE_TTL` | no | Default `60000` ms |
+| `THROTTLE_LIMIT` | no | Default `100`; max `10000` in production |
+| `GOOGLE_CLIENT_ID/SECRET` | no | OAuth — disabled if not set |
+| `GITHUB_CLIENT_ID/SECRET` | no | OAuth — disabled if not set |
+
+Full list in `apps/api/.env.example`.
+
+### packages/database/.env (required for db:* scripts)
+
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `DATABASE_URL` | yes | Same format as API |
+
+## Scripts
+
+### Root (Turborepo — runs across all workspaces)
+
+| Script | Description |
+|--------|-------------|
+| `pnpm dev` | Start all apps in watch mode |
+| `pnpm build` | Build all packages + apps |
+| `pnpm typecheck` | TypeScript type-check across workspaces |
+| `pnpm lint` | Biome lint across workspaces |
+| `pnpm lint:fix` | Auto-fix lint issues |
+| `pnpm format` | Biome format (write) |
+| `pnpm format:check` | Biome format check (no write) |
+| `pnpm test` | Run all package test suites via Turborepo |
+| `pnpm db:dev` | Init DB roles then run pending migrations |
+
+### Git Hooks (lefthook)
+
+Installed automatically on `pnpm install` via the `prepare` script.
+
+| Hook | Trigger | Action |
+|------|---------|--------|
+| `pre-commit` | `git commit` | `biome check --write` on staged JS/TS/JSON files; auto-restages fixes |
+| `commit-msg` | `git commit` | Validates Conventional Commits format on subject line |
+| `pre-push` | `git push` | `turbo run typecheck test` |
+
+Bypass (emergency only): `git commit --no-verify`. CI remains the hard gate.
+
+### apps/api (run with `pnpm --filter api <script>`)
+
+| Script | Description |
+|--------|-------------|
+| `dev` | Build then start in watch mode |
+| `build` | NestJS CLI build |
+| `start:prod` | `node dist/main` |
+| `test` | Vitest (unit) |
+| `test:cov` | Vitest with v8 coverage |
+| `test:e2e` | Vitest with `vitest.e2e.config.mts` |
+| `typecheck` | `tsc -b --noEmit` |
+| `deps` | dependency-cruiser architecture check |
+
+### packages/database (run with `pnpm --filter @onwealth/database <script>`)
+
+| Script | Description |
+|--------|-------------|
+| `db:init-roles` | Apply `sql/00-init-role-timeouts.sql` via psql |
+| `db:generate` | drizzle-kit generate (new migration) |
+| `db:migrate` | drizzle-kit migrate (apply pending) |
+| `db:push` | drizzle-kit push (dev prototype, no migration file) |
+| `db:studio` | Drizzle Studio UI |
+| `build` | tsdown ESM build |
+| `typecheck` | `tsc --noEmit` |
+
+## Workspace Layout
 
 ```
 onwealth/
 ├── apps/
-│   └── api/          # @onwealth/api — NestJS HTTP entrypoint
+│   └── api/                   # NestJS 11 application — composition root
+│       └── src/
+│           ├── modules/       # Business feature modules (reserved, none yet)
+│           ├── __tests__/     # unit + integration specs + test helpers
+│           ├── app.module.ts  # Root module — imports workspace packages
+│           └── main.ts        # Thin entrypoint: createHttpApp + listen
 ├── packages/
-│   ├── core/         # @onwealth/core — DDD primitives (DomainEvent, BaseAggregateRoot)
-│   ├── database/     # @onwealth/database — Drizzle schema barrel
-│   ├── platform/     # @onwealth/platform — NestJS foundation modules (12 subpath exports)
-│   └── tsconfig/     # Shared TypeScript presets (base, library, nest)
-├── docs/             # Project documentation
-├── plans/            # Implementation plans and reports
-├── .dependency-cruiser.cjs  # 6 architectural boundary rules
-├── oxlint.config.ts         # Single root lint config
-├── turbo.json               # Task pipeline
-└── pnpm-workspace.yaml      # Workspace + version catalog
+│   ├── database/              # @onwealth/database — Drizzle ORM schema + migrations
+│   │   ├── src/schemas/       # Schema definitions (placeholder — TODO)
+│   │   ├── drizzle/           # Generated migration files
+│   │   └── sql/               # Raw SQL (role timeout init)
+│   ├── shared-kernel/         # @onwealth/shared-kernel — transport-agnostic NestJS modules
+│   │   └── src/
+│   │       ├── cache/         # CachePort interface + CACHE_PORT token + CacheService
+│   │       ├── config/        # appConfig, databaseConfig, redisConfig; Zod env schema
+│   │       ├── database/      # DB_TOKEN, DrizzleModule, DrizzleService
+│   │       ├── domain/        # BaseAggregateRoot, DomainEvent, IntegrationEvent
+│   │       ├── errors/        # ErrorCode enum, ValidationError
+│   │       ├── events/        # DomainEventsModule, DomainEventPublisher
+│   │       └── logger/        # LoggerModule (nestjs-pino) + redaction config
+│   └── nest-http/             # @onwealth/nest-http — HTTP cross-cutting layer
+│       └── src/
+│           ├── bootstrap/     # configureHttpApp / createHttpApp + HttpAppOptions
+│           ├── config/        # httpConfig, throttleConfig, CLS, CORS, Swagger, ValidationPipe
+│           ├── filters/       # AllExceptions, ProblemDetails, ThrottlerException
+│           ├── interceptors/  # 7 global interceptors
+│           ├── middleware/    # ETagMiddleware
+│           ├── health/        # HealthModule (/livez, /readyz, /health)
+│           ├── decorators/    # @Public, @UseEnvelope, @ApiProblemResponses, validators
+│           └── dtos/          # Pagination DTOs, ProblemDetailsDto, ListResponseDto
+├── docs/                      # Project documentation
+├── .github/workflows/ci.yml   # CI: lint + typecheck + test + build + migration smoke
+├── biome.json                 # Lint + format config (Biome v2)
+├── lefthook.yml               # Git hooks: pre-commit, commit-msg, pre-push
+├── turbo.json                 # Turborepo task pipeline
+├── .dependency-cruiser.base.mjs  # Shared dependency-cruiser base (no-circular + cruise options)
+└── pnpm-workspace.yaml
 ```
 
-## Quick Start
+### Package Dependency DAG
 
-### Prerequisites
-
-- Node.js 22 (`nvm use` or `fnm use`)
-- pnpm 10.32.1 (`corepack enable && corepack prepare pnpm@10.32.1 --activate`)
-- PostgreSQL instance accessible at `DATABASE_URL`
-- Redis instance accessible at `REDIS_URL` (required at boot — throttler storage fails fast if unreachable)
-
-### Install
-
-```bash
-pnpm install
+```
+apps/api → @onwealth/nest-http → @onwealth/shared-kernel → @onwealth/database
+future-worker → @onwealth/shared-kernel
 ```
 
-### Environment
+## Health Endpoints
 
-Copy and edit the environment for `apps/api`:
+| Endpoint | Purpose | I/O Dependencies |
+|----------|---------|-----------------|
+| `GET /livez` | Process liveness | None |
+| `GET /readyz` | Readiness (orchestrator probe) | DB + Redis |
+| `GET /health` | Full component detail | DB + Redis + heap + disk |
 
-```bash
-cp apps/api/.env.example apps/api/.env
-# edit DATABASE_URL and other required vars
-```
-
-Environment variables are validated at startup via Zod. Required vars and defaults are documented in [docs/code-standards.md](./docs/code-standards.md#environment-variables).
-
-### Dev
-
-```bash
-pnpm dev           # start all apps in watch mode (Turborepo TUI)
-```
-
-Or scoped:
-
-```bash
-pnpm --filter @onwealth/api dev
-```
-
-### Build
-
-```bash
-pnpm build         # build all packages in dependency order
-```
-
-### Test
-
-```bash
-pnpm test          # Vitest across all packages (depends on build)
-```
-
-### Lint & Format
-
-```bash
-pnpm lint          # oxlint + depcruise:check across all packages
-pnpm lint:fix      # oxlint auto-fix
-pnpm format        # oxfmt write
-pnpm format:check  # oxfmt check (used in CI)
-pnpm typecheck     # tsc project references across all packages
-```
-
-### Architectural Lint
-
-```bash
-pnpm depcruise:check   # enforce 6 boundary rules (also runs as part of pnpm lint)
-```
-
-Rules enforced: no circular deps; `@onwealth/core` is NestJS-free; `@onwealth/database` is NestJS-free; `@onwealth/platform` contains no feature symbols; `apps/api` accesses platform only via subpath imports. See [docs/system-architecture.md](./docs/system-architecture.md#architectural-boundaries-dependency-cruiser-rules).
-
-## API
-
-`GET /health` — returns `{ data: { status, uptime, timestamp }, meta: { request_id, correlation_id, trace_id, timestamp } }`
-
-### API Documentation (env-gated via `ENABLE_SWAGGER`)
-
-Enabled by default outside production. Set `ENABLE_SWAGGER=true` to force-enable in production, `ENABLE_SWAGGER=false` to disable everywhere.
-
-| Route | Purpose |
-|---|---|
-| `GET /swagger` | Swagger UI |
-| `GET /docs` | Scalar API reference |
-| `GET /swagger-json` | OpenAPI 3 JSON |
-| `GET /openapi.yaml` | OpenAPI 3 YAML |
-
-A loose CSP is path-mounted on `/swagger` and `/docs` to allow inline assets; the rest of the app retains strict helmet defaults.
-
-All error responses use RFC 9457 `application/problem+json`. See [docs/system-architecture.md](./docs/system-architecture.md#error-response-shape-rfc-9457).
+All return `503` with sanitized body on degraded state.
 
 ## Documentation
 
-| Doc | Contents |
-|---|---|
-| [docs/project-overview-pdr.md](./docs/project-overview-pdr.md) | Project overview and Product Development Requirements |
-| [docs/system-architecture.md](./docs/system-architecture.md) | Package graph, request lifecycle, error/success shapes, DB layer |
-| [docs/code-standards.md](./docs/code-standards.md) | TypeScript rules, NestJS conventions, env vars, logging, testing |
-| [docs/codebase-summary.md](./docs/codebase-summary.md) | Package purposes, subpath exports, runtime deps, toolchain |
-| [docs/project-roadmap.md](./docs/project-roadmap.md) | Phase status and planned work |
-| [docs/project-changelog.md](./docs/project-changelog.md) | Significant changes by date |
+| Doc | Description |
+|-----|-------------|
+| [docs/project-overview-pdr.md](./docs/project-overview-pdr.md) | Product context + requirements |
+| [docs/system-architecture.md](./docs/system-architecture.md) | Architecture, layers, request lifecycle |
+| [docs/codebase-summary.md](./docs/codebase-summary.md) | File map, key modules |
+| [docs/code-standards.md](./docs/code-standards.md) | Conventions, error model, TypeScript config |
+| [docs/deployment-guide.md](./docs/deployment-guide.md) | Migration runner patterns |
+| [docs/project-roadmap.md](./docs/project-roadmap.md) | Phase status + upcoming work |
 
-## Branch Convention
+## Known Issues
 
-| Branch | Purpose |
-|---|---|
-| `main` | Stable, protected |
-| `init-infrastructure` | Active development branch (current) |
-
-Feature branches: `feat/<slug>`, fix branches: `fix/<slug>`. Commit style: conventional commits (`feat:`, `fix:`, `refactor:`, `test:`, `chore:`).
+- Coverage thresholds set to 0 — target 80/70/80/80 once domain modules land.
+- No domain business modules yet (auth, users, etc.) — infrastructure skeleton only.

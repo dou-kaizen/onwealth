@@ -1,15 +1,19 @@
 {
   "$schema": "https://turborepo.dev/schema.json",
   "ui": "tui",
+  "globalDependencies": [".dependency-cruiser.base.mjs"],
   "tasks": {
     "build": {
       "dependsOn": ["^build"],
-      "outputs": ["dist/**", ".next/**", "!.next/cache/**", "**/*.tsbuildinfo"]
+      "outputs": ["dist/**"]
     },
     "typecheck": {
-      "dependsOn": ["^typecheck"]
+      "dependsOn": ["^build"]
     },
     "lint": {
+      "dependsOn": ["^build"]
+    },
+    "deps": {
       "dependsOn": ["^build"]
     },
     "lint:fix": {
@@ -22,21 +26,19 @@
     "format:check": {},
     "test": {
       "dependsOn": ["^build"],
-      "outputs": ["coverage/**"]
-    },
-    "test:coverage": {
-      "dependsOn": ["^build"],
-      "outputs": ["coverage/**"]
-    },
-    "deps": {
-      "dependsOn": ["^build"]
+      "outputs": ["coverage/**"],
+      "env": [
+        "NODE_ENV",
+        "DATABASE_URL",
+        "REDIS_URL",
+        "JWT_SECRET",
+        "API_BASE_URL",
+        "ALLOWED_ORIGINS"
+      ]
     },
     "dev": {
       "dependsOn": ["^build"],
       "persistent": true,
-      "cache": false
-    },
-    "clean": {
       "cache": false
     }
   }

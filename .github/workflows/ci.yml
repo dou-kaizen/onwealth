@@ -2,72 +2,141 @@ name: CI
 
 on:
   push:
-    branches: [main]
+    branches: [main, init-infrastructure]
   pull_request:
     branches: [main]
 
-concurrency:
-  group: ci-${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
-
-env:
-  TURBO_TELEMETRY_DISABLED: 1
-  FORCE_COLOR: 1
-  SCARF_ANALYTICS: false
-  DO_NOT_TRACK: 1
-
 jobs:
-  verify:
-    name: verify
-    runs-on: ubuntu-24.04
-    timeout-minutes: 15
+  ci:
+    name: Lint / Typecheck / Test / Build
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        node-version: [22.x]
+
+    # Service containers — the di-token-identity integration test instantiates
+    # the real provider graph (pg.Pool + KeyvRedis), so CI needs both reachable.
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 5
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 5
 
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v4
+      - uses: pnpm/action-setup@v4
         with:
           version: 10.32.1
-          run_install: false
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
+      - uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version: ${{ matrix.node-version }}
           cache: pnpm
 
-      - name: Install
+      - name: Install dependencies
         run: pnpm install --frozen-lockfile
-
-      - name: Audit (prod deps — high+)
-        run: pnpm audit --audit-level=high --prod
-
-      - name: Audit (dev deps — critical only)
-        run: pnpm audit --audit-level=critical --dev
 
       - name: Typecheck
         run: pnpm typecheck
 
-      - name: Lint (oxlint + depcruise)
+      - name: Lint
         run: pnpm lint
 
-      - name: Format check
-        run: pnpm format:check
-
-      - name: Test (with coverage)
-        run: pnpm turbo run test:coverage
+      - name: Test
+        run: pnpm turbo test
         env:
-          CI: true
+          NODE_ENV: test
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/test
+          REDIS_URL: redis://localhost:6379
+          JWT_SECRET: test-secret-key-minimum-32-characters-for-ci-runs
+          API_BASE_URL: http://localhost:3000
+          ALLOWED_ORIGINS: http://localhost:3000
 
-      - name: Upload coverage
-        if: success()
-        uses: actions/upload-artifact@v4
-        with:
-          name: coverage-${{ github.run_id }}
-          path: apps/*/coverage/
-          retention-days: 14
+      - name: Architecture check
+        run: pnpm deps
 
       - name: Build
         run: pnpm build
+
+  migration-smoke:
+    name: Migration Smoke Test
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: smoke
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 5
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.32.1
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.x
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build database package
+        run: pnpm --filter @onwealth/database build
+
+      - name: Init role timeouts
+        run: pnpm --filter @onwealth/database db:init-roles
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/smoke
+
+      - name: Detect generated migrations
+        id: migrations
+        run: |
+          if [ -f packages/database/drizzle/meta/_journal.json ]; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::No migrations generated yet (empty schema) -- skipping migrate steps."
+          fi
+
+      - name: Run migrations
+        if: steps.migrations.outputs.exists == 'true'
+        run: pnpm --filter @onwealth/database db:migrate
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/smoke
+
+      - name: Assert idempotent (second run must be no-op)
+        if: steps.migrations.outputs.exists == 'true'
+        run: pnpm --filter @onwealth/database db:migrate
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/smoke

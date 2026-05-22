@@ -1,149 +1,113 @@
 # Project Overview & PDR
 
-_Last updated: 2026-05-15 | Branch: init-infrastructure_
+## Product Context
 
-## Project Overview
+**onwealth** is a financial/wealth platform (domain TBD — no business modules exist yet).
+The current codebase is a production-grade NestJS API skeleton that establishes the DDD-lite
+foundation, security posture, and CI pipeline on which all business domains will be built.
 
-**onwealth** is a backend platform for wealth management. The current phase establishes the NestJS monorepo foundation: HTTP runtime, observability, structured error handling, database connectivity, and architectural boundary enforcement. No feature domains have shipped yet.
-
-## Stack
-
-| Layer | Technology |
-|---|---|
-| Runtime | Node.js >=22 |
-| Framework | NestJS 11 (Express adapter) |
-| Language | TypeScript 6 |
-| Database | PostgreSQL via Drizzle ORM + node-postgres pool |
-| Logging | Pino (nestjs-pino) |
-| Validation | class-validator + class-transformer + Zod (env) |
-| Rate limiting | @nestjs/throttler |
-| Build | Turborepo + pnpm workspaces + SWC |
-
-## Product Development Requirements
-
-### PDR-001 — Monorepo Foundation
-
-**Status:** Shipped (init-infrastructure)
-
-**Requirements:**
-- pnpm workspaces with version catalog for all shared dependencies
-- Turborepo pipeline: build → typecheck → lint → test → dev
-- TypeScript project references across all packages
-- Shared tsconfig presets (`base`, `library`, `nest`)
-- oxlint + oxfmt linting/formatting via `@infra-x/code-quality` presets
-
-**Acceptance criteria:**
-- `pnpm build` succeeds across all packages in dependency order
-- `pnpm typecheck` passes with strict mode
-- `pnpm lint` includes architectural boundary check
+**Description from `apps/api/package.json`:** _"meme token trading platform backend"_ —
+final product scope to be confirmed by product team.
 
 ---
 
-### PDR-002 — API Bootstrap & Middleware Chain
+## Current State: `init-infrastructure` branch
 
-**Status:** Shipped (init-infrastructure)
+This branch delivers a hardened API skeleton. No domain endpoints. No auth flows wired. No
+business schemas. Infrastructure phases and subsequent codebase-review bug-fix effort are all complete.
 
-**Requirements:**
-- NestJS HTTP application with ordered middleware chain (see `system-architecture.md`)
-- Helmet security headers
-- Global ValidationPipe (whitelist, 422 status, transform)
-- CORS configurable via `ALLOWED_ORIGINS` env
-- `GET /health` smoke endpoint returning `{ status, uptime, timestamp }`
-
-**Acceptance criteria:**
-- `GET /health` returns 200 with AIP-193 `{ data, meta }` envelope
-- `GET /nonexistent` returns 404 `application/problem+json`
-- App starts in <5 s in dev mode
-
----
-
-### PDR-003 — Observability
-
-**Status:** Shipped (init-infrastructure)
-
-**Requirements:**
-- Structured JSON logs in production; pino-pretty single-line in dev/test
-- Per-request `traceId`, `correlationId` on every log line
-- W3C traceparent header parsed and propagated via CLS
-- `x-request-id` / `x-correlation-id` headers captured; UUIDs generated if absent
-- Health routes excluded from per-request autoLogging
-- Secrets redaction on known sensitive paths
-
-**Acceptance criteria:**
-- Every log line in production contains `traceId` and `correlationId` fields
-- Health endpoint logs suppressed in both dev and prod
+| Phase | Name | Summary |
+|-------|------|---------|
+| 01 | Security Criticals | Helmet, CORS, body-size limit, trust-proxy, throttler guard |
+| 02 | Env & Secrets | Zod env schema with prod superRefine (rejects placeholder secrets, forces rediss://, enforces THROTTLE_LIMIT ≤ 10 000) |
+| 03 | Runtime | DrizzleModule/DrizzleService with pool lifecycle, CacheModule (Port/Adapter), DomainEventsModule, health probes (livez/readyz/health) |
+| 04 | Cross-Cutting Correctness | RFC 9457 ProblemDetailsFilter, W3C traceparent in CLS, CorrelationId/TraceContext interceptors, ETag middleware |
+| 05 | Tooling & CI | Biome v2, Turborepo pipeline, dependency-cruiser arch guard (shared base + per-package extends), lefthook git hooks (pre-commit/commit-msg/pre-push), vitest + e2e harness, CI workflow (lint+typecheck+test+build+migration smoke) |
+| 06 | Minor Cleanups | Drop postgres.js dep (complete), Swagger annotations, log exclusions, CORS `X-Request-Id` |
+| CR | Codebase Review Fix | 24 correctness bugs fixed (1 Critical, 4 High, 13 Medium, 6 Low); 51 test cases added; CI/tooling hardening (pnpm 10.32.1 both jobs) |
 
 ---
 
-### PDR-004 — Error Handling
+## Functional Requirements (Infrastructure Layer)
 
-**Status:** Shipped (init-infrastructure)
+### FR-01 — Env Validation
+- All env vars parsed and validated at startup via Zod schema.
+- Production mode: rejects placeholder `JWT_SECRET`, `api.example.com` base URL, `redis://` scheme, `THROTTLE_LIMIT > 10000`.
+- App refuses to start if validation fails.
 
-**Requirements:**
-- RFC 9457 `application/problem+json` for all HTTP errors
-- `AllExceptionsFilter` catches `DrizzleQueryError` and maps pg SQLSTATE codes to HTTP exceptions (23505→409 CONFLICT, 23503→422 CONSTRAINT_VIOLATION FK, 23502→422 VALIDATION_ERROR NOT NULL, 23514→422 CONSTRAINT_VIOLATION check, 08xxx/57014→503)
-- `ThrottlerExceptionFilter` produces 429 with `Retry-After` + `X-RateLimit-*` headers
-- Error responses carry `request_id`, `correlation_id`, `trace_id`
-- Production 500s hide raw error message from response body
-- Validation recursion depth bounded; max 100 errors per response
+### FR-02 — Security Headers
+- Helmet applied globally (CSP + COEP disabled — JSON API only).
+- CORS: env-driven `ALLOWED_ORIGINS`, exposes `X-Request-Id`.
+- Rate limiting: configurable TTL + limit via env; ThrottlerGuard as `APP_GUARD`.
 
-**Acceptance criteria:**
-- All 4xx/5xx responses have `Content-Type: application/problem+json`
-- `Cache-Control: no-store` on all error responses
-- Validation errors include `errors[]` with JSON Pointer field references
-- FK / check / NOT NULL violations surfaced with stable `ErrorCode` instead of raw 500
+### FR-03 — Observability
+- Structured JSON logging via pino. Dev: pino-pretty. Prod: JSON.
+- Sensitive fields redacted (`password`, tokens, auth headers).
+- High-frequency probe paths excluded from access logs.
+- W3C `traceparent` propagated via CLS; `X-Request-Id` correlation.
 
----
+### FR-04 — Error Responses
+- All errors: RFC 9457 `application/problem+json`.
+- Throttle violations: 429 with standard problem body.
+- Validation errors: flattened dotted-path `errors[]` array.
 
-### PDR-005 — Database Foundation
+### FR-05 — Health Probes
+- `/livez` — process-only, no I/O.
+- `/readyz` — DB + Redis with 3 s race deadline; 503 on degraded.
+- `/health` — full component breakdown + heap/RSS/disk metrics.
 
-**Status:** Shipped (init-infrastructure)
+### FR-06 — Database
+- Drizzle ORM + `node-postgres` Pool.
+- Pool drains on `SIGTERM` via `onModuleDestroy`.
+- Migration role has `lock_timeout` / `statement_timeout` set before migrations run.
+- Idempotent migrations verified in CI smoke test.
 
-**Requirements:**
-- `DatabaseModule.forRoot()` and `forRootAsync(options)` wire Drizzle + node-postgres pool from env
-- Pool configuration via `DB_POOL_*` env vars
-- Schema barrel in `@onwealth/database` — typed even when empty
-- `@onwealth/database` has no NestJS dependency
+### FR-07 — Domain Events (Infrastructure)
+- `DomainEventPublisher`: clears aggregate's event queue, emits each event via `EventEmitter2`.
+- At-most-once delivery (no outbox, no persistence).
+- `BaseAggregateRoot` accumulates events in private `#domainEvents[]`.
 
-**Acceptance criteria:**
-- App starts without database connection error when `DATABASE_URL` points to running Postgres
-- `pnpm depcruise:check` passes `database-no-nestjs` rule
-
----
-
-### PDR-006 — Architectural Boundary Enforcement
-
-**Status:** Shipped (init-infrastructure)
-
-**Requirements:**
-- `dependency-cruiser` 16 with 6 error-severity rules covering circular deps, framework isolation, feature isolation
-- Runs as part of `pnpm lint` pipeline
-
-**Acceptance criteria:**
-- `pnpm depcruise:check` exits 0 on clean codebase
-- Any violation blocks CI lint step
+### FR-08 — Cache
+- Port/Adapter: `CachePort` interface injected via `CACHE_PORT` symbol.
+- Adapter: `cache-manager` + `@keyv/redis`.
+- Consumers depend on interface, not implementation.
 
 ---
-
-### PDR-007 — Feature Modules (planned)
-
-**Status:** Partially shipped
-
-**Requirements (TBD):**
-- Feature modules under `apps/api/src/modules/{context}/`
-- DDD layer rules added to `.dependency-cruiser.cjs`
-- `@nestjs/terminus` health indicators (readiness/liveness)
-- Authentication (JWT + refresh tokens)
-
-**Shipped ahead of feature work (init-infrastructure):**
-- Redis-backed throttler store (`@nest-lab/throttler-storage-redis` + `ioredis`; `REDIS_URL` required at boot)
 
 ## Non-Functional Requirements
 
-| NFR | Target |
-|---|---|
-| Startup time | <5 s in dev |
-| Log latency | Pino async transport (non-blocking) |
-| DB pool | max 20 connections per instance |
-| Rate limit default | 300 req / 60 s (env-tunable via `THROTTLE_LIMIT` / `THROTTLE_TTL`) |
-| Node.js version | >=22 (enforced via `engines` field) |
+| NFR | Target | Status |
+|-----|--------|--------|
+| Request timeout | 30 s global | Implemented (`TimeoutInterceptor`) |
+| Payload limit | 100 KB JSON body | Implemented |
+| Rate limiting | Configurable (default 100/min) | Implemented |
+| Test coverage | 80 % statements / 70 % branches / 80 % functions / 80 % lines | 51 test cases exist; thresholds remain 0 (gate pending) |
+| Migration idempotency | Second run must be no-op | Verified in CI |
+
+---
+
+## Architectural Constraints
+
+- NestJS 11, ESM (`"type": "module"`), `nodenext` module resolution.
+- No CQRS module, no repository abstraction yet (DB_TOKEN injected directly).
+- Every `@Global()` module must have `@global-approved` comment + appear in architecture guard whitelist.
+- Drizzle is the only ORM. postgres.js has been removed; Drizzle + `pg` only.
+
+---
+
+## Out of Scope (This Branch)
+
+- Auth/users module (no auth deps wired; passport/JWT/OAuth not in `apps/api` dependencies).
+- Business domain schemas (packages/database exports empty placeholder).
+- Outbox pattern for domain events (at-most-once is current behavior).
+- Frontend / mobile clients.
+
+---
+
+## Unresolved Questions
+
+1. Final product domain — "meme token trading" or broader wealth/fintech? Affects schema design.
+2. Multi-tenancy requirements, if any?
+3. Target deployment platform (Docker/k8s, Railway, Fly.io, etc.)?
+4. Auth strategy choice — JWT-only, OAuth-only, or combined?
+5. Coverage gate enforcement timeline — 51 test cases exist; when to raise thresholds from 0 to 80/70/80/80?

@@ -1,123 +1,171 @@
 # Codebase Summary
 
-_Last updated: 2026-05-15 | Branch: init-infrastructure (Foundation Hardening)_
+Monorepo: pnpm workspaces + Turborepo. Four workspaces: one app + three packages.
 
-## Repository Layout
+---
+
+## Workspace Map
 
 ```
-onwealth/                          # pnpm + Turborepo monorepo
-├── apps/
-│   └── api/                       # @onwealth/api — NestJS HTTP entrypoint
-├── packages/
-│   ├── core/                      # @onwealth/core — framework-agnostic DDD primitives
-│   ├── database/                  # @onwealth/database — Drizzle schemas only
-│   ├── platform/                  # @onwealth/platform — NestJS foundation layer
-│   └── tsconfig/                  # shared TypeScript presets
-├── .dependency-cruiser.cjs        # 6 error-severity architectural boundary rules
-├── pnpm-workspace.yaml            # catalog pins all dependency versions
-└── turbo.json                     # task pipeline (build → lint → test → dev)
+onwealth/
+├── apps/api/                          NestJS 11 application (composition root)
+├── packages/database/                 @onwealth/database — Drizzle ORM schema + migrations
+├── packages/shared-kernel/            @onwealth/shared-kernel — transport-agnostic NestJS modules
+├── packages/nest-http/                @onwealth/nest-http — HTTP cross-cutting layer
+├── biome.json                         Root lint + format config (Biome v2)
+├── lefthook.yml                       Git hooks: pre-commit (biome), commit-msg (Conventional Commits), pre-push (typecheck+test)
+├── turbo.json                         Task pipeline (build, test, typecheck, lint, dev); globalDependencies includes .dependency-cruiser.base.mjs
+├── .dependency-cruiser.base.mjs       Shared dependency-cruiser base: no-circular rule + cruise options; extended by each package
+├── pnpm-workspace.yaml                Workspace globs: apps/*, packages/*
+├── package.json                       Root scripts (incl. "test": turbo run test) + pnpm config; lefthook in devDependencies + onlyBuiltDependencies
+└── .github/workflows/ci.yml           CI: two jobs (ci, migration-smoke)
 ```
 
-## Packages
+---
 
-| Package | Purpose | Key constraint |
-|---|---|---|
-| `@onwealth/core` | DDD primitives: `BaseAggregateRoot`, `DomainEvent`, `IntegrationEvent` | No `@nestjs/*`, no ioredis/pino/drizzle/pg |
-| `@onwealth/database` | Drizzle schema barrel (`packages/database/src/schemas/index.ts`) | No `@nestjs/*`; empty in foundation phase |
-| `@onwealth/platform` | NestJS modules + `ErrorCode` + `ProblemDetailsDto` — 12 subpath exports | No feature symbols (auth/user/bot) |
-| `@onwealth/api` | Boots NestJS app, wires middleware chain | Consumes `@onwealth/platform/*` via subpath only — never relative |
+## apps/api
 
-## Source LOC (foundation snapshot)
+**Stack:** NestJS 11, Express, ESM, TypeScript 5 strict, Vitest + SWC
 
-| Path | LOC |
-|---|---|
-| `apps/api/src` | 584 |
-| `packages/core/src` | 94 |
-| `packages/database/src` | 9 (intentionally empty schema barrel) |
-| `packages/platform/src` | 2115 |
+Composition root only. `src/` contains: `app.module.ts`, `main.ts`, `modules/` (business modules), `__tests__/`.
+All cross-cutting infrastructure moved to `@onwealth/shared-kernel` and `@onwealth/nest-http`.
 
-## `@onwealth/platform` Subpath Exports
+### Entry Points
 
-| Subpath | Contents |
-|---|---|
-| `.` | Root barrel re-export |
-| `/config` | `ConfigModule` (Zod `envSchema`, `validateEnv`, `Env` type) |
-| `/cls` | `ClsModule` — W3C traceparent + request/correlation IDs |
-| `/logger` | `LoggerModule` — nestjs-pino, pino-pretty in dev, JSON in prod |
-| `/filters` | `FiltersModule` — `AllExceptionsFilter`, `ProblemDetailsFilter`, `ThrottlerExceptionFilter` |
-| `/interceptors` | `InterceptorsModule` — `TimeoutInterceptor`, `RequestContextInterceptor`, `CorrelationIdInterceptor`, `TraceContextInterceptor`, `TransformInterceptor` |
-| `/decorators` | `@UseEnvelope()` decorator |
-| `/pipes` | `createValidationPipe()` — whitelist, 422, transform |
-| `/throttler` | `ThrottlerModule` — Redis-backed (`@nest-lab/throttler-storage-redis` + `ioredis`), env-driven TTL/limit; fail-fast on boot if `REDIS_URL` unreachable |
-| `/database` | `DatabaseModule` (`forRoot()` / `forRootAsync(options)`), `DRIZZLE_TOKEN` + `POOL_TOKEN` injection tokens, `DrizzleDb` + `DrizzleInstance` types |
-| `/error-codes` | `ErrorCode` const object + union type (opaque string literals, not enum) |
-| `/problem-details` | `ProblemDetailsDto` (RFC 9457), `FieldError`, `ValidationErrorItem` |
+| File | Purpose |
+|------|---------|
+| `src/main.ts` | Thin entrypoint: `createHttpApp(AppModule)` + `app.useLogger(...)` + `app.listen()` + startup banner |
+| `src/app.module.ts` | Root module: imports infrastructure modules from workspace packages, registers APP_GUARD, applies ETag middleware |
 
-## `apps/api` Bootstrap Order
+### modules/ — Feature Modules
 
-1. `NestFactory.create(ApiModule, { bufferLogs: true })`
-2. Swap logger → `nestjs-pino`
-3. Body parsers — 10kb limit (JSON + urlencoded) before any route registration
-4. Resolve `swaggerEnabled = ENABLE_SWAGGER ?? (NODE_ENV !== 'production')`
-5. `helmet()` — strict CSP global; loose CSP path-mounted on `/swagger` + `/docs` only when swagger enabled
-6. `trust proxy = 1` (single LB hop)
-7. Throttler uses Redis-backed storage (`REDIS_URL` required at boot; process exits if unreachable — no silent fallback to in-memory)
-8. `createValidationPipe()` (whitelist + 422 + transform + `enableImplicitConversion: false`)
-9. 5 global interceptors (bind order): `TimeoutInterceptor` → `RequestContextInterceptor` → `CorrelationIdInterceptor` → `TraceContextInterceptor` → `TransformInterceptor`; first 4 via `app.get(...)` DI, `TransformInterceptor` via `new` (needs `reflector` + `cls`)
-10. Global filters (registered LIFO — last registered runs first on exception):
-    - registered 1st: `AllExceptionsFilter` → runs last (catch-all)
-    - registered 2nd: `ProblemDetailsFilter` → runs middle
-    - registered 3rd: `ThrottlerExceptionFilter` → runs first (catches 429)
-11. `app.enableShutdownHooks()` — **must precede `app.listen()`** (SIGTERM → http drain → OnModuleDestroy)
-12. CORS from `ALLOWED_ORIGINS` env; logs WARN if empty in non-test
-13. `setupSwagger(app, configService)` — mounts `/docs`, `/swagger`, `/swagger-json`, `/openapi.yaml` (only when `swaggerEnabled`)
-14. `app.listen(PORT)`
+Currently empty (business modules land in future milestones). Reserved path: `src/modules/<domain>/<layer>/`.
 
-## API Modules (foundation)
+### __tests__/ — Test Infrastructure
 
-| Module | Route | Notes |
-|---|---|---|
-| `HealthModule` | `GET /health` | `@SkipThrottle()` class-level; returns `{ status, uptime, timestamp }` in `{ data, meta }` via `@UseEnvelope()` |
+51 test cases across 10 spec files (50 run locally; 1 CI-guarded skip).
 
-## API Documentation Routes (env-gated)
+| File | Purpose |
+|------|---------|
+| `setup.ts` | Global test setup (Vitest) |
+| `helpers/create-app.ts` | Creates `TestingModule`, calls `configureHttpApp(app, { testMode: true })` from `@onwealth/nest-http` |
+| `helpers/create-request.ts` | Supertest request factory for integration tests |
+| `unit/global-modules.spec.ts` | Architecture guard: every `@Global()` must be in approved whitelist (3 cases) |
+| `integration/di-token-identity.spec.ts` | Verifies DI token singletons across module boundaries (2 cases) |
+| `integration/throttler-headers.spec.ts` | Asserts throttler response headers present (1 case) |
+| `integration/with-timeout.spec.ts` | DB transaction timeout via `withTimeout`; `describe.skipIf(!DATABASE_URL)` — skips offline, runs in CI (1 case) |
 
-Mounted only when `swaggerEnabled` is true:
+### Config Files (apps/api root)
 
-| Route | Description |
-|---|---|
-| `GET /docs` | Scalar API Reference (interactive UI) |
-| `GET /swagger` | Swagger UI |
-| `GET /swagger-json` | OpenAPI JSON spec |
-| `GET /openapi.yaml` | OpenAPI YAML spec |
+| File | Purpose |
+|------|---------|
+| `vitest.config.mts` | SWC + vite-tsconfig-paths, v8 coverage, thresholds at 0 |
+| `vitest.e2e.config.mts` | E2E vitest config |
+| `.dependency-cruiser.mjs` | Per-package layer-specific forbidden rules; extends root `.dependency-cruiser.base.mjs` |
+| `nest-cli.json` | NestJS CLI build config |
+| `tsconfig.json` | `strict: true`, `noUncheckedIndexedAccess`, `emitDecoratorMetadata`, `nodenext` |
 
-Source: `apps/api/src/config/swagger.config.ts`
+---
 
-## Runtime Dependencies (catalog-pinned)
+## packages/shared-kernel
 
-| Lib | Version | Role |
-|---|---|---|
-| NestJS | ^11.1.0 | HTTP framework |
-| nestjs-pino | ^4.4.0 | Structured logging |
-| nestjs-cls | ^5.0.0 | Request-scoped storage |
-| drizzle-orm | ^0.44.7 | ORM |
-| pg | ^8.16.3 | PostgreSQL driver (node-postgres pool) |
-| zod | ^4.0.0 | Env validation |
-| helmet | ^8.0.0 | Security headers |
-| @nestjs/throttler | ^6.4.0 | Rate limiting |
-| @nest-lab/throttler-storage-redis | ^1.1.0 | Redis-backed throttler storage (cluster-safe) |
-| ioredis | ^5.4.0 | Redis client (`REDIS_URL` required at boot; fail-fast if unreachable) |
-| @nestjs/swagger | ^11.2.1 | OpenAPI spec generation + Swagger UI |
-| @scalar/nestjs-api-reference | ^1.1.4 | Scalar API Reference UI (`/docs`) |
+**Package:** `@onwealth/shared-kernel` — transport-agnostic NestJS modules (no HTTP deps)
 
-## Toolchain
+| Directory | Key Files | Purpose |
+|-----------|-----------|---------|
+| `cache/` | `cache.port.ts`, `cache.module.ts`, `cache.service.ts` | `CachePort` interface + `CACHE_PORT` Symbol; cache-manager + @keyv/redis adapter |
+| `config/` | `app.config.ts`, `database.config.ts`, `redis.config.ts`, `env.schema.ts` | Config namespaces (`appConfig`, `databaseConfig`, `redisConfig`); Zod env schema + `validateEnv` |
+| `database/` | `db.port.ts`, `db.module.ts`, `db.provider.ts`, `drizzle.service.ts`, `db.helpers.ts` | `DB_TOKEN` Symbol; `DrizzleModule.forRoot()`; Pool factory; `DrizzleService` |
+| `domain/` | `base-aggregate-root.ts`, `events/` | `BaseAggregateRoot` (private `#domainEvents[]`); `DomainEvent`, `IntegrationEvent` base classes |
+| `errors/` | `error-code.ts`, `validation-error.ts` | `ErrorCode` enum for problem type URIs |
+| `events/` | `domain-events.module.ts`, `domain-event-publisher.ts` | Global `DomainEventsModule`; clear-then-emit via EventEmitter2 (at-most-once) |
+| `logger/` | `logger.module.ts`, `logger.config.ts`, `redaction.config.ts` | nestjs-pino `LoggerModule`; sensitive field redaction |
 
-| Tool | Purpose |
-|---|---|
-| pnpm 10.32.1 | Package manager |
-| Turborepo ^2.9.7 | Task orchestration |
-| TypeScript ^6.0.3 | Language |
-| SWC | Compilation emit for `apps/api` (`.swcrc` `module.type=commonjs`) |
-| oxlint ^1.59.0 | Linting (root devDep — not in catalog) |
-| oxfmt ^0.44.0 | Formatting (root devDep — not in catalog) |
-| dependency-cruiser ^16 | Architectural boundary enforcement (root devDep — not in catalog) |
-| vitest ^2.1.0 | Testing |
+### __tests__/ — Specs (packages/shared-kernel)
+
+| File | Purpose |
+|------|---------|
+| `__tests__/unit/global-modules.spec.ts` | Architecture guard for shared-kernel globals (3 cases) |
+| `cache/__tests__/cache.service.spec.ts` | CacheService unit tests (5 cases) |
+| `config/__tests__/env-pool-validation.spec.ts` | Env schema validation unit tests (6 cases) |
+
+Build: `tsdown` → `dist/index.mjs` + `dist/index.d.mts`. All NestJS + infra deps are `peerDependencies`.
+
+---
+
+## packages/nest-http
+
+**Package:** `@onwealth/nest-http` — HTTP cross-cutting layer
+
+| Directory | Key Files | Purpose |
+|-----------|-----------|---------|
+| `bootstrap/` | `configure-http-app.ts`, `create-http-app.ts`, `http-app-options.ts` | `configureHttpApp(app, options?)` — shared setup for prod + tests; `createHttpApp(module, options?)` — prod entrypoint wrapper |
+| `config/` | `http.config.ts`, `throttle.config.ts`, `security.config.ts`, `swagger.config.ts`, `cls.config.ts`, `validation.config.ts` | `httpConfig`, `throttleConfig` namespaces; CORS factory; Swagger+Scalar; CLS config; `ValidationPipe` factory |
+| `filters/` | `all-exceptions.filter.ts`, `problem-details.filter.ts`, `throttler-exception.filter.ts` | AllExceptions catch-all; RFC 9457 ProblemDetails; 429 throttler |
+| `interceptors/` | 7 interceptors + `trace-context.util.ts` | RequestContext, CorrelationId, TraceContext, Timeout, LocationHeader, LinkHeader, Transform |
+| `middleware/` | `etag.middleware.ts` | ETag on all routes |
+| `health/` | `health.module.ts`, `health.controller.ts`, `drizzle.health.ts`, `redis.health.ts` | `HealthModule`; `/livez`, `/readyz`, `/health`; Terminus indicators |
+| `decorators/` | `public.decorator.ts`, `use-envelope.decorator.ts`, `api-problem-responses.decorator.ts`, `validators/` | `@Public`, `@UseEnvelope`, `@ApiProblemResponses`, typed validators |
+| `dtos/` | `cursor-pagination.dto.ts`, `offset-pagination.dto.ts`, `list-response.dto.ts`, `problem-details.dto.ts` | Shared HTTP DTOs |
+
+### __tests__/ — Specs (packages/nest-http)
+
+| File | Purpose |
+|------|---------|
+| `health/__tests__/health.controller.spec.ts` | HealthController unit tests (9 cases) |
+| `interceptors/__tests__/trace-context.util.spec.ts` | TraceContext utility unit tests (14 cases) |
+| `interceptors/__tests__/transform.interceptor.spec.ts` | TransformInterceptor unit tests (7 cases) |
+
+Build: `tsdown` → `dist/index.mjs` + `dist/index.d.mts`. All NestJS + infra deps are `peerDependencies`.
+
+---
+
+## packages/database
+
+**Package:** `@onwealth/database` — Drizzle ORM 0.44.7, pg 8.16.3 (peer), drizzle-kit 0.31.6, tsdown ESM build
+
+| File/Dir | Purpose |
+|----------|---------|
+| `src/schemas/index.ts` | Re-exports all schemas (currently `export {}` placeholder) |
+| `src/index.ts` | Package entrypoint — re-exports `src/schemas/index.ts` |
+| `drizzle/` | Generated migration files (drizzle-kit output) |
+| `sql/00-init-role-timeouts.sql` | Sets `lock_timeout` + `statement_timeout` for migration role |
+| `drizzle.config.ts` | drizzle-kit config: schema `./src/schemas`, dialect postgresql, strict mode |
+
+Pool creation is **not** in this package — owned by `DrizzleService` in `@onwealth/shared-kernel`.
+This package exports schema types only.
+
+---
+
+## CI Pipeline
+
+Two GitHub Actions jobs on push to `main`/`init-infrastructure` and PR to `main`:
+
+**`ci` job** (Node 22, pnpm 10.32.1):
+`typecheck` → `lint` → `turbo test` (all packages) → `deps` (arch check) → `build`
+
+**`migration-smoke` job** (postgres:16-alpine service):
+`build database package` → `db:init-roles` → `db:migrate` × 2 (second asserts idempotency)
+
+---
+
+## Key Injection Tokens
+
+| Token | Type | Defined In | Provided By |
+|-------|------|-----------|-------------|
+| `DB_TOKEN` | `Symbol` | `@onwealth/shared-kernel` `database/db.port.ts` | `DrizzleModule.forRoot()` |
+| `CACHE_PORT` | `Symbol` | `@onwealth/shared-kernel` `cache/cache.port.ts` | `CacheModule` → `CacheService` |
+
+Both symbols are defined in exactly one file and imported only from `@onwealth/shared-kernel`.
+
+---
+
+## Global Modules (Architecture Guard Whitelist)
+
+These are the only modules permitted to be `@Global()` — enforced by `packages/shared-kernel/src/__tests__/unit/global-modules.spec.ts`:
+
+- `DrizzleModule` (from `@onwealth/shared-kernel`)
+- `DomainEventsModule` (from `@onwealth/shared-kernel`)
+- `ClsModule` (via `nestjs-cls`)
+- `ConfigModule` (via `@nestjs/config`)
+- `LoggerModule` (from `@onwealth/shared-kernel`, via `nestjs-pino`)

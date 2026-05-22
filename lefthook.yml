@@ -1,26 +1,29 @@
-min_version: 1.7.0
+# Git hooks managed by lefthook — https://lefthook.dev
+# Wired into git on `pnpm install` via the root `prepare` script (`lefthook install`).
+# Bypass in an emergency with `git commit --no-verify` (CI remains the hard gate).
 
 pre-commit:
-  parallel: true
   jobs:
-    - name: format
-      glob: "*.{ts,tsx,js,cjs,mjs,mts,json}"
-      run: pnpm oxfmt --write {staged_files}
+    # Auto-fix lint + format + import-sort on staged JS/TS/JSON, then re-stage.
+    - name: biome
+      glob: "*.{js,jsx,ts,tsx,mjs,cjs,mts,cts,json,jsonc}"
+      run: pnpm exec biome check --write --no-errors-on-unmatched {staged_files}
       stage_fixed: true
 
-    - name: lint-fix
-      glob: "*.{ts,tsx,js,cjs,mjs,mts}"
-      run: pnpm oxlint --fix {staged_files}
-      stage_fixed: true
-
-    - name: typecheck
-      glob: "*.{ts,tsx,mts}"
-      run: pnpm typecheck
+commit-msg:
+  jobs:
+    # Enforce Conventional Commits on the subject line. {1} = commit message file.
+    - name: conventional-commit
+      run: |
+        head -1 "{1}" | grep -qE '^(Merge |Revert |(feat|fix|refactor|perf|docs|test|build|ci|chore|style)(\([a-z0-9-]+\))?!?: .+)' || {
+          echo "✗ Commit message must follow Conventional Commits."
+          echo "  Format:  type(scope): description"
+          echo "  Types:   feat fix refactor perf docs test build ci chore style revert"
+          exit 1
+        }
 
 pre-push:
-  parallel: false
   jobs:
-    - name: lint
-      run: pnpm lint
-    - name: test
-      run: pnpm test
+    # Single turbo run — shares the build graph between typecheck and test.
+    - name: typecheck-and-test
+      run: pnpm exec turbo run typecheck test

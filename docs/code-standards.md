@@ -1,228 +1,233 @@
 # Code Standards
 
-_Last updated: 2026-05-15 | Branch: init-infrastructure (Foundation Hardening)_
+Conventions and rationale for non-obvious decisions in the onwealth codebase.
 
-## General Principles
+## TypeScript Compiler Settings
 
-- YAGNI / KISS / DRY — no speculative abstractions
-- Files under 200 LOC; split by concern when approaching limit
-- Kebab-case filenames: `pino.config.ts`, `drizzle.factory.ts`, `trace-context.util.ts`
-- Comments explain *why*, not *what*
+### `strictPropertyInitialization: false` (apps/api)
 
-## TypeScript
+`apps/api/tsconfig.json` disables `strictPropertyInitialization` while keeping `strict: true` for everything else.
 
-- `strict: true` + `noUncheckedIndexedAccess: true` + `noImplicitOverride: true`
-- `isolatedModules: true` — no const enum, no namespace merging
-- `useDefineForClassFields: false` — required for NestJS decorators
-- `target: ES2023`, `lib: ["ES2023"]`
-- `skipLibCheck: true` — type errors in dependencies are ignored
-- Prefer `interface` over `type` for object shapes; `type` for unions/aliases
-- No `any` — use `unknown` with narrowing
+**Why:** NestJS dependency injection assigns class fields **after** the constructor runs (via the DI container's instantiation pipeline + decorators like `@Inject`). With `strictPropertyInitialization` enabled, every injected field needs either:
+- a redundant `!` non-null assertion (`private readonly foo!: Foo`), or
+- an inline `// biome-ignore` / explicit initializer that the DI container then overwrites.
 
-### Module Systems
+Both options add noise without catching a real class of bug — Nest guarantees the field is populated before any provider method runs. The `strict` family's other checks (`noImplicitAny`, `strictNullChecks`, `strictFunctionTypes`, `noImplicitThis`, etc.) remain active and provide the actual safety net.
 
-| Location | `module` | `moduleResolution` | Emit |
-|---|---|---|---|
-| `packages/*` | `CommonJS` | `Node` | `tsc -b` |
-| `apps/api` typecheck | `ESNext` | `Bundler` | noEmit |
-| `apps/api` runtime | CommonJS | — | SWC via `.swcrc` |
+**Trade-off:** in this single codebase, classes that are *not* DI-managed must still ensure their fields are initialized before first read — there's no compiler warning if you forget. Keep DI-managed providers separate from plain value objects, and prefer constructor-assigned `readonly` fields for the latter.
 
-### Imports
+### Other strictness flags (apps/api)
 
-- Use subpath exports for `@onwealth/platform`: `@onwealth/platform/filters`, not `../../packages/platform/src/...`
-- `reflect-metadata` imported once at `apps/api/src/main.ts` top
-- Type-only imports: `import type { Foo } from '...'`
-- Group order: Node built-ins → external libs → workspace packages → local
+Both packages keep:
+- `strict: true`
+- `noUncheckedIndexedAccess` (in api) — array/record access returns `T | undefined`
+- `exactOptionalPropertyTypes` — distinguishes "missing" from "explicit undefined"
 
-## NestJS Conventions
+## Testing Conventions
 
-### Module structure
+### CI-Guarded Integration Tests
 
-```
-feature/
-├── feature.module.ts
-├── feature.controller.ts
-├── feature.controller.spec.ts
-├── feature.service.ts
-└── dto/
-    ├── create-feature.dto.ts
-    └── update-feature.dto.ts
+Use `describe.skipIf(!process.env.VAR)` for integration tests that require a real backing service (DB, Redis). The test exists in the suite, runs in CI where the env var is present via service containers, and skips cleanly in offline local runs — no fake passes, no mocks.
+
+```ts
+// Example: apps/api/src/__tests__/integration/with-timeout.spec.ts
+describe.skipIf(!process.env.DATABASE_URL)('withTimeout integration', () => {
+  // real DB transaction tests
+})
 ```
 
-### Foundation modules (already wired in `ApiModule`)
+This is the canonical pattern for any spec that requires a live `DATABASE_URL` or `REDIS_URL`.
 
-Do not re-import in feature modules: `ConfigModule`, `ClsModule`, `LoggerModule`, `DatabaseModule`, `ThrottlerModule`, `FiltersModule`, `InterceptorsModule`. They are global or exported globally.
+---
 
-### DTOs
+## File Naming
 
-- `class-validator` decorators for validation
-- `class-transformer` `@Transform` / `@Type` for coercion
-- Use `@ApiProperty` on all DTOs that appear in the OpenAPI spec (registered via `extraModels` or decorated handlers)
-- Platform DTOs (`ProblemDetailsDto`, `FieldError`) are classes (not interfaces) so `@nestjs/swagger` can emit schema metadata at runtime
-- Validation errors produce 422 (not 400) via `createValidationPipe()`
+- kebab-case for `.ts`/`.js`/`.py`/`.sh`
+- Long, descriptive names — file names should be self-documenting when found via Grep/Glob (e.g. `redis.health.ts`, `problem-details.filter.ts`, not `health.ts`/`filter.ts`)
+- Test files mirror their target: `foo.spec.ts` next to `foo.ts`
+- E2E tests live under `apps/api/src/__tests__/` and use the `.e2e-spec.ts` suffix
 
-### Error handling
+## Comments
 
-- Throw `HttpException` subclasses (`NotFoundException`, `BadRequestException`, etc.) from services/controllers
-- Include `{ code: 'UPPER_SNAKE_CASE', message: '...' }` as response body for machine-readable codes
-- `ProblemDetailsFilter` extracts `code` automatically from the response body
-- Never throw raw `Error` from controllers — `AllExceptionsFilter` handles it but loses HTTP semantics
+- Explain **why**, not what.
+- Reference stable external IDs (RFC numbers, PostgreSQL `SQLSTATE`, CVE IDs) — never plan artifacts (phase numbers, finding codes, audit labels).
+- Migration filenames carry domain slugs only — no `phase_*` prefixes.
 
-### Response envelope
+## Commit Messages
 
-- Use `@UseEnvelope()` on handlers that return a single resource and need tracing meta
-- Collection handlers: return `{ object: 'list', data: T[] }` — `TransformInterceptor` passes through unchanged
-- Do not use `@UseEnvelope()` on collection handlers
+Use Conventional Commits format (`feat:`, `fix:`, `refactor:`, `test:`, `chore:`, `docs:`).
+Enforced locally by the lefthook `commit-msg` hook; CI is the hard gate.
 
-### Rate limiting
+## Modules & File Size
 
-- `ThrottlerGuard` is bound globally; all routes are rate-limited by default
-- Use `@SkipThrottle()` to opt out — **mandatory on `HealthController`** to prevent K8s liveness probes from consuming throttle quota and triggering pod restart cascades (`apps/api/src/health/health.controller.ts:18`)
-- Default `THROTTLE_LIMIT` is 300 requests/window (raised from 100 in Foundation Hardening)
+- Keep files ≤ 200 lines where practical.
+- Split by logical concern (one responsibility per module).
 
-## Environment Variables
+## DDD Module Pattern
 
-Defined and validated in `packages/platform/src/config/env.schema.ts` via Zod. See `apps/api/.env.example` for the full list with comments.
+Business features live under `apps/api/src/modules/<domain>/`, each split into four
+layers. Add only the layer folders a module actually needs — not every module uses
+every folder.
 
-**Required at boot (no schema default):** `DATABASE_URL`, `JWT_SECRET`, `API_BASE_URL`. Supply via `.env.example` for local dev; production must override.
+```
+modules/<domain>/
+├── <domain>.module.ts          # wires the module: providers, controllers, port bindings
+├── domain/                     # pure business — zero framework / IO imports
+│   ├── aggregates/             # aggregate roots (extend BaseAggregateRoot)
+│   ├── entities/               # entities owned by an aggregate
+│   ├── value-objects/          # immutable VOs (Money, Slug, …)
+│   ├── enums/                  # domain enums / state types
+│   └── events/                 # domain events (extend DomainEvent)
+├── application/                # use-case orchestration
+│   ├── ports/                  # interfaces + Symbol DI tokens (the module owns these)
+│   ├── services/               # application services (use cases)
+│   └── listeners/              # @OnEvent domain-event listeners
+├── infrastructure/             # adapters — the only layer that touches IO
+│   ├── repositories/           # port implementations (Drizzle, via DB_TOKEN)
+│   ├── adapters/               # other port implementations (external APIs, …)
+│   └── strategies/             # passport strategies, etc.
+└── presentation/               # HTTP edge
+    ├── controllers/            # route handlers — thin, delegate to services
+    ├── dtos/                   # request/response DTOs (class-validator)
+    └── guards/                 # module-scoped guards
+```
 
-**Production placeholder guard:** Zod v4 `.check()` rejects literal placeholder values for `JWT_SECRET`, `DATABASE_URL`, and `API_BASE_URL` when `NODE_ENV=production` — boot fails loudly rather than silently serving with default credentials (`env.schema.ts:158–171`).
+### Dependency Rule
 
-| Variable | Default | Notes |
-|---|---|---|
-| `NODE_ENV` | `development` | `development \| production \| test` |
-| `PORT` | `3000` | 1–65535 |
-| `DATABASE_URL` | **required** | PostgreSQL connection string; no schema default |
-| `DB_POOL_MAX` | `20` | 1–100 |
-| `DB_POOL_MIN` | `5` | 0–50 |
-| `DB_POOL_IDLE_TIMEOUT` | `30000` | ms, min 1000 |
-| `DB_POOL_CONNECTION_TIMEOUT` | `10000` | ms, min 1000 |
-| `JWT_SECRET` | **required** | min 32 chars; no schema default |
-| `JWT_EXPIRES_IN` | `15m` | format: `\d+[smhd]` (schema only — auth phase pending) |
-| `JWT_REFRESH_EXPIRES_IN` | `7d` | format: `\d+[smhd]` (schema only — auth phase pending) |
-| `ALLOWED_ORIGINS` | — | comma-separated; empty → CORS disabled + WARN logged in non-test |
-| `REDIS_URL` | `redis://localhost:6379` | `redis://` or `rediss://`; **required at boot** — throttler storage factory fails fast if Redis unreachable |
-| `REDIS_TTL` | `3600` | seconds; throttler-scoped TTL (cache feature pending) |
-| `API_BASE_URL` | **required** | problem+json `type` URIs + OpenAPI server URL; no schema default |
-| `THROTTLE_TTL` | `60000` | ms window |
-| `THROTTLE_LIMIT` | `300` | requests per window |
-| `REQUEST_TIMEOUT_MS` | `30000` | ms, min 1000 |
-| `ENABLE_SWAGGER` | _(unset)_ | Strict enum: `'true'` or `'false'` only. Unset → `NODE_ENV !== 'production'`. Controls `/docs`, `/swagger`, `/swagger-json`, `/openapi.yaml` routes and helmet CSP mode. |
+Imports point inward only:
 
-Add new feature-tier env keys in the feature module's own Zod schema extension — do not add to `env.schema.ts` in `@onwealth/platform`.
+```
+presentation ─► application ─► domain
+infrastructure ─► application (implements ports) ─► domain
+```
 
-## DB Error Mapping Rules
+`domain/` imports nothing outside itself, except domain primitives from
+`@onwealth/shared-kernel` (`BaseAggregateRoot`, `DomainEvent`). Infrastructure
+depends on application, never the reverse — that inversion is the whole point of
+the `ports/` folder.
 
-When throwing from services that touch the database, use the correct `ErrorCode`:
+### Ports & Tokens (Dependency Inversion)
 
-| Scenario | Code | HTTP |
-|---|---|---|
-| FK violation (referenced row missing) | `RESOURCE_NOT_FOUND` | 422 |
-| Check constraint failure | `CONSTRAINT_VIOLATION` | 422 |
-| Unique constraint failure | `RESOURCE_CONFLICT` | 409 |
-| Not-null violation | `REQUIRED_FIELD` | 422 |
+The application layer **defines** a port; the infrastructure layer **implements** it.
+A port file exports an interface plus a `Symbol` token:
 
-**`RESOURCE_NOT_FOUND` + HTTP 422 pairing is intentional.** Client SDKs must branch on `status` first, `code` second. Do not assume `RESOURCE_NOT_FOUND` implies 404. If a feature module needs an unambiguous FK-missing symbol, introduce a domain-specific code (e.g. `REFERENCE_NOT_FOUND`).
+```ts
+// application/ports/article.repository.port.ts
+export interface ArticleRepository {
+  findById(id: string): Promise<Article | null>
+  save(article: Article): Promise<void>
+}
+export const ARTICLE_REPOSITORY = Symbol('ARTICLE_REPOSITORY')
+```
 
-## Trust Proxy
+```ts
+// article.module.ts
+providers: [
+  ArticleService,
+  { provide: ARTICLE_REPOSITORY, useClass: ArticleRepositoryImpl },
+]
+```
 
-`app.getHttpAdapter().getInstance().set('trust proxy', 1)` — configured for a single LB hop (public → LB → API). If topology is CDN → LB → API, bump to `2`. Never use `true` (trusts all forwarded IPs — enables throttler bypass via `X-Forwarded-For` spoofing).
+Consumers inject by token: `@Inject(ARTICLE_REPOSITORY) private readonly repo: ArticleRepository`.
 
-Throttler storage is Redis-backed (`@nest-lab/throttler-storage-redis`). `REDIS_URL` is required at boot — the storage factory rejects if Redis is unreachable, aborting NestJS init before any traffic is served. Rate-limit counters are cluster-safe across replicas.
+### Two Complexity Tiers
+
+Not every module needs a full domain layer. Match the structure to the problem:
+
+| Tier | When | Layers used |
+|------|------|-------------|
+| Simple CRUD | Pass-through resource, no invariants | `application` (service + port), `infrastructure`, `presentation` — skip `domain/` |
+| Rich domain | Business invariants, state machine, events | All four — aggregate enforces rules, emits domain events |
+
+A simple-CRUD service may stay a thin pass-through for consistency; non-trivial
+logic (e.g. `NotFoundException` mapping) belongs in the service, never the
+controller or repository.
+
+### Naming
+
+| Artifact | File | Symbol |
+|----------|------|--------|
+| Module | `<domain>.module.ts` | `<Domain>Module` |
+| Port | `<name>.repository.port.ts` | `interface <Name>Repository` + `<NAME>_REPOSITORY` token |
+| Repository impl | `infrastructure/repositories/<name>.repository.ts` | `<Name>RepositoryImpl` |
+| Service | `application/services/<name>.service.ts` | `<Name>Service` |
+| Aggregate | `domain/aggregates/<name>.aggregate.ts` | `<Name>` |
+| Value object | `domain/value-objects/<name>.vo.ts` | `<Name>` |
+| Domain event | `domain/events/<name>.event.ts` | `<Name>Event` |
+
+Register each module in `AppModule.imports`. A domain's DB schema goes in
+`packages/database/src/schemas/<domain>.schema.ts` with a matching migration.
+Domain-specific `ErrorCode` values are added to `@onwealth/shared-kernel` alongside
+the module that uses them — not pre-declared.
+
+## Validation
+
+- DTOs at module boundaries use class-validator decorators.
+- `validation.config.ts` produces the global pipe with `disableErrorMessages: false`, `whitelist: true`, `forbidNonWhitelisted: true`, `enableImplicitConversion: false` — implicit string-to-number coercion is **off** to prevent silently widening Zod-style numeric checks.
+
+## Error Responses
+
+- All `HttpException` instances funnel through `ProblemDetailsFilter` → RFC 9457 `application/problem+json`.
+- `type` is a URI under `${API_BASE_URL}/errors/<slug>` for mapped statuses; unmapped statuses fall back to `about:blank` (RFC 9457 §4.1).
+- Validation errors are flattened (nested DTOs produce dotted `address.street.zip` paths) and emitted in the `errors[]` array.
 
 ## Logging
 
-- Use `PinoLogger` (from `nestjs-pino`) injected via `@InjectPinoLogger(ContextName)` or constructor injection
-- Call `this.logger.setContext(ClassName.name)` in constructor
-- Log levels: `error` for 5xx, `warn` for 4xx, `debug` for dev-only traces
-- Never log raw request bodies or auth tokens — `redaction.config.ts` covers known paths
-- `requestId`, `traceId`, and `correlationId` appear on every log line automatically via `mixin` (runs inside CLS scope, not `customProps` which runs in Express middleware scope outside CLS)
+- `pino` via `nestjs-pino`. Production runs with the default formatter; dev uses `pino-pretty`.
+- Sensitive paths configured in `redaction.config.ts` (passwords, tokens, auth headers).
+- Access log suppression is controlled by `autoLoggingUrlPrefix` (passed to `createLoggerConfig`). Requests whose URL does not start with the prefix are suppressed — defaults to `'/api/'`. Health probe paths are excluded by passing them as `excludePaths` to the logger options.
 
-## DomainEvent Subclasses
+## Database
 
-Every `DomainEvent` or `IntegrationEvent` subclass **must** declare `eventName` as an explicit string literal (`packages/core/src/base/domain-event.ts:40`):
+- Drizzle ORM with `node-postgres` Pool. `postgres-js` is NOT a dependency — pick one driver, stick with it.
+- `DrizzleService` owns the pool lifecycle (`OnModuleDestroy` drains on SIGTERM).
+- Migration role has explicit `lock_timeout` set in `packages/database/sql/00-init-role-timeouts.sql`.
+- `withTimeout(db, ms, fn)` in `@onwealth/shared-kernel` wraps a Drizzle transaction with a per-transaction `statement_timeout` via `SELECT set_config('statement_timeout', $1, true)` (PgBouncer-safe bound parameter; `ms` must be `> 0`). Use only for slow analytics queries — OLTP queries rely on the role-level default.
+- DB constraint errors map to `ErrorCode` values in `AllExceptionsFilter`: SQLSTATE `23505` (unique violation) → `RESOURCE_CONFLICT`; `23503` (FK), `23502` (not-null), `23514` (check) → `CONSTRAINT_VIOLATION`.
+
+## Health Probes
+
+- `/livez` — process responsiveness only (no I/O dependencies).
+- `/readyz` — DB + Redis with a 3 s `Promise.race` deadline; degraded state returns 503.
+- `/health` — detailed multi-component breakdown (verbose, not for orchestrator probes).
+
+---
+
+## Workspace Package Conventions
+
+Applies to `packages/shared-kernel` and `packages/nest-http`.
+
+### ESM Import Extensions
+
+All relative imports and barrel imports inside workspace packages **must** include the `.js` extension (TypeScript `nodenext` + `verbatimModuleSyntax`):
 
 ```ts
-// CORRECT
-export class AccountCreatedEvent extends DomainEvent {
-  override readonly eventName = 'account.created'
-}
+// correct
+import { DB_TOKEN } from './database/db.port.js'
+export { DrizzleModule } from './database/db.module.js'
 
-// WRONG — unsafe under SWC/Terser class-name mangling
-export class AccountCreatedEvent extends DomainEvent {
-  override readonly eventName = this.constructor.name  // may become 'e' after minification
-}
+// type-only imports use `import type`
+import type { DrizzleDb } from './database/db.port.js'
 ```
 
-`IntegrationEvent` re-declares `abstract override readonly eventName` so the `noImplicitOverride` compiler flag forces concrete subclasses to declare it explicitly — it is not inherited from `DomainEvent` transitively.
+### Peer Dependencies — Never Bundle
 
-## Architectural Lint
+All NestJS and infra deps (`@nestjs/*`, `drizzle-orm`, `nestjs-pino`, `nestjs-cls`, etc.) are declared as `peerDependencies`, not `dependencies`. Each package's `tsdown.config.ts` lists them all in `deps.neverBundle`. Bundling a NestJS package creates dual-module singletons and breaks DI token identity at runtime.
 
-Run `pnpm depcruise:check` before pushing. It is also part of `pnpm lint`.
+### DI Token Identity
 
-Adding new packages: update `.dependency-cruiser.cjs` rules if the package has layer restrictions.
+`DB_TOKEN` and `CACHE_PORT` are defined in exactly one file each inside `@onwealth/shared-kernel`. Every consumer (including `@onwealth/nest-http` and `apps/api`) imports the tokens **only** from `@onwealth/shared-kernel` — never redeclaring them locally.
 
-`core-no-runtime-libs` banlist includes: `ioredis | pino | bcrypt | drizzle-orm | pg | zod | class-validator | class-transformer`. Core must stay validation/serialization-agnostic.
+### tsconfig — Auto-Generated, Never Hand-Edit
 
-## Testing
+Per-package `tsconfig.json` files are generated by `@infra-x/tsconfig`. Do not edit them manually; changes will be overwritten on the next generate run.
 
-- Framework: Vitest
-- Unit tests colocated: `*.spec.ts` next to the file under test
-- `@nestjs/testing` `Test.createTestingModule()` for controller/service tests
-- Mock `ClsService`, `ConfigService`, `PinoLogger` in unit tests — do not spin up full NestJS app
-- Coverage: `@vitest/coverage-v8`
-- Run: `pnpm test` (Turborepo pipeline, depends on `^build`)
-- Coverage run: `pnpm test:coverage` (runs `vitest --coverage` via Turborepo `test:coverage` task; artifact uploaded in CI — no numeric threshold gate yet)
-- Nested workspace `coverage/` dirs are gitignored (`.gitignore` fix landed `d1dda08`)
+### Build Output
 
-## Linting & Formatting
+Packages build via `tsdown` to:
+- `dist/index.mjs` — ESM bundle
+- `dist/index.d.mts` — TypeScript declarations
 
-| Command | What it does |
-|---|---|
-| `pnpm lint` | oxlint + depcruise:check across all packages |
-| `pnpm lint:fix` | oxlint auto-fix |
-| `pnpm format` | oxfmt write |
-| `pnpm format:check` | oxfmt check (CI) |
-| `pnpm typecheck` | tsc project references across all packages |
+### Turbo Typecheck Dependency
 
-Config: single root `oxlint.config.ts` (extends `@infra-x/code-quality` presets) — per-package overrides expressed via `overrides[].files` globs. Per-package `lint` script is `oxlint .`; root config is discovered via upward walk so IDE (oxc-vscode) and CLI stay in lockstep. Format scripts are scoped to `src/` (`oxfmt --check src` / `--write src`) to avoid scanning compiled `dist/` output.
-
-## Auth transport
-
-All access and refresh tokens MUST be sent as `Authorization: Bearer <jwt>`
-headers. Cookie-based session/refresh is FORBIDDEN until a CSRF guard ships
-(see `apps/api/src/main.ts` CORS block). Rationale: CORS allowlist with
-cookie auth + no CSRF protection allows any XSS-compromised allowed origin
-to forge state-changing requests against an authenticated session.
-
-Re-enabling `credentials: true` requires landing in the same PR:
-- CSRF token middleware (e.g. `csurf`) OR double-submit cookie scheme
-- `SameSite=Strict` on session/refresh cookies
-- Updated CORS preflight test coverage
-
-Enforcement: comment-and-doc only today. Mechanical lint/depcruise rule
-banning cookie APIs is deferred until the auth module lands (tracked in
-the foundation-hardening plan's red-team F14 row).
-
-## Supply chain
-
-- All catalog deps use caret ranges resolved by `pnpm-lock.yaml`. CI uses
-  `--frozen-lockfile`.
-- Public-scope private packages MUST be pinned to exact versions + listed
-  in `pnpm.overrides` to defend against dependency confusion via npm
-  scope hijacking. Current: `@infra-x/code-quality` (exact-version pinned, `d848254`).
-- CI runs two separate audit jobs: `pnpm audit --audit-level=high --prod` (production deps)
-  and `pnpm audit --audit-level=critical --dev` (dev deps). Failures block merge.
-- Postinstall scripts: only the allowlist in `pnpm.onlyBuiltDependencies`
-  may run install-time scripts. Adding an entry requires PR review.
-- Telemetry: Scarf disabled via `SCARF_ANALYTICS=false` + `DO_NOT_TRACK=1` env + `.npmrc`
-  `scarf-js = false`. Turbo telemetry disabled in CI workflow env.
-- GitHub Actions pinned to `@v4` tags (not SHAs). SHA pinning is deferred hardening — track
-  in future supply-chain pass.
-
-## Git & Commits
-
-- Conventional commits: `feat:`, `fix:`, `refactor:`, `test:`, `chore:` (not `docs:` for `.claude/` changes)
-- No AI references in commit messages
-- Do not commit `.env` files or secrets
-- Run `pnpm lint` before committing; run `pnpm test` before pushing
+`turbo.json` sets `typecheck.dependsOn: ["^build"]`. This ensures `apps/api` type-checks against each package's built `dist/*.d.mts`, not raw source. Run `pnpm build` once before `pnpm typecheck` in a clean workspace.

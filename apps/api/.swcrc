@@ -2,10 +2,11 @@
   "$schema": "https://swc.rs/schema.json",
   "sourceMaps": true,
   "module": {
-    "type": "commonjs"
+    "type": "es6",
+    "resolveFully": true
   },
   "jsc": {
-    "target": "es2023",
+    "target": "esnext",
     "parser": {
       "syntax": "typescript",
       "decorators": true,
@@ -15,7 +16,11 @@
       "legacyDecorator": true,
       "decoratorMetadata": true
     },
-    "keepClassNames": true
+    "keepClassNames": true,
+    "baseUrl": ".",
+    "paths": {
+      "@/*": ["src/*"]
+    }
   },
   "minify": false
 }

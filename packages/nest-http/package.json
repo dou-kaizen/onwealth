@@ -1,0 +1,73 @@
+{
+  "name": "@onwealth/nest-http",
+  "version": "1.0.0",
+  "files": [
+    "dist"
+  ],
+  "type": "module",
+  "main": "./dist/index.mjs",
+  "types": "./dist/index.d.mts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.mts",
+      "import": "./dist/index.mjs"
+    }
+  },
+  "scripts": {
+    "build": "tsdown",
+    "lint": "biome lint .",
+    "lint:fix": "biome lint --write .",
+    "format": "biome format --write .",
+    "format:check": "biome format .",
+    "check": "biome check .",
+    "check:fix": "biome check --write .",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "deps": "depcruise src --config .dependency-cruiser.mjs"
+  },
+  "devDependencies": {
+    "@nestjs/common": "catalog:",
+    "dependency-cruiser": "catalog:",
+    "@nestjs/config": "catalog:",
+    "@nestjs/core": "catalog:",
+    "@nestjs/platform-express": "catalog:",
+    "@nestjs/swagger": "catalog:",
+    "@nestjs/terminus": "catalog:",
+    "@nestjs/throttler": "catalog:",
+    "@onwealth/shared-kernel": "workspace:*",
+    "@scalar/nestjs-api-reference": "catalog:",
+    "@types/express": "catalog:",
+    "@types/node": "catalog:",
+    "@types/pg": "catalog:",
+    "class-transformer": "catalog:",
+    "class-validator": "catalog:",
+    "drizzle-orm": "catalog:",
+    "express": "^5.2.1",
+    "helmet": "catalog:",
+    "nestjs-cls": "catalog:",
+    "pg": "catalog:",
+    "rxjs": "catalog:",
+    "tsdown": "catalog:",
+    "typescript": "catalog:",
+    "vitest": "catalog:"
+  },
+  "peerDependencies": {
+    "@nestjs/common": "^11",
+    "@nestjs/config": "^4",
+    "@nestjs/core": "^11",
+    "@nestjs/platform-express": "^11",
+    "@nestjs/swagger": "^11",
+    "@nestjs/terminus": "^11",
+    "@nestjs/throttler": "^6",
+    "@onwealth/shared-kernel": "workspace:*",
+    "@scalar/nestjs-api-reference": "^1",
+    "class-transformer": "^0.5.1",
+    "class-validator": "^0.14.2",
+    "drizzle-orm": "0.44.7",
+    "express": "^5",
+    "helmet": "^8",
+    "nestjs-cls": "^6",
+    "pg": "^8.16.3",
+    "rxjs": "^7"
+  }
+}
