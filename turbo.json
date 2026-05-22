@@ -1,6 +1,7 @@
 {
   "$schema": "https://turborepo.dev/schema.json",
   "ui": "tui",
+  "globalDependencies": [".dependency-cruiser.base.mjs"],
   "tasks": {
     "build": {
       "dependsOn": ["^build"],
@@ -26,7 +27,14 @@
     "test": {
       "dependsOn": ["^build"],
       "outputs": ["coverage/**"],
-      "env": ["NODE_ENV", "DATABASE_URL", "REDIS_URL", "JWT_SECRET", "API_BASE_URL", "ALLOWED_ORIGINS"]
+      "env": [
+        "NODE_ENV",
+        "DATABASE_URL",
+        "REDIS_URL",
+        "JWT_SECRET",
+        "API_BASE_URL",
+        "ALLOWED_ORIGINS"
+      ]
     },
     "dev": {
       "dependsOn": ["^build"],

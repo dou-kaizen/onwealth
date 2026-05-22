@@ -1,13 +1,12 @@
+/**
+ * @onwealth/shared-kernel dependency rules — extends the root base config.
+ * Base supplies `no-circular` + cruise options; rule below guards this
+ * package's position as the lowest NestJS layer in the DAG.
+ */
 /** @type {import('dependency-cruiser').IConfiguration} */
 export default {
+  extends: '../../.dependency-cruiser.base.mjs',
   forbidden: [
-    {
-      name: 'no-circular',
-      severity: 'error',
-      comment: 'Circular dependencies break tooling and signal layering issues.',
-      from: {},
-      to: { circular: true },
-    },
     {
       name: 'shared-kernel-no-upstream',
       severity: 'error',
@@ -17,17 +16,4 @@ export default {
       to: { path: '(apps/api|packages/nest-http|@onwealth/nest-http)' },
     },
   ],
-  options: {
-    doNotFollow: { path: 'node_modules' },
-    includeOnly: '^src/',
-    tsConfig: { fileName: 'tsconfig.json' },
-    enhancedResolveOptions: {
-      exportsFields: ['exports'],
-      conditionNames: ['import', 'require', 'node', 'default', 'types'],
-      mainFields: ['main', 'types'],
-    },
-    reporterOptions: {
-      text: { highlightFocused: true },
-    },
-  },
 }

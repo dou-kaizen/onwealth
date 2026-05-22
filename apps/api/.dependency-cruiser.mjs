@@ -1,13 +1,12 @@
+/**
+ * apps/api dependency rules — extends the root base config.
+ * Base supplies `no-circular` + cruise options; rules below guard the
+ * in-module DDD layering and the post-extraction package boundaries.
+ */
 /** @type {import('dependency-cruiser').IConfiguration} */
 export default {
+  extends: '../../.dependency-cruiser.base.mjs',
   forbidden: [
-    {
-      name: 'no-circular',
-      severity: 'error',
-      comment: 'Circular dependencies break tooling and signal layering issues.',
-      from: {},
-      to: { circular: true },
-    },
     {
       name: 'no-cross-module',
       severity: 'error',
@@ -65,17 +64,4 @@ export default {
       to: { path: '^src/(filters|interceptors|middleware|health|logger)/' },
     },
   ],
-  options: {
-    doNotFollow: { path: 'node_modules' },
-    includeOnly: '^src/',
-    tsConfig: { fileName: 'tsconfig.json' },
-    enhancedResolveOptions: {
-      exportsFields: ['exports'],
-      conditionNames: ['import', 'require', 'node', 'default', 'types'],
-      mainFields: ['main', 'types'],
-    },
-    reporterOptions: {
-      text: { highlightFocused: true },
-    },
-  },
 }
