@@ -75,6 +75,12 @@ export class ETagMiddleware implements NestMiddleware {
       return originalJson(body)
     }
 
+    // [Phase 1 C4] Never apply ETag/Cache-Control to error responses — ProblemDetails
+    // bodies carry request_id/trace_id and must not be cached by browsers or CDNs.
+    if (res.statusCode >= 400) {
+      return originalJson(body)
+    }
+
     // If the business layer has already set an ETag (e.g. optimistic lock version), reuse it;
     // otherwise generate a content hash
     const existingETag = res.getHeader('ETag') as string | undefined
@@ -83,9 +89,10 @@ export class ETagMiddleware implements NestMiddleware {
       res.setHeader('ETag', etag)
     }
 
-    // Set Cache-Control header (adjust as needed)
+    // [Phase 1 C4] Respect any Cache-Control already set by the controller / @Header().
+    // Default to no-store (Phase 5 M5 will keep this default) — opt-in caching only.
     if (!res.getHeader('Cache-Control')) {
-      res.setHeader('Cache-Control', 'private, max-age=3600') // private: CDN must not cache user-specific responses
+      res.setHeader('Cache-Control', 'no-store')
     }
 
     // Check If-None-Match header

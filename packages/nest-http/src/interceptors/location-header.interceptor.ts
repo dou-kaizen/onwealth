@@ -1,8 +1,10 @@
 import type { CallHandler, ExecutionContext, NestInterceptor } from '@nestjs/common'
-import { Injectable } from '@nestjs/common'
+import { Inject, Injectable } from '@nestjs/common'
+import type { ConfigType } from '@nestjs/config'
 import type { Request, Response } from 'express'
 import type { Observable } from 'rxjs'
 import { tap } from 'rxjs/operators'
+import { httpConfig } from '../config/http.config.js'
 
 /**
  * Location header interceptor
@@ -15,25 +17,17 @@ import { tap } from 'rxjs/operators'
  * - The Location header points to the URI of the newly created resource
  * - Automatically constructs the URI from the id field in the response data
  *
- * RFC 9110:
- * > "The origin server SHOULD send a Location header field in the response
- * > containing a URI reference for the primary resource created."
- *
- * Use cases:
- * - Successful POST resource creation (returns 201)
- * - Response data contains an id field
- *
- * @example
- * // Usage in Controller
- * @Post()
- * @HttpCode(HttpStatus.CREATED)
- * async create(@Body() dto: CreateDto) {
- *   return this.service.create(dto);
- *   // Location header added automatically: /api/users/{id}
- * }
+ * Base URL composition (M6): uses `httpConfig.apiBaseUrl` as the canonical
+ * external origin instead of `request.protocol` / `request.get('host')`, which
+ * are attacker-influenced behind a reverse proxy.
  */
 @Injectable()
 export class LocationHeaderInterceptor implements NestInterceptor {
+  constructor(
+    @Inject(httpConfig.KEY)
+    private readonly http: ConfigType<typeof httpConfig>,
+  ) {}
+
   intercept(context: ExecutionContext, next: CallHandler): Observable<unknown> {
     return next.handle().pipe(
       tap((data: unknown) => {
@@ -53,31 +47,31 @@ export class LocationHeaderInterceptor implements NestInterceptor {
           return
         }
         const rawId = (data as Record<string, unknown>).id
-        if (rawId === null || rawId === undefined || (typeof rawId !== 'string' && typeof rawId !== 'number')) {
+        if (
+          rawId === null ||
+          rawId === undefined ||
+          (typeof rawId !== 'string' && typeof rawId !== 'number')
+        ) {
           return
         }
         const resourceId = String(rawId)
 
-        // Build Location header; buildResourcePath applies encodeURIComponent on the id
-        const baseUrl = `${request.protocol}://${request.get('host')}`
+        // Compose absolute base from configured API_BASE_URL.
+        const origin = new URL(this.http.apiBaseUrl).origin
         const resourcePath = this.buildResourcePath(request.path, resourceId)
 
-        response.setHeader('Location', `${baseUrl}${resourcePath}`)
+        response.setHeader('Location', `${origin}${resourcePath}`)
       }),
     )
   }
 
   /**
-   * Build the resource path
+   * Build the resource path.
    *
-   * @param requestPath - Request path (e.g. /api/users)
-   * @param resourceId - Resource ID
-   * @returns full resource path (e.g. /api/users/usr_123)
+   * encodeURIComponent prevents path traversal via `../` or special chars in the id.
    */
   private buildResourcePath(requestPath: string, resourceId: string): string {
-    // Remove trailing slash
     const cleanPath = requestPath.replace(/\/$/, '')
-    // encodeURIComponent prevents path traversal via ../ or special chars in the id
     const safeId = encodeURIComponent(resourceId)
     return `${cleanPath}/${safeId}`
   }

@@ -50,8 +50,39 @@ export async function configureHttpApp(
   const { testMode = false } = options
 
   // Security hardening: Helmet (adds HSTS, X-Content-Type-Options, X-Frame-Options, etc.)
-  // CSP + COEP disabled — JSON API, no HTML served; COEP not needed for APIs.
+  // CSP + COEP disabled globally — JSON API serves no HTML; COEP not needed for APIs.
   app.use(helmet({ contentSecurityPolicy: false, crossOriginEmbedderPolicy: false }))
+
+  // [M8] Scoped CSP for HTML doc routes only. SwaggerUI and Scalar both render
+  // HTML with inline scripts/styles for their UI shell; locking these down
+  // requires forking the bundles to add nonces (not on roadmap). Defense-in-depth
+  // is layered via the conservative directives below — they shut down
+  // clickjacking, plugin injection, and form-action redirects without breaking
+  // the doc UIs. `'unsafe-inline'` on script-src is an accepted residual risk
+  // documented in `plans/260524-1613-codebase-review-findings-fix/` (M8); the
+  // Swagger `persistAuthorization: true` token stays in localStorage, so a
+  // future-Scalar XSS could still exfiltrate it. Re-evaluate when either UI
+  // adds first-class nonce support.
+  app.use(
+    ['/swagger', '/swagger/{*path}', '/docs', '/docs/{*path}'],
+    helmet({
+      contentSecurityPolicy: {
+        useDefaults: false,
+        directives: {
+          defaultSrc: ["'self'"],
+          scriptSrc: ["'self'", "'unsafe-inline'", 'https://cdn.jsdelivr.net'],
+          styleSrc: ["'self'", "'unsafe-inline'", 'https://cdn.jsdelivr.net'],
+          imgSrc: ["'self'", 'data:', 'https://cdn.jsdelivr.net'],
+          fontSrc: ["'self'", 'data:', 'https://cdn.jsdelivr.net'],
+          connectSrc: ["'self'"],
+          frameAncestors: ["'none'"],
+          objectSrc: ["'none'"],
+          baseUri: ["'self'"],
+          formAction: ["'self'"],
+        },
+      },
+    }),
+  )
 
   // Trust the first proxy hop so ThrottlerGuard rates by real client IP, not LB IP.
   app.set('trust proxy', 1)
@@ -104,11 +135,12 @@ export async function configureHttpApp(
     // 2. Timeout control (30 seconds)
     new TimeoutInterceptor(REQUEST_TIMEOUT_MS),
 
-    // 3. Location header (201 Created)
-    new LocationHeaderInterceptor(),
+    // 3. Location header (201 Created). Retrieved from the container so its
+    //    `@Inject(httpConfig.KEY)` resolves (cannot be `new`-instantiated).
+    app.get(LocationHeaderInterceptor),
 
-    // 4. Link header (pagination links)
-    new LinkHeaderInterceptor(),
+    // 4. Link header (pagination links). Same DI rationale as above.
+    app.get(LinkHeaderInterceptor),
 
     // 5. Response formatting (executed last)
     new TransformInterceptor(app.get(Reflector)),
