@@ -5,6 +5,21 @@ import { APP_GUARD } from '@nestjs/core'
 import { EventEmitterModule } from '@nestjs/event-emitter'
 import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler'
 import {
+  AllExceptionsFilter,
+  CorrelationIdInterceptor,
+  createClsConfig,
+  ETagMiddleware,
+  HealthModule,
+  httpConfig,
+  LinkHeaderInterceptor,
+  LocationHeaderInterceptor,
+  ProblemDetailsFilter,
+  RequestContextInterceptor,
+  ThrottlerExceptionFilter,
+  TraceContextInterceptor,
+  throttleConfig,
+} from '@onwealth/nest-http'
+import {
   appConfig,
   CacheModule,
   DomainEventsModule,
@@ -14,19 +29,6 @@ import {
   redisConfig,
   validateEnv,
 } from '@onwealth/shared-kernel'
-import {
-  AllExceptionsFilter,
-  CorrelationIdInterceptor,
-  createClsConfig,
-  ETagMiddleware,
-  HealthModule,
-  httpConfig,
-  ProblemDetailsFilter,
-  RequestContextInterceptor,
-  throttleConfig,
-  ThrottlerExceptionFilter,
-  TraceContextInterceptor,
-} from '@onwealth/nest-http'
 import { ClsModule } from 'nestjs-cls'
 
 /**
@@ -86,6 +88,13 @@ const LOG_EXCLUDED_ROUTES = [
     HealthModule,
     CacheModule,
   ],
+  // NOTE: these filters/interceptors are registered as plain providers here so
+  // their constructor `@Inject(...)` dependencies (httpConfig, ConfigService, etc.)
+  // resolve via the Nest container. The global activation is wired in
+  // `configureHttpApp()` via `app.useGlobalFilters`/`app.useGlobalInterceptors`
+  // pulling each provider from `app.get(Class)`. Skipping `configureHttpApp` —
+  // e.g. a test that bypasses it — silently disables global activation. The
+  // regression gate is `apps/api/src/__tests__/integration/global-pipeline.spec.ts`.
   providers: [
     { provide: APP_GUARD, useClass: ThrottlerGuard },
     AllExceptionsFilter,
@@ -94,6 +103,8 @@ const LOG_EXCLUDED_ROUTES = [
     RequestContextInterceptor,
     CorrelationIdInterceptor,
     TraceContextInterceptor,
+    LinkHeaderInterceptor,
+    LocationHeaderInterceptor,
   ],
 })
 export class AppModule implements NestModule {
