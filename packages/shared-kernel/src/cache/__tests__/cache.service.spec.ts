@@ -20,10 +20,16 @@ function makeMockCacheManager() {
     set: vi.fn(async (key: string, value: unknown) => {
       store.set(key, value)
     }),
-    del: vi.fn(async (key: string) => { store.delete(key) }),
-    clear: vi.fn(async () => { store.clear() }),
+    del: vi.fn(async (key: string) => {
+      store.delete(key)
+    }),
+    clear: vi.fn(async () => {
+      store.clear()
+    }),
     // cache-manager v5 has additional methods; these are the ones CacheService uses
-    reset: vi.fn(async () => { store.clear() }),
+    reset: vi.fn(async () => {
+      store.clear()
+    }),
   }
 }
 
@@ -96,6 +102,27 @@ describe('CacheService.wrap', () => {
     const result = await service.wrap('k', fn)
 
     expect(result).toBe('value')
+    expect(fn).toHaveBeenCalledTimes(1)
+  })
+
+  // Sentinel-collision case: a legit value that happens to look like the
+  // internal MISS_WRAPPER sentinel (`{ __sk: 'undefined-sentinel-v1' }`).
+  // Currently the implementation tells these apart by referential identity on
+  // the cached object's __sk property — any caller-supplied object with the
+  // same __sk string will be unwrapped to `undefined`. This test documents
+  // that known limitation so we catch a regression that broadens or narrows
+  // the sentinel-detection rule.
+  it('sentinel collision: caller-supplied { __sk: "undefined-sentinel-v1" } is unwrapped to undefined', async () => {
+    const fn = vi.fn(async () => ({ __sk: 'undefined-sentinel-v1' }))
+    const first = await service.wrap('k', fn)
+    const second = await service.wrap('k', fn)
+
+    // First call: fn returns the colliding shape, gets stored verbatim
+    // (it is NOT === to the frozen UNDEFINED_RESULT), and returned to caller.
+    expect(first).toEqual({ __sk: 'undefined-sentinel-v1' })
+    // Second call: cacheManager.get returns the stored object, isUndefinedSentinel
+    // matches by __sk equality → unwrapped to undefined. Document this.
+    expect(second).toBeUndefined()
     expect(fn).toHaveBeenCalledTimes(1)
   })
 })

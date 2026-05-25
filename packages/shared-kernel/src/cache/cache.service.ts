@@ -21,9 +21,12 @@ import type { CachePort } from './cache.port.js'
 const UNDEFINED_RESULT = Object.freeze({ __sk: 'undefined-sentinel-v1' })
 
 function isUndefinedSentinel(raw: unknown): boolean {
+  // Object.hasOwn guard: prototype-chain hits on `__sk` (e.g. from a maliciously
+  // polluted Object.prototype) must NOT be mistaken for our sentinel.
   return (
     typeof raw === 'object' &&
     raw !== null &&
+    Object.hasOwn(raw, '__sk') &&
     (raw as Record<string, unknown>).__sk === 'undefined-sentinel-v1'
   )
 }
