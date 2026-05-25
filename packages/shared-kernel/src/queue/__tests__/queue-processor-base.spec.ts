@@ -40,6 +40,20 @@ describe('_evaluateJobFailure', () => {
     expect(result.context.isFatal).toBe(true)
   })
 
+  it('treats FatalQueueException as terminal even on non-last attempt (UnrecoverableError short-circuit)', () => {
+    // BullMQ wraps UnrecoverableError → no further retries, so attemptsMade=1 of 5
+    // is effectively the last attempt. Without isFatal in isLastAttempt, this would
+    // log the WARN retry-level branch and incident triage would miss the terminal.
+    const result = _evaluateJobFailure(
+      makeJob({ attemptsMade: 1, opts: { attempts: 5 } }),
+      new FatalQueueException('hard-stop'),
+    )
+    expect(result.level).toBe('error')
+    expect(result.message).toBe('Queue job failed permanently')
+    expect(result.context.isFatal).toBe(true)
+    expect(result.context.attemptsMade).toBe(1)
+  })
+
   it('sets isFatal=false for a soft QueueException on the last attempt', () => {
     const result = _evaluateJobFailure(
       makeJob({ attemptsMade: 2, opts: { attempts: 3 } }),

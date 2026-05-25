@@ -270,7 +270,43 @@ process.on('unhandledRejection' | 'uncaughtException')
        └─ setTimeout(5000).unref()  ← hard-stop fallback if drain stalls
 ```
 
-`DrizzleService.onModuleDestroy()` ends the pg Pool. BullMQ workers close on NestJS shutdown hooks. The 5 s hard-stop prevents zombie processes in container environments where the orchestrator sends SIGKILL after its own timeout.
+`DrizzleService.onModuleDestroy()` ends the pg Pool. `QueueProcessorBase.onModuleDestroy()` calls `worker.close(false)` — `false` means "wait for active jobs" (note: BullMQ's `close(force)` param is inverted; `true` skips the wait) — with a 5000 ms timeout race before hard exit. The 5 s hard-stop prevents zombie processes in container environments where the orchestrator sends SIGKILL after its own timeout.
+
+---
+
+## Queue Architecture
+
+### Connection Model
+
+`QueueModule` registers a single shared Redis connection per role, keyed by `QueueConfigKey`:
+
+```
+QueueModule [@Global()]
+  ├─ producer connection  (configKey: 'queue')           ← BullMQ Queue instances
+  └─ processor connection (configKey: 'queue-processor') ← BullMQ Worker instances
+```
+
+Both connections resolve from `QUEUE_REDIS_URL ?? REDIS_URL`. Queue Redis is fully separate from the cache `@keyv/redis` client — no shared connection. `defaultJobOptions` set globally: `removeOnComplete: { count: 1000 }`, `removeOnFail: { count: 5000 }` (prevents Redis key accumulation in production).
+
+### Failure & Retry Model
+
+```
+job attempt N fails
+  ├─ error instanceof FatalQueueException → moveToFailed immediately (no more retries)
+  └─ else → BullMQ retry backoff until maxAttempts exhausted → moveToFailed
+```
+
+`FatalQueueException` short-circuits retry logic regardless of attempt count. Legacy `error.isFatal` flag is dropped — use `FatalQueueException` subclass instead.
+
+### DLQ Approach
+
+BullMQ's native `failed` set is the dead-letter queue. No separate queue or topic needed.
+
+`QueueDlqHelper` provides:
+- `getFailedJobs(queue)` → `FailedJobSummary[]` — paginated inspection
+- `retryFailedJob(queue, jobId)` — moves job back to `waiting`
+
+Migration path for future alerting: instrument `QueueProcessorBase.onFailed` with a metrics hook (deferred to Phase B).
 
 ---
 

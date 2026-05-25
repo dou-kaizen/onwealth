@@ -83,16 +83,18 @@ Currently empty (business modules land in future milestones). Reserved path: `sr
 | `logger/` | `logger.module.ts`, `logger.config.ts`, `redaction.config.ts` | nestjs-pino `LoggerModule`; sensitive field redaction |
 | `queue/` | `queue.module.ts`, `queue-processor.base.ts`, `queue.decorator.ts`, `queue.config.ts`, `queue.constant.ts`, `queue.enum.ts`, `queue.exception.ts`, `queue-job-result.type.ts` | BullMQ abstraction — scaffold only (see Queue Scaffold below) |
 
-### Queue Scaffold (`packages/shared-kernel/src/queue/`)
+### Queue (`packages/shared-kernel/src/queue/`)
 
-BullMQ abstraction layer — scaffold only, no concrete queues registered. `apps/api` does NOT import `QueueModule` until a concrete queue is introduced.
+BullMQ abstraction layer — production-hardened scaffold, no concrete queues registered. `apps/api` does NOT import `QueueModule` until a concrete queue is introduced.
 
-- **`QueueModule`** — `@Global()` static module; registers two named BullMQ root connections (`queue` producer key, `queue-processor` worker key), self-loads `queueConfig` via `ConfigModule.forFeature`.
-- **`QueueProcessorBase`** — abstract `WorkerHost` subclass; `onFailed` emits structured NestJS `Logger` output. Failure-log branching extracted to the pure `evaluateJobFailure(job, error)`.
-- **`QueueProcessor`** — decorator wrapping `@Processor` with the shared processor connection key. No `process.env` reads at decoration time.
-- **`QueueException`** — domain error with optional `isFatal` flag for dead-letter routing.
+- **`QueueModule`** — `@Global()` static module; registers two named BullMQ root connections (`queue` producer key, `queue-processor` worker key), self-loads `queueConfig` via `ConfigModule.forFeature`. `defaultJobOptions`: `removeOnComplete: { count: 1000 }`, `removeOnFail: { count: 5000 }`.
+- **`QueueProcessorBase`** — abstract `WorkerHost` subclass; `onFailed` emits structured NestJS `Logger` output. Failure-log branching in pure `_evaluateJobFailure(job, error)`. `onModuleDestroy` drains via `worker.close(false)` (waits for active jobs) with 5000 ms timeout race. `FatalQueueException` is treated as terminal regardless of attempt count (`instanceof` check — legacy `error.isFatal` dropped).
+- **`QueueProcessor`** — decorator wrapping `@Processor` with the shared processor connection key; JSDoc documents `limiter` rate-limit option with example.
+- **`FatalQueueException`** — subclass of `QueueException`; signals dead-letter routing without exhausting retries.
+- **`QueueDlqHelper`** — `getFailedJobs(queue)` + `retryFailedJob(queue, jobId)` + `FailedJobSummary` DTO. Pure delegation over BullMQ native `failed` set. Exported from barrel.
 - **`QueueJobResult`** — return type contract for all processors. **`EnumQueuePriority`** — job priority levels.
 - **`queueConfig`** — `registerAs('queue', ...)` namespace; resolves `QUEUE_REDIS_URL ?? REDIS_URL`. Redis connection for queues is kept fully separate from the cache `@keyv/redis` client.
+- **`queue/README.md`** — Quick Start, Gotchas (4 production traps), Production Checklist (10 items), DLQ migration sketch.
 
 ### __tests__/ — Specs (packages/shared-kernel)
 
@@ -103,7 +105,12 @@ BullMQ abstraction layer — scaffold only, no concrete queues registered. `apps
 | `config/__tests__/env-pool-validation.spec.ts` | Env schema validation unit tests (6 cases) |
 | `queue/__tests__/queue.exception.spec.ts` | QueueException unit tests (3 cases) |
 | `queue/__tests__/queue.config.spec.ts` | queueEnvSchema parsing + prod-TLS guard (10 cases) |
-| `queue/__tests__/queue-processor-base.spec.ts` | evaluateJobFailure pure-function tests (6 cases) |
+| `queue/__tests__/queue-processor-base.spec.ts` | `_evaluateJobFailure` pure-function tests including `FatalQueueException` terminal path (7 cases) |
+| `queue/__tests__/queue-processor-base.integration.spec.ts` | 5 integration scenarios via `@testcontainers/redis` (redis:7.4-alpine): success, retry-exhausted, FatalQueueException short-circuit, stalled, graceful drain |
+| `queue/__tests__/queue-dlq-helper.integration.spec.ts` | 4 integration scenarios for `QueueDlqHelper` |
+| `queue/__tests__/fixtures/echo-processor.ts` | `EchoProcessor` + `EchoStalledProcessor` test fixtures |
+
+Integration test split: `vitest.config.integration.ts` in `packages/shared-kernel` runs testcontainer-backed specs separately from unit tests. New devDep: `@testcontainers/redis@12.x`.
 
 Build: `tsdown` → `dist/index.mjs` + `dist/index.d.mts`. All NestJS + infra deps are `peerDependencies`.
 

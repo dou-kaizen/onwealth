@@ -74,6 +74,29 @@ Ref: `plans/260522-1522-bullmq-queue-scaffold/`
 
 ---
 
+## Queue Production Hardening — Phase A COMPLETE
+
+Production-ready hardening of the BullMQ queue scaffold in `packages/shared-kernel`.
+
+| Deliverable | Status |
+|-------------|--------|
+| `defaultJobOptions` (removeOnComplete/Fail counts) in `QueueModule` | Done |
+| `FatalQueueException` terminal path in `_evaluateJobFailure` (drops legacy `error.isFatal`) | Done |
+| `QueueProcessorBase.onModuleDestroy` — graceful drain via `worker.close(false)` + 5 s timeout race | Done |
+| `QueueDlqHelper` — `getFailedJobs` + `retryFailedJob` + `FailedJobSummary` DTO | Done |
+| `queue/README.md` — Quick Start, Gotchas, Production Checklist, DLQ migration sketch | Done |
+| `@QueueProcessor` JSDoc for `limiter` rate-limit option | Done |
+| Integration test suite (5 processor + 4 DLQ scenarios) via `@testcontainers/redis` | Done |
+| `vitest.config.integration.ts` split for testcontainer-backed specs | Done |
+
+84 unit + 9 integration tests pass. typecheck / lint / build / dep-cruiser green. `apps/api` still does NOT import `QueueModule`.
+
+**Phase B (deferred):** metrics hook in `onFailed`, comment trim pass, alert threshold configuration.
+
+Ref: `plans/260525-1515-queue-production-hardening/`
+
+---
+
 ## Upcoming Milestones
 
 ### M1 — Cleanup & Reconciliation — Substantially Complete

@@ -1,5 +1,5 @@
 import type { Job } from 'bullmq'
-import { FatalQueueException, QueueException } from './queue.exception.js'
+import { FatalQueueException } from './queue.exception.js'
 
 /**
  * @internal
@@ -36,9 +36,12 @@ export interface JobFailureLog {
  */
 export function _evaluateJobFailure(job: Job, error: Error): JobFailureLog {
   const attempts = Math.max(job.opts.attempts ?? 1, 1)
-  const isLastAttempt = job.attemptsMade >= attempts - 1
-  const isFatal =
-    error instanceof FatalQueueException || (error instanceof QueueException && error.isFatal)
+  const isFatal = error instanceof FatalQueueException
+  // A FatalQueueException short-circuits BullMQ's retry loop (it extends
+  // UnrecoverableError), so the current attempt IS the last one regardless of
+  // `attempts`. Without this OR, a fatal failure on attempt 1 of 5 would emit
+  // the retry-level WARN and incident triage would miss the terminal signal.
+  const isLastAttempt = isFatal || job.attemptsMade >= attempts - 1
   const errorName = (error as { name?: string }).name ?? error.constructor.name
 
   if (isLastAttempt) {
