@@ -1,10 +1,12 @@
 import { randomUUID } from 'node:crypto'
+import { sanitizeHeaderValue } from '@onwealth/shared-kernel'
 import type { Request } from 'express'
 import type { ClsModuleOptions, ClsService } from 'nestjs-cls'
 import { parseTraceparent } from '../interceptors/trace-context.util.js'
 
-// Allowlist regex to block HTTP response splitting and log injection
-// via attacker-controlled X-Request-Id / X-Correlation-Id headers.
+// Strict allowlist regex for ID-style headers (X-Request-Id / X-Correlation-Id).
+// More restrictive than the shared sanitizer because IDs are used as log
+// correlation keys — only word chars + hyphen survive.
 const SAFE_ID_RE = /^[\w-]{1,128}$/
 
 function sanitizeClientId(value: string | undefined): string | undefined {
@@ -43,8 +45,11 @@ export function createClsConfig(): ClsModuleOptions {
  * Extracts and stores various tracing information from request headers
  */
 function setupClsContext(cls: ClsService, request: Request) {
-  // Store basic request information
-  cls.set('userAgent', request.headers['user-agent'])
+  // Store basic request information.
+  // userAgent is attacker-controlled — sanitize before storage to block log injection
+  // (CR/LF/TAB/NUL/ANSI escape sequences from User-Agent into log shipper).
+  const rawUserAgent = request.headers['user-agent']
+  cls.set('userAgent', rawUserAgent ? sanitizeHeaderValue(rawUserAgent) : undefined)
   cls.set('ip', request.ip)
   cls.set('method', request.method)
   cls.set('url', request.url)
@@ -65,11 +70,12 @@ function setupClsContext(cls: ClsService, request: Request) {
     }
   }
 
-  // Store Tracestate (optional distributed tracing state)
+  // Store Tracestate (optional distributed tracing state).
   // W3C Trace Context §3.3.2 mandates a 512-byte maximum for the tracestate header.
-  // Truncate at the spec limit to reject non-conformant oversized values.
+  // [Phase 2 H2] Sanitize after the 512-byte truncate to block log injection from
+  // attacker-controlled CR/LF/TAB/NUL/ANSI in the tracestate value.
   const tracestate = request.headers.tracestate as string
   if (tracestate) {
-    cls.set('tracestate', tracestate.slice(0, 512))
+    cls.set('tracestate', sanitizeHeaderValue(tracestate.slice(0, 512)))
   }
 }

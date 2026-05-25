@@ -53,7 +53,7 @@ export class ProblemDetailsFilter implements ExceptionFilter {
 
     // Build Problem Details response
     const errorPayload = this.buildErrorPayload(
-      exceptionResponse as string | Record<string, unknown>,
+      exceptionResponse as string | Record<string, unknown> | unknown[],
       exception,
       status,
     )
@@ -154,7 +154,7 @@ export class ProblemDetailsFilter implements ExceptionFilter {
    * 3. Fallback → code/detail at top level from fallback map
    */
   private buildErrorPayload(
-    exceptionResponse: string | Record<string, unknown>,
+    exceptionResponse: string | Record<string, unknown> | unknown[],
     exception: HttpException,
     status: number,
   ): Pick<ProblemDetailsDto, 'code' | 'detail' | 'errors'> {
@@ -170,7 +170,18 @@ export class ProblemDetailsFilter implements ExceptionFilter {
       }
     }
 
-    // 2. Business error with explicit code
+    // 2. [Phase 2 H4] Array-shape exception body (`new BadRequestException(['a','b'])`).
+    // Without this branch, `'code' in exceptionResponse` returns false on arrays and
+    // the payload is silently dropped — leaving the client with only `exception.message`.
+    if (Array.isArray(exceptionResponse)) {
+      return {
+        code: status >= 500 ? 'INTERNAL_SERVER_ERROR' : 'BAD_REQUEST',
+        detail: exception.message,
+        errors: exceptionResponse.map(String),
+      }
+    }
+
+    // 3. Business error with explicit code
     if (typeof exceptionResponse === 'object' && 'code' in exceptionResponse) {
       const code = exceptionResponse.code as string
       const msg = exceptionResponse.message
@@ -178,7 +189,7 @@ export class ProblemDetailsFilter implements ExceptionFilter {
       return { code, detail }
     }
 
-    // 3. Fallback: no explicit code
+    // 4. Fallback: no explicit code
     const detail = typeof exceptionResponse === 'string' ? exceptionResponse : exception.message
     const fallbackCodeMap: Record<number, string> = {
       401: 'UNAUTHORIZED',
@@ -198,10 +209,12 @@ export class ProblemDetailsFilter implements ExceptionFilter {
    * Converts class-validator error messages into a structured array of field-level errors
    */
   private extractValidationErrors(
-    exceptionResponse: string | Record<string, unknown>,
+    exceptionResponse: string | Record<string, unknown> | unknown[],
   ): FieldError[] | undefined {
     if (
       typeof exceptionResponse !== 'object' ||
+      exceptionResponse === null ||
+      Array.isArray(exceptionResponse) ||
       !('message' in exceptionResponse) ||
       !Array.isArray(exceptionResponse.message)
     ) {

@@ -1,4 +1,4 @@
-import { Controller, Get, Header, ServiceUnavailableException } from '@nestjs/common'
+import { Controller, Get, Header, Logger, ServiceUnavailableException } from '@nestjs/common'
 import { ConfigService } from '@nestjs/config'
 import { ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger'
 import type { HealthIndicatorFunction } from '@nestjs/terminus'
@@ -39,6 +39,8 @@ type HealthEntry = { status: 'up' | 'down'; message: string }
 @ApiTags('health')
 @SkipThrottle()
 export class HealthController {
+  private readonly logger = new Logger(HealthController.name)
+
   constructor(
     private readonly health: HealthCheckService,
     private readonly drizzle: DrizzleHealthIndicator,
@@ -160,12 +162,16 @@ export class HealthController {
       const environment: Env['NODE_ENV'] = this.config.get('NODE_ENV')
       return { environment, ...details }
     } catch (error) {
-      if (error instanceof ServiceUnavailableException) {
-        // Static aggregate message — no per-component concatenation that could
-        // surface raw infra error strings to unauthenticated callers.
-        throw new ServiceUnavailableException('One or more components unhealthy')
-      }
-      throw error
+      // Log internally with errorName ONLY — error.message may embed infra topology
+      // (e.g. `ECONNREFUSED redis-prod-primary:6379` from HealthCheckError wrapping),
+      // and log shippers downstream still see it. Never log .message or .stack here.
+      this.logger.warn('health check failed', {
+        errorName: (error as { constructor?: { name?: string } })?.constructor?.name ?? 'Unknown',
+      })
+      // Static aggregate response — never leaks per-component raw error strings to
+      // unauthenticated callers. Always re-throw as ServiceUnavailableException so
+      // the global filter renders a sanitized Problem Details body.
+      throw new ServiceUnavailableException('One or more components unhealthy')
     }
   }
 }

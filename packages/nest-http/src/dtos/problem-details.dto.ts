@@ -138,7 +138,9 @@ export class ProblemDetailsDto {
 
   @ApiPropertyOptional({
     description:
-      'Field-level error details (validation errors only; absent for business/system errors)',
+      'Field-level error details (validation errors only; absent for business/system errors). ' +
+      'May also be a plain string[] when the controller threw `new BadRequestException([...])` ' +
+      'with raw messages instead of a structured class-validator payload (RFC 9457 §3.2 extension).',
     type: [FieldError],
     example: [
       {
@@ -149,5 +151,5 @@ export class ProblemDetailsDto {
       },
     ],
   })
-  errors?: FieldError[]
+  errors?: FieldError[] | string[]
 }

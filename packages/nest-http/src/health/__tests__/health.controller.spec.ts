@@ -224,9 +224,14 @@ describe('HealthController', () => {
       }
     })
 
-    it('re-throws non-ServiceUnavailableException errors unchanged', async () => {
+    it('[M10] sanitizes ANY thrown error into a static ServiceUnavailableException', async () => {
+      // M10 (Phase 5): the catch-all branch must rewrite every non-503 thrown
+      // error into a ServiceUnavailableException with the static aggregate
+      // message — error.message may embed infra topology (e.g.
+      // `ECONNREFUSED redis-prod-primary:6379`) and the response goes to the
+      // unauthenticated `/health` endpoint.
       const health = {
-        check: vi.fn().mockRejectedValue(new Error('Unexpected internal error')),
+        check: vi.fn().mockRejectedValue(new Error('ECONNREFUSED redis-prod-primary:6379')),
       } as unknown as HealthCheckService
       const controller = new HealthController(
         health,
@@ -237,7 +242,17 @@ describe('HealthController', () => {
         makeConfig(),
       )
 
-      await expect(controller.detailed()).rejects.toThrow('Unexpected internal error')
+      try {
+        await controller.detailed()
+        throw new Error('expected detailed() to throw')
+      } catch (err) {
+        expect(err).toBeInstanceOf(ServiceUnavailableException)
+        const response = (err as ServiceUnavailableException).getResponse() as { message: string }
+        expect(response.message).toBe('One or more components unhealthy')
+        // Static message must NOT contain the raw infra string.
+        expect(response.message).not.toContain('ECONNREFUSED')
+        expect(response.message).not.toContain('redis-prod-primary')
+      }
     })
   })
 })
