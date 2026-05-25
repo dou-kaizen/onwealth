@@ -79,6 +79,7 @@ jobs:
 
   migration-smoke:
     name: Migration Smoke Test
+    needs: [ci]
     runs-on: ubuntu-latest
 
     services:

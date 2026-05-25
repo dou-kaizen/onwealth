@@ -38,7 +38,6 @@
     "@nestjs/terminus": "catalog:",
     "@nestjs/throttler": "catalog:",
     "@scalar/nestjs-api-reference": "catalog:",
-    "@onwealth/database": "workspace:*",
     "@onwealth/nest-http": "workspace:*",
     "@onwealth/shared-kernel": "workspace:*",
     "class-transformer": "catalog:",

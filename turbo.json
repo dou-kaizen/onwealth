@@ -10,14 +10,11 @@
     "typecheck": {
       "dependsOn": ["^build"]
     },
-    "lint": {
-      "dependsOn": ["^build"]
-    },
+    "lint": {},
     "deps": {
       "dependsOn": ["^build"]
     },
     "lint:fix": {
-      "dependsOn": ["^build"],
       "cache": false
     },
     "format": {
@@ -33,7 +30,9 @@
         "REDIS_URL",
         "JWT_SECRET",
         "API_BASE_URL",
-        "ALLOWED_ORIGINS"
+        "ALLOWED_ORIGINS",
+        "THROTTLE_TTL",
+        "THROTTLE_LIMIT"
       ]
     },
     "dev": {
