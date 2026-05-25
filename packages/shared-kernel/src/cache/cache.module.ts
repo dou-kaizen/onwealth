@@ -23,7 +23,11 @@ import { CacheService } from './cache.service.js'
     // imports: [ConfigModule] ensures redisConfig.KEY resolves when CacheModule
     // is bootstrapped standalone. NestJS dedupes if ConfigModule is already global.
     NestCacheModule.registerAsync({
-      imports: [ConfigModule],
+      // `ConfigModule.forFeature(redisConfig)` registers the typed factory locally
+      // so `redisConfig.KEY` always resolves regardless of host-app wiring —
+      // matches the QueueModule pattern. NestJS dedupes if the host already
+      // registered the same factory globally.
+      imports: [ConfigModule.forFeature(redisConfig)],
       useFactory: (cfg: ConfigType<typeof redisConfig>) => ({
         stores: [new KeyvRedis(cfg.url)],
         ttl: cfg.ttl * 1000,

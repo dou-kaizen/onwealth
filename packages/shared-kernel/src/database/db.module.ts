@@ -29,10 +29,11 @@ export class DrizzleModule {
   static forRoot(): DynamicModule {
     return {
       module: DrizzleModule,
-      // ConfigModule ensures databaseConfig.KEY resolves when DrizzleModule is
-      // bootstrapped standalone (e.g. integration tests). If ConfigModule is
-      // already global in the host app, NestJS dedupes silently — no side effect.
-      imports: [ConfigModule],
+      // `ConfigModule.forFeature(databaseConfig)` registers the typed factory
+      // locally so `databaseConfig.KEY` always resolves — matches QueueModule
+      // pattern. NestJS dedupes if the host already registered the same factory
+      // globally, so this is safe to use under AppModule too.
+      imports: [ConfigModule.forFeature(databaseConfig)],
       providers: [
         {
           provide: DrizzleService,
