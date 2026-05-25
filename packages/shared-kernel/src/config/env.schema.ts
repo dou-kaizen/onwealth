@@ -103,12 +103,15 @@ export const envObjectSchema = z.object({
   // No default: a wrong URL would produce type URIs pointing to an external domain.
   API_BASE_URL: z.url('API_BASE_URL must be a valid URL'),
 
-  // Rate limiting — default 100 req/window; prod superRefine rejects >10 000
+  // Rate limiting window in MILLISECONDS — default 60 000 ms = 60 s.
+  // Min 1000 ms guards against the foot-gun of treating the value as seconds.
   THROTTLE_TTL: z
     .string()
     .default('60000')
     .transform((value) => Number.parseInt(value, 10))
-    .refine((value) => value > 0, { message: 'THROTTLE_TTL must be greater than 0' }),
+    .refine((value) => value >= 1000, {
+      message: 'THROTTLE_TTL must be at least 1000ms (millisecond unit)',
+    }),
 
   THROTTLE_LIMIT: z
     .string()

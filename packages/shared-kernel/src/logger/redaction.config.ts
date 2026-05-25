@@ -37,6 +37,13 @@ export const redactPaths = [
   'res.body.token',
   'res.body.accessToken',
   'res.body.refreshToken',
+
+  // ioredis / BullMQ connection objects — close credential-leak path on
+  // connection errors logged by pino as the full options object.
+  '*.connectionOptions.password',
+  '*.options.password',
+  '*.connection.password',
+  '*.redisOpts.password',
 ]
 
 /**

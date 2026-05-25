@@ -2,6 +2,7 @@ import type { IncomingMessage, ServerResponse } from 'node:http'
 import type { ConfigService } from '@nestjs/config'
 import type { Params } from 'nestjs-pino'
 import type { Env } from '../config/env.schema.js'
+import { sanitizeHeaderValue } from '../utils/sanitize-header-value.js'
 import { redactCensor, redactPaths } from './redaction.config.js'
 
 /**
@@ -91,9 +92,12 @@ export function createLoggerConfig(
         }),
       },
 
-      // Custom log properties: extract tracing info from the request
+      // Custom log properties: extract tracing info from the request.
+      // [Phase 2 H2] sanitize attacker-controlled header values before they reach
+      // structured logs — strip CR/LF/TAB/NUL/ANSI to close log-injection.
       customProps: (req: IncomingMessage) => ({
-        correlationId: req.headers['x-correlation-id'],
+        correlationId: sanitizeHeaderValue(req.headers['x-correlation-id']),
+        requestId: sanitizeHeaderValue(req.headers['x-request-id']),
         traceId: extractTraceId(req.headers.traceparent as string | undefined),
       }),
 
