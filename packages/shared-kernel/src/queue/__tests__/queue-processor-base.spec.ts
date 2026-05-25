@@ -1,7 +1,7 @@
 import type { Job } from 'bullmq'
 import { describe, expect, it } from 'vitest'
-import { QueueException } from '../queue.exception.js'
-import { evaluateJobFailure } from '../queue-processor.base.js'
+import { FatalQueueException, QueueException } from '../queue.exception.js'
+import { _evaluateJobFailure } from '../queue-processor.base.internal.js'
 
 function makeJob(overrides: Partial<Job> = {}): Job {
   return {
@@ -13,9 +13,9 @@ function makeJob(overrides: Partial<Job> = {}): Job {
   } as unknown as Job
 }
 
-describe('evaluateJobFailure', () => {
+describe('_evaluateJobFailure', () => {
   it('returns warn level on a non-last attempt', () => {
-    const result = evaluateJobFailure(
+    const result = _evaluateJobFailure(
       makeJob({ attemptsMade: 0, opts: { attempts: 3 } }),
       new Error('transient'),
     )
@@ -24,7 +24,7 @@ describe('evaluateJobFailure', () => {
   })
 
   it('returns error level on the last attempt', () => {
-    const result = evaluateJobFailure(
+    const result = _evaluateJobFailure(
       makeJob({ attemptsMade: 2, opts: { attempts: 3 } }),
       new Error('final'),
     )
@@ -32,33 +32,68 @@ describe('evaluateJobFailure', () => {
     expect(result.message).toBe('Queue job failed permanently')
   })
 
-  it('sets isFatal=true for QueueException(isFatal=true) on the last attempt', () => {
-    const result = evaluateJobFailure(
+  it('sets isFatal=true for FatalQueueException on the last attempt', () => {
+    const result = _evaluateJobFailure(
       makeJob({ attemptsMade: 2, opts: { attempts: 3 } }),
-      new QueueException('fatal', true),
+      new FatalQueueException('fatal'),
     )
     expect(result.context.isFatal).toBe(true)
   })
 
+  it('sets isFatal=false for a soft QueueException on the last attempt', () => {
+    const result = _evaluateJobFailure(
+      makeJob({ attemptsMade: 2, opts: { attempts: 3 } }),
+      new QueueException('soft'),
+    )
+    expect(result.context.isFatal).toBe(false)
+  })
+
   it('sets isFatal=false for a plain Error on the last attempt', () => {
-    const result = evaluateJobFailure(
+    const result = _evaluateJobFailure(
       makeJob({ attemptsMade: 2, opts: { attempts: 3 } }),
       new Error('plain'),
     )
     expect(result.context.isFatal).toBe(false)
   })
 
-  it('includes errorName from the error constructor', () => {
-    const result = evaluateJobFailure(
+  it('reads errorName from error.name (minifier-safe)', () => {
+    const result = _evaluateJobFailure(
       makeJob({ attemptsMade: 2, opts: { attempts: 3 } }),
-      new QueueException('x', true),
+      new FatalQueueException('x'),
     )
-    expect(result.context.errorName).toBe('QueueException')
+    expect(result.context.errorName).toBe('FatalQueueException')
+  })
+
+  it('falls back to constructor.name when error.name is missing', () => {
+    class Anonymous extends Error {}
+    const err = new Anonymous('boom')
+    // Force-clear .name so the fallback path is exercised.
+    Object.defineProperty(err, 'name', { value: undefined })
+    const result = _evaluateJobFailure(makeJob({ attemptsMade: 2, opts: { attempts: 3 } }), err)
+    expect(result.context.errorName).toBe('Anonymous')
+  })
+
+  it('does NOT include error.message in permanent-failure context (M2 PII guard)', () => {
+    const result = _evaluateJobFailure(
+      makeJob({ attemptsMade: 2, opts: { attempts: 3 } }),
+      new Error('secret-payload-value@example.com'),
+    )
+    expect(result.context).not.toHaveProperty('error')
   })
 
   it('defaults attempts to 1 when job.opts.attempts is undefined', () => {
-    // attemptsMade=0, attempts defaults to 1 → last attempt → error level
-    const result = evaluateJobFailure(makeJob({ attemptsMade: 0, opts: {} }), new Error('e'))
+    const result = _evaluateJobFailure(makeJob({ attemptsMade: 0, opts: {} }), new Error('e'))
+    expect(result.level).toBe('error')
+  })
+
+  it('clamps attempts to ≥1 when producer sets attempts: 0 (M4 guard)', () => {
+    // Without the Math.max guard, attempts=0 would produce attemptsRemaining=-1
+    // on a retry-branch read. With the guard, the math behaves as if attempts=1
+    // (single attempt → always last attempt → error level).
+    const result = _evaluateJobFailure(
+      makeJob({ attemptsMade: 0, opts: { attempts: 0 } }),
+      new Error('e'),
+    )
     expect(result.level).toBe('error')
   })
 })

@@ -1,16 +1,34 @@
+import { UnrecoverableError } from 'bullmq'
+
 /**
- * Domain exception for queue job failures.
+ * Soft, retryable queue processor error.
  *
- * `isFatal` distinguishes transient errors (retry eligible) from fatal ones
- * (last-attempt logging / future dead-letter routing). Throw inside a
- * processor's `process()` method to propagate structured failure metadata.
+ * BullMQ will retry per the worker backoff config. Throw from `process()` when
+ * a transient condition (network blip, lock contention) caused the failure.
+ *
+ * For non-retryable failures, throw {@link FatalQueueException} — that class
+ * extends BullMQ's `UnrecoverableError` and short-circuits retries.
  */
 export class QueueException extends Error {
-  readonly isFatal: boolean
+  readonly isFatal = false as const
 
-  constructor(message: string, isFatal = false) {
+  constructor(message: string) {
     super(message)
     this.name = 'QueueException'
-    this.isFatal = isFatal
+  }
+}
+
+/**
+ * Hard, non-retryable queue processor error.
+ *
+ * Extends BullMQ's `UnrecoverableError`: throwing this from `process()` makes
+ * BullMQ skip remaining retry attempts and move the job to `failed` immediately.
+ */
+export class FatalQueueException extends UnrecoverableError {
+  readonly isFatal = true as const
+
+  constructor(message: string) {
+    super(message)
+    this.name = 'FatalQueueException'
   }
 }
