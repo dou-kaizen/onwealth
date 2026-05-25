@@ -1,16 +1,24 @@
 import { HttpStatus, UnprocessableEntityException, ValidationPipe } from '@nestjs/common'
 
 /**
- * Create the global validation pipe configuration
+ * Build the global {@link ValidationPipe} consumed by `app.useGlobalPipes`.
  *
- * Configuration notes:
- * - whitelist: automatically strips properties not declared in the DTO
- * - forbidNonWhitelisted: throws a 422 error if unknown properties are present
- * - transform: automatically converts types (e.g. string → number)
- * - stopAtFirstError: returns all validation errors, not just the first
- * - errorHttpStatusCode: validation errors return 422 (Unprocessable Entity)
- *
- * @returns a configured ValidationPipe instance
+ * **Configuration choices and rationale:**
+ * - `whitelist: true` — strips properties not declared in the DTO. Defends
+ *   against mass-assignment when consumers add fields without re-declaring
+ *   their DTOs.
+ * - `forbidNonWhitelisted: true` — 422 on unknown properties instead of
+ *   silently dropping them, so clients learn their typo immediately.
+ * - `transform: true` with `enableImplicitConversion: false` — explicit
+ *   `@Type(() => X)` decorators are REQUIRED for coercion. Implicit
+ *   conversion runs BEFORE the whitelist strip, which can bypass validation
+ *   guards on numeric/boolean fields.
+ * - `stopAtFirstError: false` — return ALL validation errors per field so
+ *   forms can render every failure at once.
+ * - `errorHttpStatusCode: 422` — RFC-aligned (Unprocessable Entity for
+ *   semantic failure; 400 stays reserved for syntactic/parse errors).
+ * - `exceptionFactory` — explicit `UnprocessableEntityException` ensures
+ *   the 422 status sticks even when downstream filters re-wrap.
  */
 export function createValidationPipe(): ValidationPipe {
   return new ValidationPipe({
@@ -18,14 +26,11 @@ export function createValidationPipe(): ValidationPipe {
     forbidNonWhitelisted: true,
     transform: true,
     transformOptions: {
-      // Explicit @Type(() => X) decorators must be used for type coercion; implicit
-      // coercion runs before whitelist strip which can bypass validation guards.
       enableImplicitConversion: false,
     },
     stopAtFirstError: false,
     errorHttpStatusCode: HttpStatus.UNPROCESSABLE_ENTITY,
     exceptionFactory: (errors) => {
-      // Custom exception factory to ensure UnprocessableEntityException (422) is thrown
       return new UnprocessableEntityException(errors)
     },
   })

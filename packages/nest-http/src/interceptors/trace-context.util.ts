@@ -1,18 +1,21 @@
 import { randomBytes } from 'node:crypto'
 
 /**
- * W3C Trace Context utility functions
+ * W3C Trace Context parser and generator helpers.
  *
- * Specification: https://www.w3.org/TR/trace-context/
- *
- * traceparent header format:
+ * **`traceparent` wire format:**
+ * ```
  * 00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01
- * │  │                                │                │
- * │  └─ trace-id (32 hex chars)        │                └─ trace-flags
- * │                                   └─ parent-id (16 hex chars)
- * └─ version
+ * └─ version (2 hex)
+ *    └─ trace-id (32 hex)
+ *                                     └─ parent-id (16 hex)
+ *                                                      └─ trace-flags (2 hex)
+ * ```
+ *
+ * @see {@link https://www.w3.org/TR/trace-context/} — W3C Trace Context
  */
 
+/** Parsed `traceparent` parts. */
 export interface TraceContext {
   version: string
   traceId: string
@@ -21,34 +24,31 @@ export interface TraceContext {
 }
 
 /**
- * Parses the W3C Trace Context traceparent header.
+ * Parse a `traceparent` header value into its four parts.
  *
- * @param traceparent - The traceparent header value
- * @returns The parsed TraceContext object, or null if parsing fails
+ * Returns `null` for any non-conforming input rather than throwing — the
+ * caller (CLS setup) treats invalid headers as "no trace context" and
+ * mints a fresh trace ID instead.
+ *
+ * **Rejection rules (W3C Trace Context §3.2.2):**
+ * - Wrong number of segments or wrong segment lengths.
+ * - Non-hex characters anywhere.
+ * - Reserved version `ff`.
+ * - All-zero `trace-id` (means "trace not identified").
+ * - All-zero `parent-id` (means "no valid span ancestor").
  *
  * @example
- * const context = parseTraceparent('00-4bf92f3577b34da6-00f067aa0ba902b7-01');
- * // {
- * //   version: '00',
- * //   traceId: '4bf92f3577b34da6a3ce929d0e0e4736',
- * //   parentId: '00f067aa0ba902b7',
- * //   traceFlags: '01'
- * // }
+ * parseTraceparent('00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01')
+ * // { version: '00', traceId: '4bf9…4736', parentId: '00f0…02b7', traceFlags: '01' }
  */
 export function parseTraceparent(traceparent: string): TraceContext | null {
-  if (!traceparent || typeof traceparent !== 'string') {
-    return null
-  }
+  if (!traceparent || typeof traceparent !== 'string') return null
 
   const parts = traceparent.split('-')
-
-  if (parts.length !== 4) {
-    return null
-  }
+  if (parts.length !== 4) return null
 
   const [version, traceId, parentId, traceFlags] = parts
 
-  // Validate format
   if (
     version?.length !== 2 ||
     traceId?.length !== 32 ||
@@ -58,7 +58,6 @@ export function parseTraceparent(traceparent: string): TraceContext | null {
     return null
   }
 
-  // Validate that all parts are valid hexadecimal
   const hexRegex = /^[0-9a-f]+$/i
   if (
     !hexRegex.test(version) ||
@@ -69,36 +68,25 @@ export function parseTraceparent(traceparent: string): TraceContext | null {
     return null
   }
 
-  // W3C Trace Context §3.2.2 — reject values that the spec defines as invalid:
-  // - version 'ff' is reserved and MUST NOT be used
-  // - all-zero trace-id means the trace is not sampled / not identified
-  // - all-zero parent-id means no valid span ancestor exists
-  if (
-    version === 'ff' ||
-    traceId === '0'.repeat(32) ||
-    parentId === '0'.repeat(16)
-  ) {
+  if (version === 'ff' || traceId === '0'.repeat(32) || parentId === '0'.repeat(16)) {
     return null
   }
 
-  return {
-    version,
-    traceId,
-    parentId,
-    traceFlags,
-  }
+  return { version, traceId, parentId, traceFlags }
 }
 
 /**
- * Generates a new traceparent header (for downstream calls).
+ * Compose a `traceparent` header for a downstream call.
  *
- * @param traceId - The trace ID (unchanged)
- * @param parentId - Optional parent ID; a new span ID is generated when omitted
- * @returns The new traceparent header value
+ * @param traceId — keep the parent trace ID unchanged so the child span
+ *                  joins the same distributed trace.
+ * @param parentId — optional span ID; a fresh one is minted when omitted
+ *                   so the downstream service appears as a new child span.
+ * @returns the formatted `version-traceId-parentId-flags` string.
  *
  * @example
- * const traceparent = generateTraceparent('4bf92f3577b34da6a3ce929d0e0e4736');
- * // '00-4bf92f3577b34da6a3ce929d0e0e4736-{newly generated spanId}-01'
+ * generateTraceparent('4bf92f3577b34da6a3ce929d0e0e4736')
+ * // '00-4bf9…4736-<new-span-id>-01'
  */
 export function generateTraceparent(traceId: string, parentId?: string): string {
   const newParentId = parentId ?? generateSpanId()
@@ -106,32 +94,28 @@ export function generateTraceparent(traceId: string, parentId?: string): string 
 }
 
 /**
- * Generates a new span ID (16 hex characters / 8 random bytes).
+ * Mint a fresh 64-bit span ID (8 random bytes → 16 hex chars).
  *
- * Uses node:crypto randomBytes for cryptographic-quality randomness.
- *
- * @returns A 16-character hexadecimal string
+ * Uses `node:crypto`'s CSPRNG so span IDs cannot be guessed — important
+ * because they appear in shared distributed-trace storage.
  */
 export function generateSpanId(): string {
   return randomBytes(8).toString('hex')
 }
 
 /**
- * Generates a new trace ID (32 hex characters / 16 random bytes).
+ * Mint a fresh 128-bit trace ID (16 random bytes → 32 hex chars).
  *
- * Uses node:crypto randomBytes for cryptographic-quality randomness.
- *
- * @returns A 32-character hexadecimal string
+ * Uses `node:crypto`'s CSPRNG for the same reason as
+ * {@link generateSpanId} — trace IDs are shared across services.
  */
 export function generateTraceId(): string {
   return randomBytes(16).toString('hex')
 }
 
 /**
- * Validates whether a traceparent header is valid.
- *
- * @param traceparent - The traceparent header value
- * @returns Whether the value is valid
+ * Boolean wrapper around {@link parseTraceparent} for callers that only
+ * need a yes/no answer.
  */
 export function isValidTraceparent(traceparent: string): boolean {
   return parseTraceparent(traceparent) !== null

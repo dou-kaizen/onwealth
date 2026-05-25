@@ -8,14 +8,16 @@ import { sanitizeRedisUrl } from '../utils/sanitize-redis-url.js'
 import { queueConfig } from './queue.config.js'
 import { QueueConfigKey } from './queue.constant.js'
 
+const SHARED_CONFIG_TOKEN = getSharedConfigToken(QueueConfigKey)
+
 /**
- * Parses a Redis URL into the explicit field shape ioredis expects.
+ * Parse a Redis URL into the explicit field shape ioredis expects.
  *
- * BullMQ's `connection` accepts either a `RedisOptions` object or a raw URL
- * string — NOT `{ url }` as a property. Passing `{ url }` silently falls back
- * to the ioredis defaults (localhost:6379, no auth), masking misconfigurations.
- * We extract host/port/auth/tls so additional ioredis flags (e.g.
- * `maxRetriesPerRequest`) can sit alongside the parsed connection.
+ * BullMQ's `connection` accepts a `RedisOptions` object or a raw URL string —
+ * NOT `{ url }` as a property. Passing `{ url }` silently falls back to
+ * ioredis defaults (`localhost:6379`, no auth), masking misconfiguration.
+ * Extracting host/port/auth/tls lets additional ioredis flags
+ * (e.g. `maxRetriesPerRequest`) sit alongside the parsed connection.
  *
  * Supports `redis://` and `rediss://` (TLS) schemes.
  */
@@ -31,26 +33,54 @@ function parseRedisUrl(url: string): RedisOptions {
   }
 }
 
-const SHARED_CONFIG_TOKEN = getSharedConfigToken(QueueConfigKey)
+/**
+ * Build the BullMQ root connection options consumed by `BullModule.forRootAsync`.
+ *
+ * Two non-obvious settings:
+ *
+ * 1. **`maxRetriesPerRequest: null`** — required for the worker's blocking
+ *    `BRPOP`. ioredis defaults retry-then-fail on blocking commands, which
+ *    breaks long-poll workers. Producer-side cost: enqueues will not fail
+ *    fast during a Redis outage. DO NOT remove during cleanup; see
+ *    `plans/reports/code-review-260524-1703-codebase-scan.md` (C3).
+ *
+ * 2. **`defaultJobOptions.removeOnComplete / removeOnFail`** — bounded
+ *    retention so the `completed` / `failed` Redis lists cannot grow without
+ *    limit. Per-queue overrides via `BullModule.registerQueue({ defaultJobOptions })`
+ *    or per-call `queue.add(name, data, opts)`.
+ */
+function buildBullRootOptions(cfg: ConfigType<typeof queueConfig>) {
+  return {
+    connection: {
+      ...parseRedisUrl(cfg.url),
+      maxRetriesPerRequest: null,
+    },
+    defaultJobOptions: {
+      removeOnComplete: { count: 1000 },
+      removeOnFail: { count: 5000 },
+    },
+  }
+}
 
 /**
  * Queue infrastructure module.
  *
  * Registers a single named BullMQ root connection under {@link QueueConfigKey}
- * ('queue'). Both producers and workers share it.
+ * (`'queue'`). Producers and workers share it.
  *
- * Why one connection (not split producer/worker): `@nestjs/bullmq`'s
- * `BullExplorer.getQueueOptions` prefers a registered Queue's
- * `opts.connection` over the worker's `configKey` shared config. Any split
- * would be silently defeated for queues registered via
- * `BullModule.registerQueue` — both sides end up on the producer's
- * connection. The unified key uses worker-safe ioredis settings
- * (`maxRetriesPerRequest: null`) so blocking BRPOP works; the producer-side
- * cost is enqueues won't fail fast on a Redis outage.
+ * **Why a single shared connection (not split producer/worker):**
+ * `@nestjs/bullmq`'s `BullExplorer.getQueueOptions` prefers a registered
+ * Queue's `opts.connection` over the worker's `configKey` shared config. Any
+ * split is silently defeated for queues registered via
+ * `BullModule.registerQueue` — both sides end up on the producer's connection.
+ * The unified key uses worker-safe ioredis settings (`maxRetriesPerRequest: null`)
+ * so blocking `BRPOP` works; the trade-off is that enqueues will not fail
+ * fast during a Redis outage.
  *
- * Concrete queue registration is intentionally absent here.
- * Feature modules register their own queues via `BullModule.registerQueue()`,
- * importing this module to inherit the root connection:
+ * **Why concrete queue registration is absent here:** feature modules register
+ * their own queues via `BullModule.registerQueue()`, importing this module to
+ * inherit the root connection. `apps/api` does NOT import `QueueModule` until
+ * a concrete queue is introduced.
  *
  * @example
  *   BullModule.registerQueue({
@@ -58,32 +88,15 @@ const SHARED_CONFIG_TOKEN = getSharedConfigToken(QueueConfigKey)
  *     name: 'email-notification',
  *   })
  *
- * apps/api does NOT import QueueModule until a concrete queue is introduced.
- *
  * @see ./README.md — Quick Start, Gotchas, Production Checklist, DLQ migration.
  */
 @Global() // @global-approved: BullMQ root connection, consumed by all feature queue modules
 @Module({
   imports: [
-    // Self-contain queueConfig so QueueModule's own constructor injection of
-    // `queueConfig.KEY` resolves without forcing consumers to register it.
     ConfigModule.forFeature(queueConfig),
     BullModule.forRootAsync(QueueConfigKey, {
       imports: [ConfigModule.forFeature(queueConfig)],
-      useFactory: (cfg: ConfigType<typeof queueConfig>) => ({
-        connection: {
-          ...parseRedisUrl(cfg.url),
-          // null required for worker BRPOP: ioredis must not fail-fast on blocking commands.
-          // DO NOT remove during "cleanup" — see plans/reports/code-review-260524-1703-codebase-scan.md C3.
-          maxRetriesPerRequest: null,
-        },
-        // Bounded retention on Redis to prevent unbounded list growth.
-        // Per-queue overrides via BullModule.registerQueue({ defaultJobOptions }) or per add() call.
-        defaultJobOptions: {
-          removeOnComplete: { count: 1000 },
-          removeOnFail: { count: 5000 },
-        },
-      }),
+      useFactory: buildBullRootOptions,
       inject: [queueConfig.KEY],
     }),
   ],
@@ -91,23 +104,30 @@ const SHARED_CONFIG_TOKEN = getSharedConfigToken(QueueConfigKey)
 export class QueueModule implements OnModuleInit {
   private readonly logger = new Logger(QueueModule.name)
 
+  /**
+   * @param cfg          Validated queue config (Redis URL).
+   * @param sharedConfig Shared BullMQ root config injected via the named
+   *                     token. Optional + `unknown` so a missing registration
+   *                     surfaces as `undefined` for a typed assertion in
+   *                     {@link onModuleInit}, instead of Nest's opaque
+   *                     dependency-resolution error.
+   */
   constructor(
     @Inject(queueConfig.KEY) private readonly cfg: ConfigType<typeof queueConfig>,
-    // Injected only to fail fast at startup if `BullModule.forRootAsync` did
-    // NOT register the shared config under `QueueConfigKey`. `@Optional()` so
-    // a missing token surfaces as `undefined` we can throw on, instead of
-    // Nest's opaque dependency-resolution error.
     @Optional() @Inject(SHARED_CONFIG_TOKEN) private readonly sharedConfig?: unknown,
   ) {}
 
   /**
-   * Startup assertion: the shared BullMQ root connection must be registered
-   * under the named token (not the default). A misconfigured `forRootAsync`
-   * call (wrong `configKey`, missing import) would silently fall back to
-   * default localhost:6379 — fail loud at boot instead.
+   * Boot-time guard rails:
    *
-   * Also logs the sanitized Redis URL once at boot so deployment misconfig
-   * (wrong host, missing credentials) is visible without leaking the password.
+   * 1. Asserts the shared BullMQ root connection was registered under
+   *    {@link QueueConfigKey}. A misconfigured `forRootAsync` (wrong
+   *    `configKey`, missing import) would silently fall back to ioredis
+   *    defaults (`localhost:6379`); fail loud at boot instead.
+   * 2. Logs the sanitized Redis URL once so deployment misconfig (wrong
+   *    host, missing credentials) is visible without leaking the password.
+   *
+   * @throws Error if the shared config token resolves to `undefined`.
    */
   onModuleInit(): void {
     if (this.sharedConfig === undefined) {

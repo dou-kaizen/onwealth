@@ -11,19 +11,31 @@ import { mapDatabaseError } from './database-error-mapper.js'
 import { ProblemDetailsFilter } from './problem-details.filter.js'
 
 /**
- * Global exception filter
+ * Global catch-all exception filter — last line of defence for anything
+ * that escapes the typed filters.
  *
- * Catches all unhandled exceptions, including non-HTTP exceptions.
- * Prevents sensitive error information from leaking to the client.
+ * **Dispatch order:**
+ * 1. `HttpException` → delegated to {@link ProblemDetailsFilter}.
+ * 2. `DrizzleQueryError` wrapping a `pg.DatabaseError` → mapped via
+ *    {@link mapDatabaseError} to an appropriate `HttpException`, then
+ *    re-delegated.
+ * 3. Anything else → rendered as a 500 Problem Details body. The original
+ *    error message is swapped for a static string in production so
+ *    internal details (file paths, SQL fragments) cannot leak.
  *
- * For HTTP exceptions, delegates to ProblemDetailsFilter (RFC 9457 format).
+ * `ClsService` and `appConfig` are `@Optional()` so non-CLS / non-Nest
+ * test harnesses can still construct the filter; missing config falls
+ * back to the prod-safe path (no message leakage).
  */
 @Catch()
 export class AllExceptionsFilter implements ExceptionFilter {
   private readonly logger = new Logger(AllExceptionsFilter.name)
 
   constructor(
-    // Required: misconfigured DI must fail loudly at startup, not silently produce wrong status codes
+    /**
+     * Required: misconfigured DI must fail loudly at startup, not silently
+     * produce wrong status codes by skipping the RFC 9457 path.
+     */
     @Inject(ProblemDetailsFilter)
     private readonly problemDetailsFilter: ProblemDetailsFilter,
     @Optional() private readonly cls?: ClsService,
@@ -37,12 +49,10 @@ export class AllExceptionsFilter implements ExceptionFilter {
     const response = context.getResponse<Response>()
     const request = context.getRequest<Request>()
 
-    // For HTTP exceptions, delegate to ProblemDetailsFilter (RFC 9457 format)
     if (exception instanceof HttpException) {
       return this.problemDetailsFilter.catch(exception, host)
     }
 
-    // Map Postgres DatabaseError to an appropriate HttpException, then re-delegate
     if (exception instanceof DrizzleQueryError) {
       const cause = exception.cause
       if (cause instanceof DatabaseError) {
@@ -52,33 +62,30 @@ export class AllExceptionsFilter implements ExceptionFilter {
         )
         return this.problemDetailsFilter.catch(httpException, host)
       }
-      // M9: cause is NOT a pg.DatabaseError (rare — e.g. a driver-level wrap or
-      // a network error). Log it before falling through to the generic 500 so
-      // operators have a breadcrumb instead of a silent black hole.
+      // Cause is NOT a pg.DatabaseError (rare — driver-level wrap or network error).
+      // Log a breadcrumb before falling through to the generic 500 path so operators
+      // can trace it instead of seeing a silent black hole.
       this.logger.warn('DrizzleQueryError with non-pg cause', {
         causeName: (cause as { constructor?: { name?: string } })?.constructor?.name ?? 'Unknown',
       })
     }
 
-    // Only handle non-HTTP exceptions (system errors)
     const status = HttpStatus.INTERNAL_SERVER_ERROR
-
-    // Default to true (prod-safe) when appConfig is absent to avoid leaking error.message
+    // Default to true (prod-safe) when appConfig is absent — never leak error.message
+    // in test harnesses or misconfigured environments.
     const isProduction = this.appCfg ? this.appCfg.nodeEnv === 'production' : true
     let message = 'Internal server error'
     if (exception instanceof Error) {
       message = isProduction ? 'The server encountered an unexpected error' : exception.message
     }
 
-    // Get tracing IDs
     const requestId = this.cls?.getId()
     const correlationId = this.cls?.get<string>('correlationId')
     const traceId = this.cls?.get<string>('traceId')
 
-    // Build Problem Details response (RFC 9457 format).
-    // RFC 9457 §3: use 'about:blank' when no specific documentation URI exists for the
-    // error type. Non-HTTP system errors are unclassified — 'about:blank' is correct here;
-    // it signals "no additional semantics beyond the HTTP status code".
+    // RFC 9457 §3: `about:blank` is the canonical default when no documented
+    // problem type URI exists. Non-HTTP system errors are unclassified by
+    // definition, so we never invent a fake `/errors/unknown` doc URI.
     const problemDetails: ProblemDetailsDto = {
       type: 'about:blank',
       title: 'Internal Server Error',
@@ -92,10 +99,7 @@ export class AllExceptionsFilter implements ExceptionFilter {
       detail: message,
     }
 
-    // Build trace prefix for log message
     const tracePrefix = this.buildTracePrefix(requestId, correlationId, traceId)
-
-    // Log full error stack
     const logMessage = `${tracePrefix}${request.method} ${request.url} ${status}`
     if (exception instanceof Error) {
       this.logger.error(logMessage, exception.stack)
@@ -103,30 +107,21 @@ export class AllExceptionsFilter implements ExceptionFilter {
       this.logger.error(logMessage, JSON.stringify(exception))
     }
 
-    // Set response headers (RFC 9457 recommended media type)
     response.setHeader('Content-Type', 'application/problem+json')
-    // Prevent browsers from caching error responses
     response.setHeader('Cache-Control', 'no-store')
-
     response.status(status).json(problemDetails)
   }
 
   /**
-   * Build trace ID prefix
+   * Compose a `[req:…|corr:…|trace:…]` log prefix from the optional
+   * tracing IDs. Empty when none are present, so log lines stay clean
+   * outside request scope.
    */
   private buildTracePrefix(requestId?: string, correlationId?: string, traceId?: string): string {
     const parts: string[] = []
-
-    if (requestId) {
-      parts.push(`req:${requestId}`)
-    }
-    if (correlationId) {
-      parts.push(`corr:${correlationId}`)
-    }
-    if (traceId) {
-      parts.push(`trace:${traceId}`)
-    }
-
+    if (requestId) parts.push(`req:${requestId}`)
+    if (correlationId) parts.push(`corr:${correlationId}`)
+    if (traceId) parts.push(`trace:${traceId}`)
     return parts.length > 0 ? `[${parts.join('|')}] ` : ''
   }
 }

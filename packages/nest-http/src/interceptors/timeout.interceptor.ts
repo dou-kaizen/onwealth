@@ -5,15 +5,27 @@ import { TimeoutError, throwError } from 'rxjs'
 import { catchError, timeout } from 'rxjs/operators'
 
 /**
- * Timeout interceptor
+ * Cap controller execution time so a hung handler can never wedge a
+ * request indefinitely.
  *
- * Sets a timeout for all requests to prevent indefinite waiting.
- * Default timeout: 30 seconds
+ * On timeout, the RxJS `TimeoutError` is rewritten as a NestJS
+ * `RequestTimeoutException` (HTTP 408) so the Problem Details filter can
+ * render a standard error body. Non-timeout errors are forwarded verbatim
+ * so other filters can still classify them correctly.
+ *
+ * @remarks
+ * Default budget is 30 seconds — set deliberately above typical p99 to
+ * catch true hangs without firing on slow-but-progressing requests.
+ * Override per-instance when registering for endpoints with different
+ * SLOs.
  */
 @Injectable()
 export class TimeoutInterceptor implements NestInterceptor {
   private readonly timeoutMs: number
 
+  /**
+   * @param timeoutMs — hard deadline in milliseconds; defaults to 30 s.
+   */
   constructor(timeoutMs = 30_000) {
     this.timeoutMs = timeoutMs
   }

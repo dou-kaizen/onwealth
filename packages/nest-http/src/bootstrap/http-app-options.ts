@@ -3,9 +3,14 @@
  */
 export interface HttpAppOptions {
   /**
-   * When true: skip Swagger setup and use a permissive, fixed CORS origin
-   * (`http://localhost:3000`) for test isolation. Production bootstrap leaves
-   * this unset so CORS origins are read from `httpConfig`.
+   * When `true`:
+   * - Swagger setup is skipped (avoids polluting test output with schema
+   *   gen + endpoint mounting).
+   * - CORS uses a fixed permissive origin (`http://localhost:3000`) for
+   *   deterministic, isolated test requests.
+   *
+   * Production bootstrap leaves this unset so CORS origins are read from
+   * `httpConfig` and Swagger gating defers to `NODE_ENV`.
    */
   testMode?: boolean
 }

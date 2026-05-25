@@ -5,23 +5,27 @@ import { appConfig } from '@onwealth/shared-kernel'
 import { Logger } from 'nestjs-pino'
 import { AppModule } from './app.module.js'
 
-/** Hard-stop fallback in ms — bounded so a stuck `app.close()` cannot wedge the process. */
+/**
+ * Hard-stop fallback in ms — bounded so a stuck `app.close()` cannot wedge
+ * the process indefinitely. Kept aligned with `QueueProcessorBase`'s
+ * `SHUTDOWN_GRACE_MS` so HTTP + queue drain windows match.
+ */
 const SHUTDOWN_GRACE_MS = 5000
 
 /**
- * App reference hoisted out of bootstrap so unhandledRejection / uncaughtException
- * handlers can call `app.close()` for a graceful drain instead of a raw
- * `process.exit(1)` that would drop in-flight requests, abandon BullMQ workers,
- * and leak the Postgres pool. `app.enableShutdownHooks()` is already called
- * inside `configureHttpApp`.
+ * App reference hoisted out of `bootstrap()` so the `unhandledRejection` and
+ * `uncaughtException` handlers can call `app.close()` for a graceful drain
+ * instead of a raw `process.exit(1)` that would drop in-flight requests,
+ * abandon BullMQ workers, and leak the Postgres pool.
+ *
+ * `app.enableShutdownHooks()` runs inside `configureHttpApp`, so OS signals
+ * (SIGTERM/SIGINT) follow the same drain path automatically.
  */
 let app: INestApplication | undefined
 
 async function bootstrap() {
-  // Shared HTTP bootstrap — filters, interceptors, pipes, CORS, Swagger, etc.
   app = await createHttpApp(AppModule)
 
-  // Use nestjs-pino Logger — flushes the buffered bootstrap logs.
   const logger = app.get(Logger)
   app.useLogger(logger)
 
@@ -29,8 +33,7 @@ async function bootstrap() {
   const appCfg = app.get<ConfigType<typeof appConfig>>(appConfig.KEY)
 
   const port = httpCfg.port
-  // Bind to 0.0.0.0 for container environments (Docker, Kubernetes) where
-  // localhost-only binding makes the port unreachable from outside the pod.
+
   await app.listen(port, '0.0.0.0')
   const baseUrl = `http://localhost:${port}`
 
@@ -57,16 +60,21 @@ async function bootstrap() {
  * Graceful shutdown — invoked by fatal-process handlers and bootstrap failure.
  *
  * Order matters:
- *   1. Log via the app's Logger if available (so the entry hits the same
- *      transports as the rest of the app); fall back to console pre-bootstrap.
- *   2. `await app.close()` runs Nest's onModuleDestroy lifecycle, which drains
- *      the HTTP server, closes the Postgres pool, and shuts down BullMQ
- *      workers via `enableShutdownHooks`.
- *   3. Schedule a hard-stop fallback so a hanging `close()` cannot prevent exit.
- *      `unref()` keeps the timer from holding the loop open in the happy path.
+ * 1. Resolve a logger: the app's pino instance if booted, plain `console`
+ *    otherwise. Routing fatal output through pino keeps it in the same
+ *    transports as the rest of the app.
+ * 2. `await app.close()` runs Nest's `onModuleDestroy` lifecycle, which
+ *    drains the HTTP server, closes the Postgres pool, and shuts down BullMQ
+ *    workers via `enableShutdownHooks`.
+ * 3. Schedule a hard-stop fallback so a hanging `close()` cannot prevent
+ *    exit. `.unref()` keeps the timer from holding the loop open in the
+ *    happy path.
+ *
+ * @param code   exit code passed to {@link process.exit}.
+ * @param reason short string fed into the log entry for triage.
+ * @param err    the underlying error (rejection reason or uncaught throwable).
  */
 async function shutdown(code: number, reason: string, err: unknown): Promise<void> {
-  // Use the in-app pino logger if the container booted; otherwise plain console.
   let logger: { error: (...args: unknown[]) => void } = console
   try {
     const piner = app?.get(Logger, { strict: false })

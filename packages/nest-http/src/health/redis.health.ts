@@ -3,21 +3,32 @@ import type { HealthIndicatorResult } from '@nestjs/terminus'
 import type { CachePort } from '@onwealth/shared-kernel'
 import { CACHE_PORT } from '@onwealth/shared-kernel'
 
-/** Temporary key for the health probe; TTL is set to 5 seconds */
+/** Probe key — written then read back to assert round-trip integrity. */
 const PROBE_KEY = '__health_probe__'
 
-/** Sentinel value written then read back to assert round-trip integrity. */
+/** Probe value — compared byte-for-byte on read-back. */
 const PROBE_VALUE = '1'
 
-/** Health check timeout — prevents hanging under half-open TCP connections. */
+/**
+ * Probe deadline.
+ *
+ * Set+get round-trip must complete inside this window or the indicator
+ * reports `down`. Catches half-open TCP connections that the client
+ * library still considers alive.
+ */
 const HEALTH_TIMEOUT_MS = 3_000
 
 /**
- * Redis health indicator
+ * Terminus health indicator for the Redis cache backend.
  *
- * Verifies the Redis connection by writing and reading back a temporary key
- * with a 3 s timeout. Raw error messages are never returned to callers —
- * they are logged server-side only (prevents hostname/port/password leakage).
+ * Writes a temporary key (5 s TTL) then reads it back under a 3-second
+ * deadline. A read-after-write mismatch is treated as `down` even when
+ * the underlying connection succeeded — this catches stale replicas, the
+ * null-driver fallback, and serialization mismatches that would
+ * otherwise appear as "healthy" but silently drop traffic.
+ *
+ * Raw error messages are never returned to callers — they are logged
+ * server-side only so hostname / port / password details cannot leak.
  */
 @Injectable()
 export class RedisHealthIndicator {
@@ -26,29 +37,30 @@ export class RedisHealthIndicator {
   constructor(@Inject(CACHE_PORT) private readonly cache: CachePort) {}
 
   /**
-   * Check the Redis connection health.
+   * Run the probe.
    *
-   * @param key - Health check identifier used as the result key
-   * @returns HealthIndicatorResult with status 'up' or 'down'
+   * @param key — Terminus result key (becomes the property name in
+   *              `HealthIndicatorResult`).
+   * @returns `{ [key]: { status: 'up' | 'down', message } }`. Never throws
+   *          — failures are logged and reported as `down`.
    */
   async isHealthy(key: string): Promise<HealthIndicatorResult> {
     try {
       await this.checkRedis()
-      return {
-        [key]: { status: 'up' as const, message: 'Redis is available' },
-      }
+      return { [key]: { status: 'up' as const, message: 'Redis is available' } }
     } catch (error) {
-      // Log full error server-side; return static message to caller to prevent info leak.
       this.logger.error('Redis health check failed', {
         error: error instanceof Error ? error.message : String(error),
       })
-      return {
-        [key]: { status: 'down' as const, message: 'Connection failed' },
-      }
+      return { [key]: { status: 'down' as const, message: 'Connection failed' } }
     }
   }
 
-  /** Performs a set+get round-trip with a hard 3 s deadline. */
+  /**
+   * Perform the set+get round-trip under the {@link HEALTH_TIMEOUT_MS}
+   * deadline. The timer is always cleared in `finally` so the Node event
+   * loop is not held open when the probe wins the race.
+   */
   private async checkRedis(): Promise<void> {
     let timerId: ReturnType<typeof setTimeout> | undefined
     const timeout = new Promise<never>((_, reject) => {
@@ -60,8 +72,6 @@ export class RedisHealthIndicator {
     const probe = async () => {
       await this.cache.set(PROBE_KEY, PROBE_VALUE, 5)
       const readback = await this.cache.get(PROBE_KEY)
-      // Read-after-write divergence => stale replica, cache backed by null driver,
-      // or serialization mismatch. Treat as DOWN even though connection succeeded.
       if (readback !== PROBE_VALUE) {
         throw new Error('Redis health check readback mismatch')
       }
@@ -69,8 +79,6 @@ export class RedisHealthIndicator {
     try {
       await Promise.race([probe(), timeout])
     } finally {
-      // Clear the timer so the Node.js event loop is not held open when the
-      // probe wins the race and the timeout callback is no longer needed.
       clearTimeout(timerId)
     }
   }

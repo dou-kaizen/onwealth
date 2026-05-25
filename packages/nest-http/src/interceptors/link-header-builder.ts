@@ -1,13 +1,13 @@
 /**
- * RFC 8288 Link header builder — pure functions, extracted from
- * `link-header.interceptor.ts` (M25) so the interceptor stays under the
- * 200-line guideline and the link-building rules can be unit-tested without
- * having to spin up an ExecutionContext.
+ * Pure RFC 8288 link-header builders. Extracted from
+ * {@link LinkHeaderInterceptor} so the link-composition rules can be
+ * unit-tested without spinning up an `ExecutionContext`, and so the
+ * interceptor file stays under the 200-line guideline.
  *
- * Spec: RFC 8288 (Web Linking)
- * https://www.rfc-editor.org/rfc/rfc8288.html
+ * @see {@link https://www.rfc-editor.org/rfc/rfc8288.html} — RFC 8288 (Web Linking)
  */
 
+/** Minimum shape of an offset-paginated list response. */
 export interface OffsetListResponse {
   total: number
   page: number
@@ -15,11 +15,16 @@ export interface OffsetListResponse {
   hasMore: boolean
 }
 
+/** Minimum shape of a cursor-paginated list response. */
 export interface CursorListResponse {
   hasMore?: boolean
   nextCursor?: string
 }
 
+/**
+ * Duck-type guard for the list-envelope shape
+ * (`{ object: 'list', data: [...] }`).
+ */
 export function isListResponse(data: unknown): data is Record<string, unknown> {
   return (
     typeof data === 'object' &&
@@ -31,6 +36,7 @@ export function isListResponse(data: unknown): data is Record<string, unknown> {
   )
 }
 
+/** Duck-type guard for the offset-paginated shape. */
 export function isOffsetListResponse(data: unknown): data is OffsetListResponse {
   return (
     typeof data === 'object' &&
@@ -43,11 +49,19 @@ export function isOffsetListResponse(data: unknown): data is OffsetListResponse 
 }
 
 /**
- * Compose a query string, preserving multi-value params and applying overrides.
+ * Compose a query string from existing params with an override layer.
  *
- * Uses `append` (not `set`) for incoming query params so
- * `?status=active&status=pending` survives into next/prev links. Overrides
- * (pagination controls — always single-value) use `set`.
+ * Uses `append` (not `set`) for incoming params so multi-value query
+ * strings like `?status=active&status=pending` survive into the
+ * generated `next`/`prev` links. Overrides (pagination controls — always
+ * single-value by contract) use `set`.
+ *
+ * Pagination cursor params (`cursor`, `page`) are filtered out of the
+ * incoming side so they cannot leak past the overrides.
+ *
+ * @param baseUrl — already-resolved absolute URL for the current path.
+ * @param query   — Express `request.query` shape.
+ * @param overrides — fields to inject (e.g. `{ page: 2, pageSize: 20 }`).
  */
 export function buildUrl(
   baseUrl: string,
@@ -74,15 +88,22 @@ export function buildUrl(
 }
 
 /**
- * Build the RFC 8288 Link header array from a paginated response.
+ * Build the RFC 8288 `Link` header value as an array (caller joins with
+ * `, `).
  *
- * @param baseUrl  Already-resolved absolute URL for the current request path
- *                 (e.g. `https://api.example.com/api/users`). The caller is
- *                 responsible for composing this from `httpConfig.apiBaseUrl` +
- *                 `request.path` — see M6 for why we no longer trust
- *                 `request.protocol` / `request.get('host')` here.
- * @param query    Express `request.query` object (multi-value supported).
- * @param data     The response body — duck-typed for cursor or offset pagination.
+ * **Cursor pagination:** emits `self` and (when `hasMore && nextCursor`)
+ * `next`. `prev`/`first`/`last` are omitted — cursor walks are one-way.
+ *
+ * **Offset pagination:** emits `first` (when `page > 1`), `prev`, `self`,
+ * `next` (when `hasMore`), and `last` (when not on the final page).
+ *
+ * @param baseUrl — already-resolved absolute URL for the current request
+ *                  path. The caller composes this from
+ *                  `httpConfig.apiBaseUrl` + `request.path` rather than
+ *                  trusting `request.protocol` / `request.get('host')`,
+ *                  which are attacker-influenced behind a reverse proxy.
+ * @param query   — Express `request.query` object (multi-value supported).
+ * @param data    — response body; duck-typed for cursor vs offset shape.
  */
 export function buildLinks(
   baseUrl: string,
@@ -91,7 +112,6 @@ export function buildLinks(
 ): string[] {
   const links: string[] = []
 
-  // Cursor pagination
   if ('nextCursor' in data) {
     if (
       'hasMore' in data &&
@@ -107,7 +127,6 @@ export function buildLinks(
     return links
   }
 
-  // Offset pagination (flat format)
   if (isOffsetListResponse(data)) {
     const { page, pageSize, total, hasMore } = data
     const totalPages = Math.ceil(total / pageSize)

@@ -8,25 +8,27 @@ import { CACHE_PORT } from './cache.port.js'
 import { CacheService } from './cache.service.js'
 
 /**
- * Cache module
+ * Global cache module backed by Redis through the Keyv adapter.
  *
- * Provides a caching service backed by Redis (via the Keyv adapter)
- * This is an example of the "thin application layer" pattern:
- * - primarily integrates third-party libraries (cache-manager + @keyv/redis)
- * - the service layer acts only as a coordinator with no complex business logic
- * - uses port/adapter pattern for easy replacement of the cache implementation
+ * Demonstrates the "thin application layer" pattern:
+ * - Integrates third-party libraries (`@nestjs/cache-manager` + `@keyv/redis`).
+ * - {@link CacheService} acts only as a coordinator; no business logic.
+ * - Port/adapter via {@link CACHE_PORT} allows swapping the implementation
+ *   without touching consumers.
+ *
+ * **Wiring notes:**
+ * - `ConfigModule.forFeature(redisConfig)` registers the typed factory locally
+ *   so `redisConfig.KEY` always resolves regardless of host-app wiring —
+ *   mirrors the `QueueModule` pattern. NestJS dedupes if the host already
+ *   registered the same factory globally.
+ * - Global scope is intentional: Redis cache is a cross-cutting resource
+ *   that every context may need, and instantiating it per-module would
+ *   multiply connections.
  */
-@Global() // @global-approved: Redis 缓存，所有需要缓存的 context 都依赖
+@Global() // @global-approved: Redis cache shared by all contexts.
 @Module({
   imports: [
-    // Configure cache-manager to use Redis (via the Keyv adapter).
-    // imports: [ConfigModule] ensures redisConfig.KEY resolves when CacheModule
-    // is bootstrapped standalone. NestJS dedupes if ConfigModule is already global.
     NestCacheModule.registerAsync({
-      // `ConfigModule.forFeature(redisConfig)` registers the typed factory locally
-      // so `redisConfig.KEY` always resolves regardless of host-app wiring —
-      // matches the QueueModule pattern. NestJS dedupes if the host already
-      // registered the same factory globally.
       imports: [ConfigModule.forFeature(redisConfig)],
       useFactory: (cfg: ConfigType<typeof redisConfig>) => ({
         stores: [new KeyvRedis(cfg.url)],
@@ -37,8 +39,6 @@ import { CacheService } from './cache.service.js'
   ],
   providers: [
     CacheService,
-
-    // Provide CachePort interface (DIP)
     {
       provide: CACHE_PORT,
       useExisting: CacheService,

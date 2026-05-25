@@ -6,23 +6,28 @@ import type { CachePort } from './cache.port.js'
 /**
  * Sentinel that represents a cached `undefined` result.
  *
- * Problem: cacheManager.get returns `undefined` for both a genuine cache miss
- * (key absent) and a cached value of `undefined`. Without disambiguation, a
- * function that returns `undefined` would be called on every wrap() invocation.
+ * `cacheManager.get` returns `undefined` for both a genuine miss (key absent)
+ * AND a cached value of `undefined`. Without disambiguation, a wrapped
+ * function returning `undefined` would re-execute on every `wrap()` call.
  *
- * Solution: store UNDEFINED_RESULT in the cache whenever fn() returns `undefined`.
- * On the next call, raw === UNDEFINED_RESULT (not strict-undefined), so we know
- * this is a cache HIT and return `undefined` without calling fn() again.
+ * Storing this sentinel makes `raw === UNDEFINED_RESULT` distinguishable
+ * from `raw === undefined`, so the next `wrap()` sees a HIT.
  *
- * The sentinel is a frozen object (not a bare Symbol) because cache-manager may
- * serialise values through JSON for some stores. The `__sk` property name is
- * deliberately obscure to avoid collisions with user data.
+ * Implementation notes:
+ * - Frozen plain object (not a bare `Symbol`) because some cache-manager
+ *   stores serialise through JSON; symbols would round-trip to `undefined`.
+ * - `__sk` (shared-kernel) prefix + version suffix avoids collisions with
+ *   user payloads and allows future bumps without breaking old caches.
  */
 const UNDEFINED_RESULT = Object.freeze({ __sk: 'undefined-sentinel-v1' })
 
+/**
+ * Discriminator for {@link UNDEFINED_RESULT}.
+ *
+ * Uses {@link Object.hasOwn} so a poisoned `Object.prototype.__sk` cannot
+ * masquerade as a sentinel hit — prototype-chain lookups are excluded.
+ */
 function isUndefinedSentinel(raw: unknown): boolean {
-  // Object.hasOwn guard: prototype-chain hits on `__sk` (e.g. from a maliciously
-  // polluted Object.prototype) must NOT be mistaken for our sentinel.
   return (
     typeof raw === 'object' &&
     raw !== null &&
@@ -31,6 +36,17 @@ function isUndefinedSentinel(raw: unknown): boolean {
   )
 }
 
+/**
+ * Default {@link CachePort} implementation backed by `cache-manager` + Keyv.
+ *
+ * **Failure model:** every backend call is wrapped in try/catch and logs a
+ * `warn` on failure. Cache is treated as a non-critical accelerator; an
+ * outage degrades gracefully (read miss / silent set failure / direct fn()
+ * call from `wrap`) rather than propagating to the caller.
+ *
+ * **TTL units:** the public API takes seconds; cache-manager v5+ takes
+ * milliseconds, so every set multiplies by 1000 at the boundary.
+ */
 @Injectable()
 export class CacheService implements CachePort {
   private readonly logger = new Logger(CacheService.name)
@@ -54,7 +70,6 @@ export class CacheService implements CachePort {
 
   async set<T>(key: string, value: T, ttl?: number): Promise<void> {
     try {
-      // cache-manager v5+ uses milliseconds
       const ttlMs = ttl ? ttl * 1000 : undefined
       await this.cacheManager.set(key, value, ttlMs)
     } catch (err) {
@@ -86,14 +101,25 @@ export class CacheService implements CachePort {
     }
   }
 
+  /**
+   * Read-through cache: return cached value, or compute, store, and return.
+   *
+   * Distinguishes three states by reading `cacheManager` directly (not via
+   * {@link CacheService.get}):
+   * - `raw === undefined` → genuine miss → call `fn()`.
+   * - {@link isUndefinedSentinel}(raw) → cached `undefined` → return `undefined`.
+   * - anything else → cached value → return as-is.
+   *
+   * **TODO:** thundering-herd — N concurrent misses all call `fn()`. Add a
+   * per-key mutex or Redis SET NX flag if a hot key shows contention.
+   *
+   * **Failure behaviour:**
+   * - Read error → degrades to a direct `fn()` call (no store on success
+   *   path; we don't know whether the store would have succeeded).
+   * - Write error → returns the freshly computed value but logs a warn;
+   *   subsequent calls will miss again.
+   */
   async wrap<T>(key: string, function_: () => Promise<T>, ttl?: number): Promise<T> {
-    // TODO: thundering-herd — N concurrent misses all call fn(). Add mutex/NX-flag if hot-path contention observed.
-
-    // Read directly from cacheManager (not through this.get) so we can see the raw
-    // stored value and detect both hit variants:
-    //   raw === undefined       → genuine cache miss  → call fn()
-    //   isUndefinedSentinel(raw) → cached undefined   → HIT, return undefined
-    //   anything else           → cached value        → HIT, return as-is
     let raw: unknown
     try {
       raw = await this.cacheManager.get(key)
@@ -102,21 +128,15 @@ export class CacheService implements CachePort {
         key,
         error: (err as Error).message,
       })
-      // On read error degrade to calling fn() directly
       return function_()
     }
 
-    // Cache HIT path
     if (raw !== undefined) {
-      // Unwrap the sentinel back to undefined for the caller.
       return (isUndefinedSentinel(raw) ? undefined : raw) as T
     }
 
-    // Cache MISS path — call the wrapped function
     const result = await function_()
 
-    // Persist: store the sentinel when result is undefined so the next call sees
-    // a HIT rather than another miss.
     const toStore = result === undefined ? UNDEFINED_RESULT : result
     try {
       const ttlMs = ttl ? ttl * 1000 : undefined

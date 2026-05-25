@@ -19,7 +19,6 @@ export const queueEnvSchema = envObjectSchema
   .superRefine((data, ctx) => {
     const isProd = data.NODE_ENV === 'production'
     if (!isProd) return
-    // Effective URL is the same fallback the factory below applies.
     const effectiveUrl = data.QUEUE_REDIS_URL ?? data.REDIS_URL
     if (effectiveUrl.startsWith('redis://')) {
       ctx.addIssue({

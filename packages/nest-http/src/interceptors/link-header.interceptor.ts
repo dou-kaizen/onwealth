@@ -8,21 +8,23 @@ import { httpConfig } from '../config/http.config.js'
 import { buildLinks, isListResponse, isOffsetListResponse } from './link-header-builder.js'
 
 /**
- * Link header interceptor
+ * Attach an RFC 8288 `Link` header (with `first`/`prev`/`self`/`next`/`last`
+ * relations) to any paginated list response, plus `X-Total-Count` and
+ * `X-Page-Count` siblings for offset pagination clients that prefer
+ * non-Link headers.
  *
- * Spec: RFC 8288 (Web Linking)
- * https://www.rfc-editor.org/rfc/rfc8288.html
+ * **Activation:** only when the body duck-types as a list envelope
+ * (`{ object: 'list', data: [...] }`). Single-resource responses pass
+ * through untouched.
  *
- * Features:
- * - Automatically adds Link headers to paginated responses
- * - Supports first, prev, self, next, last relation types
- * - Compliant with RFC 8288 format
+ * **Origin trust model:** absolute URLs are composed from
+ * `httpConfig.apiBaseUrl` + `request.path`, NOT from `request.protocol` /
+ * `request.get('host')`. Behind a reverse proxy the Host header is
+ * attacker-influenced and the protocol is unreliable (TLS terminated at
+ * the LB), so the canonical external origin must come from configuration.
  *
- * Base URL composition (M6): the absolute URL is composed from
- * `httpConfig.apiBaseUrl` + `request.path` — NOT `request.protocol` /
- * `request.get('host')`. Reverse proxies make those values attacker-influenced
- * (Host header) and protocol-unreliable (TLS terminated at LB), so the canonical
- * external base must come from configuration.
+ * @see {@link https://www.rfc-editor.org/rfc/rfc8288.html} — RFC 8288 (Web Linking)
+ * @see {@link buildLinks} — pure link-string builder (extracted for unit testing).
  */
 @Injectable()
 export class LinkHeaderInterceptor implements NestInterceptor {
@@ -34,16 +36,12 @@ export class LinkHeaderInterceptor implements NestInterceptor {
   intercept(context: ExecutionContext, next: CallHandler): Observable<unknown> {
     return next.handle().pipe(
       tap((data: unknown) => {
-        if (!isListResponse(data)) {
-          return
-        }
+        if (!isListResponse(data)) return
 
         const httpContext = context.switchToHttp()
         const response = httpContext.getResponse<Response>()
         const request = httpContext.getRequest<Request>()
 
-        // Compose absolute base from configured API_BASE_URL + the request's
-        // own path. URL handles trailing-slash normalization for us.
         const origin = new URL(this.http.apiBaseUrl).origin
         const baseUrl = `${origin}${request.path}`
 

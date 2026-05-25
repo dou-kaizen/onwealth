@@ -5,24 +5,24 @@ import { IsOptional } from 'class-validator'
 import { IsIntField, MaxField, MinField } from '../decorators/validators/index.js'
 
 /**
- * Offset pagination query DTO
+ * Query DTO for offset-based pagination (`?page=&pageSize=`).
  *
- * Performance characteristics:
- * - Query performance degrades with page number (offset=100k ~30ms)
- * - Inserts can cause duplicate or missing items
- * - Best for: small datasets (&lt;1,000 rows), page number navigation
+ * **Trade-offs vs cursor pagination:**
+ * - Query cost grows with `page` — at `offset=100k` Postgres reads ~100k
+ *   rows before discarding them (~30ms+).
+ * - Concurrent inserts shift rows across page boundaries, causing
+ *   duplicates or misses between paginated calls.
+ * - Enables direct page-number navigation, which cursor pagination cannot.
  *
- * Usage guidance:
- * - Dataset < 1,000 rows: acceptable
- * - Dataset > 10,000 rows: prefer cursor pagination
- * - Need page number navigation: acceptable
- * - Real-time data / high write frequency: not recommended
+ * **Use when:** dataset < 1,000 rows OR UX needs numeric page jumps.
+ * **Avoid when:** dataset > 10,000 rows OR write frequency is high — use
+ * {@link import('./cursor-pagination.dto.js').CursorPaginationDto} instead.
+ *
+ * Hard caps: `page ≤ 10_000` prevents pathological offsets; `pageSize ≤ 100`
+ * keeps per-request payloads bounded.
  */
 export class OffsetPaginationDto {
-  /**
-   * Page number (1-based)
-   */
-  @ApiPropertyOptional({ example: 1 })
+  @ApiPropertyOptional({ description: 'Page number (1-based)', example: 1 })
   @IsOptional()
   @Type(() => Number)
   @IsIntField()
@@ -30,10 +30,7 @@ export class OffsetPaginationDto {
   @MaxField(10_000)
   page?: number = 1
 
-  /**
-   * Number of items per page
-   */
-  @ApiPropertyOptional({ example: 20 })
+  @ApiPropertyOptional({ description: 'Number of items per page', example: 20 })
   @IsOptional()
   @Type(() => Number)
   @IsIntField()

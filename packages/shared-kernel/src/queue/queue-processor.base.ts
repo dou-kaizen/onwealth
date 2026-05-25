@@ -8,30 +8,35 @@ import type { QueueJobResult } from './queue-job-result.type.js'
 import { _evaluateJobFailure } from './queue-processor.base.internal.js'
 
 /**
- * Bounded drain window for SIGTERM-triggered worker close. Mirrors the
- * `SHUTDOWN_GRACE_MS` constant in `apps/api/src/main.ts` so a hung handler
- * cannot exceed the process-level hard-stop budget. If `main.ts` changes,
- * update this in lockstep (or extract to a shared constant).
+ * Bounded drain window for SIGTERM-triggered worker close.
+ *
+ * Mirrors the `SHUTDOWN_GRACE_MS` constant in `apps/api/src/main.ts` so a
+ * hung handler cannot exceed the process-level hard-stop budget. If
+ * `main.ts` changes, update this in lockstep (or extract to a shared
+ * constant).
  */
 const QUEUE_DRAIN_TIMEOUT_MS = 5000
 
 /**
- * Abstract base class for all BullMQ job processors.
+ * Abstract base for all BullMQ job processors.
  *
  * Extend this class and decorate with `@QueueProcessor`. Implement
- * {@link handleJob} (NOT `process`) — `process` is the BullMQ entry point and
- * is owned by the base. It strips prototype-pollution keys from `job.data`
- * before delegating, so concrete processors never see `__proto__` / `constructor`
- * / `prototype` keys.
+ * {@link handleJob} — NOT `process`. `process` is the BullMQ entry point and
+ * is owned by the base so it can strip prototype-pollution keys from
+ * `job.data` before delegating, and so failure / completion / stalled hooks
+ * can be wired uniformly across every processor in the system.
  *
- * Throw {@link FatalQueueException} for non-retryable failures (extends
- * BullMQ's `UnrecoverableError`, retries short-circuited); throw
- * {@link QueueException} for retryable failures.
+ * **Failure semantics:**
+ * - Throw {@link FatalQueueException} for non-retryable failures (extends
+ *   BullMQ's `UnrecoverableError`; retries are short-circuited).
+ * - Throw {@link QueueException} or a plain `Error` for retryable failures
+ *   (BullMQ retries per the worker's `attempts` setting).
  *
- * **Long-running jobs:** BullMQ holds a Redis lock per job (`WorkerOptions.lockDuration`,
- * default 30 000 ms). Use `AbortSignal.timeout(N)` inside {@link handleJob} to bound
- * work to the lock window — e.g. pass the signal to `fetch` / `axios`. Or raise
- * `lockDuration` via `@QueueProcessor(name, { lockDuration: 60_000 })`.
+ * **Long-running jobs:** BullMQ holds a Redis lock per job
+ * (`WorkerOptions.lockDuration`, default 30 000 ms). Either bound the work
+ * with `AbortSignal.timeout(N)` inside {@link handleJob} (preferred — pass
+ * the signal to `fetch` / `axios` / DB clients) or raise `lockDuration`
+ * via `@QueueProcessor(name, { lockDuration: 60_000 })`.
  *
  * @see ./README.md — Quick Start, Gotchas, Production Checklist, DLQ migration.
  */
@@ -41,15 +46,16 @@ export abstract class QueueProcessorBase extends WorkerHost implements OnModuleD
   /**
    * Graceful drain on Nest shutdown (SIGTERM).
    *
-   * Races `worker.close()` — which awaits the active job via
-   * `whenCurrentJobsFinished` then disconnects Redis — against
-   * {@link QUEUE_DRAIN_TIMEOUT_MS}. A hung handler cannot block shutdown; the
-   * timeout path logs the loss and lets Nest tear down anyway.
+   * Races `worker.close(false)` against {@link QUEUE_DRAIN_TIMEOUT_MS}. The
+   * `false` argument lets BullMQ await the in-flight job via
+   * `whenCurrentJobsFinished` before disconnecting Redis. The timeout path
+   * logs the loss and lets Nest tear down anyway — a hung handler must not
+   * block process exit.
    *
-   * CRITICAL: `Worker.close(force)` semantics are INVERTED from intuition.
-   * `close(false)` (the default) waits for in-flight jobs to finish; `close(true)`
-   * skips the wait and returns immediately. We pass `false` here so a graceful
-   * SIGTERM does not drop the active job mid-handler.
+   * **CRITICAL — `Worker.close(force)` semantics are INVERTED from intuition.**
+   * `close(false)` (the default) WAITS for in-flight jobs to finish;
+   * `close(true)` SKIPS the wait and returns immediately. We pass `false`
+   * here so a graceful SIGTERM does not drop the active job mid-handler.
    */
   async onModuleDestroy(): Promise<void> {
     const name = this.worker?.name ?? 'unknown'
@@ -72,22 +78,21 @@ export abstract class QueueProcessorBase extends WorkerHost implements OnModuleD
         graceMs: QUEUE_DRAIN_TIMEOUT_MS,
         err: err instanceof Error ? err.message : String(err),
       })
-      // Fall through — Nest will teardown anyway; we just logged the loss.
     }
   }
 
   /**
-   * BullMQ-invoked entry point. Sealed to the base because BullMQ's `WorkerHost`
-   * calls `process()` directly; concrete processors implement {@link handleJob}.
+   * BullMQ-invoked entry point. Sealed to the base — BullMQ's `WorkerHost`
+   * calls `process()` directly, and concrete processors implement
+   * {@link handleJob} instead.
    *
-   * Behavior:
-   * 1. Recursively strips `__proto__` / `constructor` / `prototype` keys from
-   *    `job.data` (mutates in place) so prototype-pollution payloads cannot
-   *    chain into downstream object lookups.
-   * 2. Delegates to {@link handleJob}.
+   * Recursively strips `__proto__` / `constructor` / `prototype` keys from
+   * `job.data` (mutating in place) so prototype-pollution payloads cannot
+   * chain into downstream object lookups, then delegates to
+   * {@link handleJob}.
    *
    * Concrete processors should STILL Zod-validate `job.data` before use —
-   * sanitization is a defense-in-depth, not a schema check.
+   * sanitization is defense-in-depth, not a schema check.
    */
   override async process(job: Job): Promise<QueueJobResult> {
     if (job.data && typeof job.data === 'object') {
@@ -99,17 +104,21 @@ export abstract class QueueProcessorBase extends WorkerHost implements OnModuleD
   /**
    * Concrete processor entry point. Implement this — NOT `process`.
    *
-   * @returns {@link QueueJobResult} describing the outcome
-   * @throws {@link QueueException} for retryable failures
-   * @throws {@link FatalQueueException} for non-retryable failures
+   * @returns {@link QueueJobResult} describing the outcome.
+   * @throws {@link QueueException} for retryable failures.
+   * @throws {@link FatalQueueException} for non-retryable failures (BullMQ
+   *         short-circuits remaining retries via `UnrecoverableError`).
    */
   protected abstract handleJob(job: Job): Promise<QueueJobResult>
 
   /**
-   * Called by BullMQ after each failed attempt. Delegates the log decision
-   * to `_evaluateJobFailure` then emits at the chosen level. `isFatal=true`
-   * means the error was a {@link FatalQueueException} — BullMQ short-circuits
-   * remaining retries via `UnrecoverableError`.
+   * BullMQ `failed` event hook.
+   *
+   * Delegates the log-level decision to
+   * {@link _evaluateJobFailure} (pure function — unit-testable without a
+   * worker), enriches with `correlationId` from `job.data`, then emits at
+   * the chosen level. `isFatal=true` in the context means the error was a
+   * {@link FatalQueueException}.
    */
   @OnWorkerEvent('failed')
   onFailed(job: Job, error: Error): void {
@@ -123,9 +132,10 @@ export abstract class QueueProcessorBase extends WorkerHost implements OnModuleD
   }
 
   /**
-   * Called by BullMQ when a job completes successfully. Logs duration so
-   * observability tooling can chart processing latency without instrumentation
-   * at every concrete processor.
+   * BullMQ `completed` event hook.
+   *
+   * Logs handler duration so observability tooling can chart processing
+   * latency without instrumentation at every concrete processor.
    */
   @OnWorkerEvent('completed')
   onCompleted(job: Job): void {
@@ -144,9 +154,12 @@ export abstract class QueueProcessorBase extends WorkerHost implements OnModuleD
   }
 
   /**
-   * Called by BullMQ when the worker detects a stalled job (lock not renewed
-   * in time). Leading indicator of either oversize work or saturated workers
-   * — warn level so it surfaces in alerts.
+   * BullMQ `stalled` event hook.
+   *
+   * Fired when the worker fails to renew the job lock in time (handler ran
+   * longer than `lockDuration`, or LockManager was disabled). Leading
+   * indicator of oversize work or saturated workers — `warn` level so it
+   * surfaces in alerts.
    */
   @OnWorkerEvent('stalled')
   onStalled(jobId: string): void {
@@ -154,9 +167,12 @@ export abstract class QueueProcessorBase extends WorkerHost implements OnModuleD
   }
 
   /**
-   * Called by BullMQ on worker-level errors (Redis connection drops, deserialize
-   * failures). Distinct from `onFailed` — `onError` is infrastructure, `onFailed`
-   * is application logic.
+   * BullMQ `error` event hook.
+   *
+   * Distinct from {@link onFailed}: `error` is infrastructure (Redis
+   * connection drops, deserialize failures), `failed` is application logic.
+   * Reads `error.name` first so a minified `error.constructor.name` does
+   * not obscure the original class.
    */
   @OnWorkerEvent('error')
   onError(error: Error): void {
@@ -165,9 +181,11 @@ export abstract class QueueProcessorBase extends WorkerHost implements OnModuleD
   }
 
   /**
-   * Merges `correlationId` from `job.data` into a log context when present.
-   * Producers populate it from CLS — see {@link QueueJobBaseData}. Absent IDs
-   * yield the unmodified context (no `correlationId: undefined` noise).
+   * Merge `correlationId` from `job.data` into a log context when present.
+   *
+   * Producers populate `correlationId` from CLS at enqueue time — see
+   * {@link QueueJobBaseData}. Absent IDs yield the unmodified context so
+   * logs do not carry `correlationId: undefined` noise.
    */
   private withCorrelationId(job: Job, context: Record<string, unknown>): Record<string, unknown> {
     const data = job.data as QueueJobBaseData | null | undefined

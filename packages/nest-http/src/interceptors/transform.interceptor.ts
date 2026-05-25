@@ -8,19 +8,27 @@ import { USE_ENVELOPE_KEY } from '../decorators/use-envelope.decorator.js'
 type ListEnvelope<T = unknown> = { object: 'list'; data: T[] }
 
 /**
- * Response transform interceptor.
+ * Enforce the project's response-shape contract.
  *
- * Contract:
- * - No `@UseEnvelope()`        -> return resource as-is (single object / scalar).
- * - `@UseEnvelope()` + array   -> wrap as `{ object: 'list', data: [...] }`.
- * - `@UseEnvelope()` + already-shaped envelope (incl. paginated DTOs) -> pass-through.
- * - `@UseEnvelope()` + non-list -> throw InternalServerErrorException (contract violation).
+ * **Decision matrix:**
+ * | Handler returns | `@UseEnvelope()`? | Outcome                               |
+ * |-----------------|-------------------|---------------------------------------|
+ * | single resource | absent            | returned as-is                        |
+ * | scalar          | absent            | returned as-is                        |
+ * | `T[]`           | present           | wrapped → `{ object: 'list', data }`  |
+ * | already-envelope| present           | returned as-is (no double-wrap)       |
+ * | non-list        | present           | `InternalServerErrorException` — bug  |
  *
- * Always pass-through:
- * - null / undefined (lets NestJS choose 204 or default body)
- * - StreamableFile, Buffer (binary streams / file downloads / SSE)
+ * **Always pass-through (regardless of decorator):**
+ * - `null` / `undefined` — lets Nest decide 204 vs default body.
+ * - `StreamableFile`, `Buffer` — binary streams, downloads, SSE.
  *
- * Reference: https://cloud.google.com/apis/design/design_patterns
+ * Throwing on `@UseEnvelope()` + non-list is intentional: it surfaces
+ * controller bugs at request time instead of silently shipping a
+ * mis-shaped payload.
+ *
+ * @see {@link https://cloud.google.com/apis/design/design_patterns}
+ *      — Google API Design Guide (collection envelope pattern)
  */
 @Injectable()
 export class TransformInterceptor implements NestInterceptor {
@@ -50,6 +58,7 @@ export class TransformInterceptor implements NestInterceptor {
     )
   }
 
+  /** Duck-type check for an already-shaped `{ object: 'list', data: [] }`. */
   private isListEnvelope(data: unknown): data is ListEnvelope {
     return (
       typeof data === 'object' &&

@@ -5,16 +5,16 @@ import { ClsService } from 'nestjs-cls'
 import type { Observable } from 'rxjs'
 
 /**
- * Request context interceptor
+ * Mirror the per-request CLS ID onto the `X-Request-Id` response header
+ * so clients can quote it back when reporting incidents and operators can
+ * grep structured logs for it directly.
  *
- * Features:
- * 1. Adds the Request ID to the X-Request-Id response header
- * 2. Provides a unique identifier for each request to aid log tracing and debugging
+ * Header is omitted when CLS has no ID (e.g. a request that bypassed the
+ * CLS middleware) rather than fabricating one downstream — the canonical
+ * source is `setupClsContext`.
  *
- * Use cases:
- * - Distributed system tracing
- * - Log correlation
- * - Debugging
+ * @see {@link CorrelationIdInterceptor} — sibling that handles the
+ *      cross-service business-transaction ID.
  */
 @Injectable()
 export class RequestContextInterceptor implements NestInterceptor {
@@ -23,15 +23,10 @@ export class RequestContextInterceptor implements NestInterceptor {
   intercept(context: ExecutionContext, next: CallHandler): Observable<unknown> {
     const httpContext = context.switchToHttp()
     const response = httpContext.getResponse<Response>()
-
-    // Retrieve the Request ID for the current request
     const requestId = this.cls.getId()
-
-    // Add the Request ID to the response header
     if (requestId) {
       response.setHeader('X-Request-Id', requestId)
     }
-
     return next.handle()
   }
 }

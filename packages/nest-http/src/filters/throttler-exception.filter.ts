@@ -9,17 +9,24 @@ import { throttleConfig } from '../config/throttle.config.js'
 import type { ProblemDetailsDto } from '../dtos/problem-details.dto.js'
 
 /**
- * Throttler exception filter
+ * Specialised filter for `@nestjs/throttler` rate-limit failures.
  *
- * Spec:
- * - RFC 6585 §4 (429 Too Many Requests): https://www.rfc-editor.org/rfc/rfc6585.html#section-4
- * - IETF Rate Limit Headers: https://datatracker.ietf.org/doc/html/draft-ietf-httpapi-ratelimit-headers
+ * Renders the RFC 9457 Problem Details body and attaches the headers
+ * standard clients expect on a 429 response:
+ * - `Retry-After` (RFC 6585 §4, mandatory). Set to the full TTL window
+ *   in seconds — `@nestjs/throttler` does not surface the offending
+ *   bucket's exact time-to-reset, so the full TTL is the safe upper
+ *   bound a client can back off to without hammering.
+ * - `X-RateLimit-Limit` / `X-RateLimit-Remaining` / `X-RateLimit-Reset`
+ *   per the IETF rate-limit-headers draft.
  *
- * Features:
- * - Catches @nestjs/throttler rate limit exceptions
- * - Adds the RFC 6585 required Retry-After header
- * - Adds X-RateLimit-* headers
- * - Uses RFC 9457 Problem Details format
+ * Registered before {@link AllExceptionsFilter} because the catch-all
+ * would otherwise swallow `ThrottlerException` and miss the headers.
+ *
+ * @see {@link https://www.rfc-editor.org/rfc/rfc6585.html#section-4}
+ *      — RFC 6585 §4 (429 Too Many Requests)
+ * @see {@link https://datatracker.ietf.org/doc/html/draft-ietf-httpapi-ratelimit-headers}
+ *      — IETF rate-limit-headers draft
  */
 @Catch(ThrottlerException)
 export class ThrottlerExceptionFilter implements ExceptionFilter {
@@ -40,20 +47,12 @@ export class ThrottlerExceptionFilter implements ExceptionFilter {
     const limit = this.throttleCfg.limit
     const resetTime = Math.floor(Date.now() / 1000) + ttl
 
-    // RFC 6585 §4 requires Retry-After. We expose the full TTL window rather than
-    // the exact time-to-reset of the offending bucket — @nestjs/throttler does not
-    // surface per-bucket remaining time, and full-TTL is the safe upper bound.
     response.setHeader('Retry-After', ttl.toString())
-
-    // IETF Rate Limit Headers draft
     response.setHeader('X-RateLimit-Limit', limit.toString())
     response.setHeader('X-RateLimit-Remaining', '0')
     response.setHeader('X-RateLimit-Reset', resetTime.toString())
-
-    // RFC 9457 media type
     response.setHeader('Content-Type', 'application/problem+json')
 
-    // Build Problem Details response
     const problemDetails: ProblemDetailsDto = {
       type: `${this.httpCfg.apiBaseUrl}/errors/rate-limit-exceeded`,
       title: 'Too Many Requests',
@@ -76,9 +75,7 @@ export class ThrottlerExceptionFilter implements ExceptionFilter {
       ],
     }
 
-    // Log warning
     this.logger.warn(`Rate limit exceeded: ${request.method} ${request.url} - ${request.ip}`)
-
     response.status(429).json(problemDetails)
   }
 }

@@ -9,19 +9,17 @@ import { httpConfig } from '../config/http.config.js'
 import type { FieldError, ProblemDetailsDto } from '../dtos/problem-details.dto.js'
 
 /**
- * RFC 9457 Problem Details exception filter
+ * RFC 9457 Problem Details renderer for every `HttpException`.
  *
- * Spec: https://www.rfc-editor.org/rfc/rfc9457.html
+ * **Responsibilities:**
+ * - Map status code → canonical `type` URI + `title`.
+ * - Surface tracing IDs (`request_id`/`correlation_id`/`trace_id`) from CLS.
+ * - Translate class-validator failures into the structured `errors[]` array.
+ * - Translate `BadRequestException(['…'])` array payloads (which would
+ *   otherwise be silently dropped) into a usable `errors` field.
+ * - Emit `Content-Type: application/problem+json` + `Cache-Control: no-store`.
  *
- * Features:
- * - Converts all HTTP exceptions to the standard Problem Details format
- * - Automatically extracts class-validator validation errors
- * - Includes request tracing info (Request ID, Correlation ID, Trace ID)
- *
- * Use cases:
- * - All HTTP exceptions (400, 401, 403, 404, 409, 422, 429, etc.)
- * - Validation errors (exceptions thrown by ValidationPipe)
- * - Business exceptions (manually thrown HttpException)
+ * @see {@link https://www.rfc-editor.org/rfc/rfc9457.html} — RFC 9457
  */
 @Catch(HttpException)
 export class ProblemDetailsFilter implements ExceptionFilter {
@@ -33,8 +31,9 @@ export class ProblemDetailsFilter implements ExceptionFilter {
   ) {}
 
   /**
-   * Paths to suppress logging in development
-   * e.g. Service Worker requests from frontend MSW
+   * Paths suppressed from access logs — typically dev tooling probes
+   * (e.g. MSW service-worker file) that would otherwise pollute logs
+   * with 404 noise.
    */
   readonly #silentPaths = ['/mockServiceWorker.js']
 
@@ -45,13 +44,11 @@ export class ProblemDetailsFilter implements ExceptionFilter {
     const status = exception.getStatus()
     const exceptionResponse = exception.getResponse()
 
-    // Silently handle specific paths (skip logging, return 404 directly)
     if (status === 404 && this.#silentPaths.includes(request.url)) {
       response.status(404).end()
       return
     }
 
-    // Build Problem Details response
     const errorPayload = this.buildErrorPayload(
       exceptionResponse as string | Record<string, unknown> | unknown[],
       exception,
@@ -69,7 +66,6 @@ export class ProblemDetailsFilter implements ExceptionFilter {
       ...errorPayload,
     }
 
-    // Log the request
     const logMessage = `${request.method} ${request.url} ${status}`
     if (status >= 500) {
       this.logger.error(logMessage, exception.stack)
@@ -77,33 +73,26 @@ export class ProblemDetailsFilter implements ExceptionFilter {
       this.logger.warn(logMessage)
     }
 
-    // Set response headers (RFC 9457 recommended media type)
     response.setHeader('Content-Type', 'application/problem+json')
-    // Prevent browsers from caching error responses
     response.setHeader('Cache-Control', 'no-store')
-
     response.status(status).json(problemDetails)
   }
 
   /**
-   * Generate the problem type URI
+   * Resolve the RFC 9457 `type` URI for a given status code.
    *
-   * RFC 9457 §3.1.1: the type field should be a URI, ideally dereferenceable to human-readable documentation.
-   * §4.1 reserves "about:blank" as the default when no canonical type URI is known — used
-   * for statuses outside the mapped allowlist so we never invent a fake /errors/unknown-error doc.
+   * RFC 9457 §4.1 reserves `about:blank` for cases without a canonical
+   * type URI — used here for statuses outside the mapped allowlist so we
+   * never fabricate a fake `/errors/unknown` documentation link.
    */
   private getTypeUri(status: number): string {
     const errorType = this.getErrorType(status)
-    if (errorType === 'about:blank') {
-      return 'about:blank'
-    }
+    if (errorType === 'about:blank') return 'about:blank'
     const baseUrl = this.httpCfg.apiBaseUrl
     return `${baseUrl}/errors/${errorType}`
   }
 
-  /**
-   * Get the error type identifier (kebab-case)
-   */
+  /** Map status code → kebab-case error slug used in the `type` URI path. */
   private getErrorType(status: number): string {
     const typeMap: Record<number, string> = {
       400: 'bad-request',
@@ -118,14 +107,14 @@ export class ProblemDetailsFilter implements ExceptionFilter {
       503: 'service-unavailable',
       504: 'gateway-timeout',
     }
-
     return typeMap[status] ?? 'about:blank'
   }
 
   /**
-   * Get the error title (short summary)
+   * Resolve the short human-readable `title` (RFC 9457 §3.1.2).
    *
-   * RFC 9457 §3.1.2: title should be a short, human-readable summary
+   * Falls back to `exception.name` for unmapped statuses so callers still
+   * get a meaningful identifier instead of an empty string.
    */
   private getTitle(status: number, exception: HttpException): string {
     const titleMap: Record<number, string> = {
@@ -141,24 +130,30 @@ export class ProblemDetailsFilter implements ExceptionFilter {
       503: 'Service Unavailable',
       504: 'Gateway Timeout',
     }
-
     return titleMap[status] ?? exception.name
   }
 
   /**
-   * Build error payload fields
+   * Assemble the `code`/`detail`/`errors` fields based on the shape of
+   * the exception response body.
    *
-   * Strategy:
-   * 1. Validation errors (400/422 with field-level data) → code/detail at top level + errors[]
-   * 2. Business errors (exceptionResponse has explicit code) → code/detail at top level, no errors[]
-   * 3. Fallback → code/detail at top level from fallback map
+   * **Strategy (first match wins):**
+   * 1. **Validation** (400/422 with structured class-validator items) →
+   *    `VALIDATION_FAILED` + flattened field-level `errors[]`.
+   * 2. **Array body** (`new BadRequestException(['a','b'])`) → preserved
+   *    as `string[]` in `errors`. Without this branch, `'code' in arr`
+   *    returns false and the payload is silently dropped, leaving the
+   *    client with only `exception.message`.
+   * 3. **Business error** with explicit `{ code, message }` body → forwarded
+   *    verbatim.
+   * 4. **Fallback** → status → code map (`UNAUTHORIZED`, `FORBIDDEN`, …)
+   *    with `INTERNAL_SERVER_ERROR` for any 5xx.
    */
   private buildErrorPayload(
     exceptionResponse: string | Record<string, unknown> | unknown[],
     exception: HttpException,
     status: number,
   ): Pick<ProblemDetailsDto, 'code' | 'detail' | 'errors'> {
-    // 1. Validation errors (class-validator)
     if (status === 400 || status === 422) {
       const validationErrors = this.extractValidationErrors(exceptionResponse)
       if (validationErrors && validationErrors.length > 0) {
@@ -170,9 +165,6 @@ export class ProblemDetailsFilter implements ExceptionFilter {
       }
     }
 
-    // 2. [Phase 2 H4] Array-shape exception body (`new BadRequestException(['a','b'])`).
-    // Without this branch, `'code' in exceptionResponse` returns false on arrays and
-    // the payload is silently dropped — leaving the client with only `exception.message`.
     if (Array.isArray(exceptionResponse)) {
       return {
         code: status >= 500 ? 'INTERNAL_SERVER_ERROR' : 'BAD_REQUEST',
@@ -181,7 +173,6 @@ export class ProblemDetailsFilter implements ExceptionFilter {
       }
     }
 
-    // 3. Business error with explicit code
     if (typeof exceptionResponse === 'object' && 'code' in exceptionResponse) {
       const code = exceptionResponse.code as string
       const msg = exceptionResponse.message
@@ -189,7 +180,6 @@ export class ProblemDetailsFilter implements ExceptionFilter {
       return { code, detail }
     }
 
-    // 4. Fallback: no explicit code
     const detail = typeof exceptionResponse === 'string' ? exceptionResponse : exception.message
     const fallbackCodeMap: Record<number, string> = {
       401: 'UNAUTHORIZED',
@@ -204,9 +194,20 @@ export class ProblemDetailsFilter implements ExceptionFilter {
   }
 
   /**
-   * Extract validation error details
+   * Convert a class-validator failure payload into structured
+   * {@link FieldError} entries.
    *
-   * Converts class-validator error messages into a structured array of field-level errors
+   * Handles both shapes encountered in practice:
+   * - **Legacy string form** (`"email must be an email"`) — split on
+   *   whitespace; the first token is treated as the field name. No
+   *   nesting possible.
+   * - **Structured `ValidationErrorItem`** — passed through
+   *   {@link flattenValidationErrors} so nested DTO failures
+   *   (`address.street.zip`) emit dotted property paths instead of
+   *   being dropped on the top-level scan.
+   *
+   * Returns `undefined` when the shape does not look like a validation
+   * payload, so callers can fall back to other branches.
    */
   private extractValidationErrors(
     exceptionResponse: string | Record<string, unknown> | unknown[],
@@ -226,7 +227,6 @@ export class ProblemDetailsFilter implements ExceptionFilter {
 
     for (const item of exceptionResponse.message) {
       if (typeof item === 'string') {
-        // Legacy string form (e.g. "email must be an email") — no nesting possible.
         const parts = item.split(' ')
         const field = parts[0] ?? 'unknown'
         errors.push({
@@ -240,8 +240,6 @@ export class ProblemDetailsFilter implements ExceptionFilter {
       }
     }
 
-    // Flatten the structured tree so nested DTOs (e.g. address.street.zip) produce
-    // dotted property paths instead of being dropped on the top-level scan.
     for (const flat of flattenValidationErrors(structuredItems)) {
       errors.push({
         field: flat.property,
@@ -254,9 +252,7 @@ export class ProblemDetailsFilter implements ExceptionFilter {
     return errors.length > 0 ? errors : undefined
   }
 
-  /**
-   * Type guard: checks whether the value is a ValidationErrorItem
-   */
+  /** Type guard for the structured class-validator error item shape. */
   private isValidationErrorItem(item: unknown): item is ValidationErrorItem {
     return (
       typeof item === 'object' &&

@@ -5,15 +5,29 @@ import { Pool } from 'pg'
 import type { DrizzleDb, DrizzleModuleOptions } from './db.port.js'
 
 /**
- * Creates a Drizzle database instance alongside the underlying pg Pool.
+ * Build a Drizzle database instance alongside its underlying pg `Pool`.
  *
- * Returns both db and pool so DrizzleService can manage pool lifecycle
- * (drain on SIGTERM via OnModuleDestroy).
+ * Returns both so {@link DrizzleService} can own pool lifecycle (drain on
+ * SIGTERM via `OnModuleDestroy`).
  *
- * Statement-level timeouts are NOT set here via pool.on('connect') — that
- * pattern silently breaks under PgBouncer transaction mode. Role-level
- * timeouts are enforced via packages/database/sql/00-init-role-timeouts.sql
- * (run once per environment before first migration).
+ * **Why no `pool.on('connect')` for `statement_timeout`:** that pattern
+ * silently breaks under PgBouncer transaction mode — settings issued on
+ * connect run against a shared backend and may not apply to the pooled
+ * session. Role-level timeouts are enforced once per environment via
+ * `packages/database/sql/00-init-role-timeouts.sql` before the first
+ * migration. Per-query overrides go through {@link withTimeout}.
+ *
+ * **Pool error handler:** attached to prevent process crash from an
+ * unhandled EventEmitter error on idle client drop. Writes directly to
+ * `process.stderr` rather than `console.error` because (a) the handler
+ * runs outside DI scope so no injected logger is available, and (b)
+ * structured-log pipelines (pino) may intercept `console.*` and drop it;
+ * raw stderr is always visible in crash logs.
+ *
+ * @param options {@link DrizzleModuleOptions} — connection string + pool tunables.
+ * @returns `{ db, pool }` — db for query use, pool for lifecycle management.
+ *
+ * @see DrizzleService for the lifecycle wrapper consumed by `DrizzleModule`.
  */
 export function createDrizzleInstance(options: DrizzleModuleOptions): {
   db: DrizzleDb
@@ -27,11 +41,6 @@ export function createDrizzleInstance(options: DrizzleModuleOptions): {
     connectionTimeoutMillis: options.pool?.connectionTimeoutMillis ?? 5000,
   })
 
-  // Prevent process crash from unhandled EventEmitter error on idle client drop.
-  // process.stderr.write is used instead of console.error: the handler runs
-  // outside DI scope so no injected logger is available, and console.* is
-  // intercepted/filtered by structured-log pipelines (pino) which may suppress
-  // it. A raw stderr write is always visible in crash logs.
   pool.on('error', (err: Error) => {
     process.stderr.write(`[pg-pool] Unexpected idle client error: ${err.message}\n`)
   })

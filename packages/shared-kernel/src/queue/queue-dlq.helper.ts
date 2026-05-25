@@ -4,13 +4,14 @@ import { QueueException } from './queue.exception.js'
 import type { QueueJobBaseData } from './queue-job-data.types.js'
 
 /**
- * Operator-facing summary of a permanently failed job. Strips BullMQ ceremony
- * (private fields, method references) so it serialises cleanly over an admin
- * API or a CLI listing.
+ * Operator-facing summary of a permanently failed job.
  *
- * `failedAt` is the BullMQ `finishedOn` ms timestamp — set on the final failed
- * attempt. Absent only if the job is mid-flight, which can't happen for jobs
- * pulled from the `failed` set.
+ * Strips BullMQ ceremony (private fields, method references) so it
+ * serialises cleanly over an admin API or a CLI listing.
+ *
+ * `failedAt` is the BullMQ `finishedOn` ms timestamp, set on the final
+ * failed attempt. Absent only if the job is mid-flight — which cannot
+ * happen for jobs pulled from the `failed` set, so `0` is a safe fallback.
  */
 export interface FailedJobSummary {
   id: string
@@ -27,12 +28,14 @@ export interface FailedJobSummary {
  * List permanently failed jobs from a BullMQ queue's `failed` set.
  *
  * Pure delegation to {@link Queue.getFailed} + summary mapping. The `failed`
- * set is bounded by the producer's `removeOnFail` (see QueueModule defaults:
- * 5000). Tune per queue if operators need a longer retry window.
+ * set is bounded by the producer's `removeOnFail` (QueueModule default:
+ * `5000`). Tune per queue if operators need a longer retry window.
  *
- * @param queue   BullMQ Queue obtained via `@InjectQueue(name)`
- * @param start   inclusive 0-based offset (default 0)
- * @param end     inclusive upper bound (default 50 — match operator UI page size)
+ * @param queue BullMQ `Queue` obtained via `@InjectQueue(name)`.
+ * @param start Inclusive 0-based offset. Defaults to `0`.
+ * @param end   Inclusive upper bound. Defaults to `50` (matches typical
+ *              operator UI page size).
+ * @returns Newest-first array of {@link FailedJobSummary}.
  */
 export async function getFailedJobs(
   queue: Queue,
@@ -46,15 +49,22 @@ export async function getFailedJobs(
 /**
  * Manually requeue a failed job by ID.
  *
- * Delegates to {@link Job.retry}, which resets `attemptsMade` and moves the
- * job back to `wait`. Defensive: rejects missing or non-`failed` jobs so a
+ * Delegates to {@link Job.retry}, which resets `attemptsMade` and moves
+ * the job back to `wait`. Defensive on missing or non-`failed` jobs so a
  * caller bug (stale ID list, racing operator) becomes a typed exception
  * instead of a silent BullMQ no-op.
  *
- * NOTE: `Job.retry()` bypasses the configured backoff — manual retry is
- * immediate. Document this in any admin UI exposing the helper.
+ * **Caveat:** `Job.retry()` bypasses the configured backoff — the manual
+ * retry runs immediately. Surface this in any admin UI exposing the helper
+ * so operators do not accidentally re-trigger a flapping downstream.
  *
- * @throws {@link QueueException} if the job is missing or not in `failed`
+ * @param queue  BullMQ `Queue` obtained via `@InjectQueue(name)`.
+ * @param jobId  The job ID from {@link FailedJobSummary.id}.
+ * @param logger Optional logger; when provided, emits a `'manual retry'`
+ *               record at `log` level with `correlationId` propagated.
+ *
+ * @throws {@link QueueException} if the job is missing or not in the
+ *         `failed` state.
  */
 export async function retryFailedJob(queue: Queue, jobId: string, logger?: Logger): Promise<void> {
   const job = await queue.getJob(jobId)
@@ -74,6 +84,11 @@ export async function retryFailedJob(queue: Queue, jobId: string, logger?: Logge
   await job.retry()
 }
 
+/**
+ * Convert a BullMQ `Job` to the operator-facing {@link FailedJobSummary}
+ * shape. Coerces nullable BullMQ fields to safe defaults so consumers do
+ * not need defensive checks.
+ */
 function toSummary(job: Job, queueName: string): FailedJobSummary {
   const data = job.data as QueueJobBaseData | null | undefined
   return {

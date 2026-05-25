@@ -1,15 +1,17 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger'
 
 /**
- * Error detail
+ * A single error detail entry inside a {@link ProblemDetailsDto.errors} array.
  *
- * Spec:
- * - JSON Pointer (RFC 6901): https://www.rfc-editor.org/rfc/rfc6901.html
- * - Google AIP-193 error model: https://google.aip.dev/193
+ * Two usage modes distinguished by the presence of `field` / `pointer`:
+ * - **Field-level validation error** — `field`/`pointer` populated. Used by
+ *   the `flattenValidationErrors` adapter when class-validator reports a
+ *   per-property failure.
+ * - **General error** — `field`/`pointer` absent. Used for cross-field or
+ *   business-rule failures.
  *
- * Usage rules:
- * - field present: field-level validation error (e.g. invalid email format)
- * - field absent: general error (e.g. business rule error, system error)
+ * @see {@link https://www.rfc-editor.org/rfc/rfc6901.html} — JSON Pointer (RFC 6901)
+ * @see {@link https://google.aip.dev/193} — Google AIP-193 error model
  */
 export class FieldError {
   @ApiPropertyOptional({
@@ -50,24 +52,21 @@ export class FieldError {
 }
 
 /**
- * RFC 9457 Problem Details standard error response
+ * RFC 9457 Problem Details response shape returned by every error handler.
  *
- * Spec: https://www.rfc-editor.org/rfc/rfc9457.html
+ * **Field groupings:**
+ * 1. **Core (RFC 9457 §3.1)** — `type`, `title`, `status`, `instance`. The
+ *    `type` URI should dereference to human-readable documentation.
+ * 2. **Tracing extensions** — `request_id`, `correlation_id`, `trace_id`,
+ *    `timestamp`. Sourced from CLS context so error responses can be
+ *    correlated with structured logs across services.
+ * 3. **Business error extensions** — `code` (machine-readable),
+ *    `detail` (human-readable). Set by the all-exceptions filter when the
+ *    underlying error carries an {@link import('@onwealth/shared-kernel').ErrorCode}.
+ * 4. **Validation error extensions** — `errors[]`. Populated only when the
+ *    underlying exception originated from class-validator.
  *
- * Core fields (RFC 9457 standard):
- * - type: problem type URI (should be dereferenceable to documentation)
- * - title: short human-readable summary
- * - status: HTTP status code
- * - instance: URI reference where the problem occurred
- *
- * Extension fields (application-specific):
- * - request_id: request tracing ID
- * - correlation_id: correlation ID (cross-service tracing)
- * - trace_id: distributed tracing ID
- * - timestamp: time the error occurred
- * - code: machine-readable error code (business errors)
- * - detail: human-readable description of this specific occurrence (business errors)
- * - errors: field-level error details array (validation errors only)
+ * @see {@link https://www.rfc-editor.org/rfc/rfc9457.html} — RFC 9457
  */
 export class ProblemDetailsDto {
   @ApiProperty({
@@ -94,8 +93,6 @@ export class ProblemDetailsDto {
   })
   instance?: string
 
-  // ========== Extension fields (application-specific) ==========
-
   @ApiPropertyOptional({
     description: 'Request tracing ID',
     example: 'req_xyz789',
@@ -120,8 +117,6 @@ export class ProblemDetailsDto {
   })
   timestamp?: string
 
-  // ========== Business error fields ==========
-
   @ApiPropertyOptional({
     description: 'Machine-readable error code (business errors only)',
     example: 'INVALID_CREDENTIALS',
@@ -134,8 +129,15 @@ export class ProblemDetailsDto {
   })
   detail?: string
 
-  // ========== Validation error details (validation errors only) ==========
-
+  /**
+   * Field-level error details. Populated by `flattenValidationErrors`
+   * for class-validator failures.
+   *
+   * May degrade to `string[]` when a controller throws
+   * `new BadRequestException([...])` with raw messages instead of a
+   * structured class-validator payload — RFC 9457 §3.2 permits the
+   * extension to carry either shape.
+   */
   @ApiPropertyOptional({
     description:
       'Field-level error details (validation errors only; absent for business/system errors). ' +
