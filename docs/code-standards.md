@@ -60,8 +60,14 @@ Enforced locally by the lefthook `commit-msg` hook; CI is the hard gate.
 
 ## Modules & File Size
 
-- Keep files ≤ 200 lines where practical.
+- Keep files ≤ 200 lines where practical. Extract helpers to a sibling file when a class approaches the limit — e.g. `all-exceptions.filter.ts` (132 LOC) extracts DB-error mapping to `database-error-mapper.ts`; `link-header.interceptor.ts` (67 LOC) extracts URL building to `link-header-builder.ts`.
 - Split by logical concern (one responsibility per module).
+
+## DI Providers for Interceptors
+
+Interceptors that have constructor dependencies (config namespaces, services) **must** be registered as NestJS DI providers, not instantiated with `new`. `LocationHeaderInterceptor` and `LinkHeaderInterceptor` are concrete examples: they use `@Inject(httpConfig.KEY)` in their constructor and are registered in `AppModule.providers`. `configureHttpApp` retrieves them via `app.get(LocationHeaderInterceptor)` / `app.get(LinkHeaderInterceptor)` before passing to `app.useGlobalInterceptors()`.
+
+**Do not** use `new InterceptorName(...)` anywhere in bootstrap or module files when the interceptor depends on injected config or services.
 
 ## DDD Module Pattern
 

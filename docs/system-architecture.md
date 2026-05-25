@@ -233,12 +233,14 @@ AppModule
 ├── ClsModule (global)             ← request-scoped context store  (@onwealth/nest-http createClsConfig)
 ├── LoggerModule                   ← nestjs-pino  (@onwealth/shared-kernel)
 ├── EventEmitterModule             ← wildcard, delimiter "."
-├── DrizzleModule (global)         ← DB_TOKEN  (@onwealth/shared-kernel)
+├── DrizzleModule (global)         ← DB_TOKEN  (@onwealth/shared-kernel); self-loads databaseConfig via ConfigModule.forFeature
 ├── DomainEventsModule (global)    ← DomainEventPublisher  (@onwealth/shared-kernel)
 ├── ThrottlerModule                ← rate limiting  (throttleConfig from @onwealth/nest-http)
 ├── HealthModule                   ← /livez /readyz /health  (@onwealth/nest-http)
-└── CacheModule                    ← CACHE_PORT adapter  (@onwealth/shared-kernel)
+└── CacheModule                    ← CACHE_PORT adapter  (@onwealth/shared-kernel); self-loads redisConfig via ConfigModule.forFeature
 ```
+
+`DrizzleModule`, `CacheModule`, and `QueueModule` are self-contained: each calls `ConfigModule.forFeature(...)` internally to register its typed config factory regardless of how the host app wires `ConfigModule`. Host app does not need to pass config to these modules explicitly.
 
 All `@Global()` modules are enforced by the architecture guard test
 (`packages/shared-kernel/src/__tests__/unit/global-modules.spec.ts`).
@@ -258,16 +260,30 @@ All health routes are `@Public()` (bypass auth) and `@SkipThrottle()`.
 
 ---
 
+## Graceful Shutdown
+
+`main.ts` hoists the `app` reference before `app.listen()` so that fatal process signal handlers can call it:
+
+```
+process.on('unhandledRejection' | 'uncaughtException')
+  └─ app.close()          ← drains HTTP, Postgres pool, BullMQ workers
+       └─ setTimeout(5000).unref()  ← hard-stop fallback if drain stalls
+```
+
+`DrizzleService.onModuleDestroy()` ends the pg Pool. BullMQ workers close on NestJS shutdown hooks. The 5 s hard-stop prevents zombie processes in container environments where the orchestrator sends SIGKILL after its own timeout.
+
+---
+
 ## Security Layers
 
 | Layer | Mechanism |
 |-------|-----------|
-| Headers | Helmet (HSTS, X-Content-Type-Options, X-Frame-Options, …) |
+| Headers | Helmet (HSTS, X-Content-Type-Options, X-Frame-Options, …); scoped CSP on `/swagger` + `/docs` HTML routes (per-route middleware); CSP off on JSON API routes |
 | CORS | Env-driven `ALLOWED_ORIGINS`; exposes `X-Request-Id` |
-| Rate limiting | `ThrottlerGuard` as `APP_GUARD`; configurable TTL + limit |
+| Rate limiting | `ThrottlerGuard` as `APP_GUARD`; `THROTTLE_TTL` ≥ 1000 ms enforced by Zod |
 | Payload | 100 KB JSON body limit (express.json) |
 | Env validation | Zod rejects placeholder secrets and insecure config in production |
-| Logging | Sensitive field redaction in pino config |
+| Logging | Sensitive field redaction in pino config; health probe errors log `errorName` only — never `error.message` (prevents infra topology leaks) |
 
 ---
 

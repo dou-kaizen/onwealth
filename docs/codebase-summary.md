@@ -34,8 +34,8 @@ All cross-cutting infrastructure moved to `@onwealth/shared-kernel` and `@onweal
 
 | File | Purpose |
 |------|---------|
-| `src/main.ts` | Thin entrypoint: `createHttpApp(AppModule)` + `app.useLogger(...)` + `app.listen()` + startup banner |
-| `src/app.module.ts` | Root module: imports infrastructure modules from workspace packages, registers APP_GUARD, applies ETag middleware |
+| `src/main.ts` | Thin entrypoint: `createHttpApp(AppModule)` + `app.useLogger(...)` + `app.listen()` + startup banner; hoists `app` reference for `unhandledRejection`/`uncaughtException` handlers that call `app.close()` + hard-stop fallback |
+| `src/app.module.ts` | Root module: imports infrastructure modules from workspace packages, registers APP_GUARD, applies ETag middleware; registers `LocationHeaderInterceptor` and `LinkHeaderInterceptor` as DI providers |
 
 ### modules/ — Feature Modules
 
@@ -54,6 +54,7 @@ Currently empty (business modules land in future milestones). Reserved path: `sr
 | `integration/di-token-identity.spec.ts` | Verifies DI token singletons across module boundaries (2 cases) |
 | `integration/throttler-headers.spec.ts` | Asserts throttler response headers present (1 case) |
 | `integration/with-timeout.spec.ts` | DB transaction timeout via `withTimeout`; `describe.skipIf(!DATABASE_URL)` — skips offline, runs in CI (1 case) |
+| `integration/global-pipeline.spec.ts` | Regression gate: verifies `configureHttpApp()` wires all global filters/interceptors; uses `vi.hoisted()` to set env before AppModule import |
 
 ### Config Files (apps/api root)
 
@@ -73,9 +74,9 @@ Currently empty (business modules land in future milestones). Reserved path: `sr
 
 | Directory | Key Files | Purpose |
 |-----------|-----------|---------|
-| `cache/` | `cache.port.ts`, `cache.module.ts`, `cache.service.ts` | `CachePort` interface + `CACHE_PORT` Symbol; cache-manager + @keyv/redis adapter |
+| `cache/` | `cache.port.ts`, `cache.module.ts`, `cache.service.ts` | `CachePort` interface + `CACHE_PORT` Symbol; cache-manager + @keyv/redis adapter; self-loads `redisConfig` via `ConfigModule.forFeature(redisConfig)` |
 | `config/` | `app.config.ts`, `database.config.ts`, `redis.config.ts`, `env.schema.ts` | Config namespaces (`appConfig`, `databaseConfig`, `redisConfig`); Zod env schema + `validateEnv` |
-| `database/` | `db.port.ts`, `db.module.ts`, `db.provider.ts`, `drizzle.service.ts`, `db.helpers.ts` | `DB_TOKEN` Symbol; `DrizzleModule.forRoot()`; Pool factory; `DrizzleService` |
+| `database/` | `db.port.ts`, `db.module.ts`, `db.provider.ts`, `drizzle.service.ts`, `db.helpers.ts` | `DB_TOKEN` Symbol; `DrizzleModule.forRoot()`; Pool factory; `DrizzleService`; self-loads `databaseConfig` via `ConfigModule.forFeature(databaseConfig)` |
 | `domain/` | `base-aggregate-root.ts`, `events/` | `BaseAggregateRoot` (private `#domainEvents[]`); `DomainEvent`, `IntegrationEvent` base classes |
 | `errors/` | `error-code.ts`, `validation-error.ts` | `ErrorCode` enum for problem type URIs |
 | `events/` | `domain-events.module.ts`, `domain-event-publisher.ts` | Global `DomainEventsModule`; clear-then-emit via EventEmitter2 (at-most-once) |
@@ -114,12 +115,12 @@ Build: `tsdown` → `dist/index.mjs` + `dist/index.d.mts`. All NestJS + infra de
 
 | Directory | Key Files | Purpose |
 |-----------|-----------|---------|
-| `bootstrap/` | `configure-http-app.ts`, `create-http-app.ts`, `http-app-options.ts` | `configureHttpApp(app, options?)` — shared setup for prod + tests; `createHttpApp(module, options?)` — prod entrypoint wrapper |
-| `config/` | `http.config.ts`, `throttle.config.ts`, `security.config.ts`, `swagger.config.ts`, `cls.config.ts`, `validation.config.ts` | `httpConfig`, `throttleConfig` namespaces; CORS factory; Swagger+Scalar; CLS config; `ValidationPipe` factory |
-| `filters/` | `all-exceptions.filter.ts`, `problem-details.filter.ts`, `throttler-exception.filter.ts` | AllExceptions catch-all; RFC 9457 ProblemDetails; 429 throttler |
-| `interceptors/` | 7 interceptors + `trace-context.util.ts` | RequestContext, CorrelationId, TraceContext, Timeout, LocationHeader, LinkHeader, Transform |
+| `bootstrap/` | `configure-http-app.ts`, `create-http-app.ts`, `http-app-options.ts` | `configureHttpApp(app, options?)` — shared setup for prod + tests; retrieves `LocationHeaderInterceptor`/`LinkHeaderInterceptor` via `app.get()` (DI providers, not `new`); `createHttpApp(module, options?)` — prod entrypoint wrapper |
+| `config/` | `http.config.ts`, `throttle.config.ts`, `security.config.ts`, `swagger.config.ts`, `cls.config.ts`, `validation.config.ts` | `httpConfig`, `throttleConfig` namespaces; CORS factory; Swagger+Scalar; CLS config; `ValidationPipe` factory; `THROTTLE_TTL` enforced ≥ 1000 ms (milliseconds) |
+| `filters/` | `all-exceptions.filter.ts`, `database-error-mapper.ts`, `problem-details.filter.ts`, `throttler-exception.filter.ts` | AllExceptions catch-all (DB error mapping extracted to `database-error-mapper.ts`); RFC 9457 ProblemDetails; 429 throttler |
+| `interceptors/` | 7 interceptors + `trace-context.util.ts`, `link-header-builder.ts` | RequestContext, CorrelationId, TraceContext, Timeout, LocationHeader, LinkHeader (link building extracted to `link-header-builder.ts`), Transform; LocationHeader and LinkHeader are DI providers (`@Inject(httpConfig.KEY)`) |
 | `middleware/` | `etag.middleware.ts` | ETag on all routes |
-| `health/` | `health.module.ts`, `health.controller.ts`, `drizzle.health.ts`, `redis.health.ts` | `HealthModule`; `/livez`, `/readyz`, `/health`; Terminus indicators |
+| `health/` | `health.module.ts`, `health.controller.ts`, `drizzle.health.ts`, `redis.health.ts` | `HealthModule`; `/livez`, `/readyz`, `/health`; Terminus indicators; thrown errors become static `ServiceUnavailableException` — error.message never surfaced (prevents infra topology leaks) |
 | `decorators/` | `public.decorator.ts`, `use-envelope.decorator.ts`, `api-problem-responses.decorator.ts`, `validators/` | `@Public`, `@UseEnvelope`, `@ApiProblemResponses`, typed validators |
 | `dtos/` | `cursor-pagination.dto.ts`, `offset-pagination.dto.ts`, `list-response.dto.ts`, `problem-details.dto.ts` | Shared HTTP DTOs |
 
@@ -130,6 +131,8 @@ Build: `tsdown` → `dist/index.mjs` + `dist/index.d.mts`. All NestJS + infra de
 | `health/__tests__/health.controller.spec.ts` | HealthController unit tests (9 cases) |
 | `interceptors/__tests__/trace-context.util.spec.ts` | TraceContext utility unit tests (14 cases) |
 | `interceptors/__tests__/transform.interceptor.spec.ts` | TransformInterceptor unit tests (7 cases) |
+
+**Scoped CSP:** `/swagger` and `/docs` HTML routes get a per-route helmet middleware with conservative CSP directives (`frame-ancestors`, `object-src`, `base-uri`, `form-action` all `'none'`; `script-src`/`style-src` allow `'self' 'unsafe-inline' cdn.jsdelivr.net`). Global API routes have CSP off (JSON responses do not need it).
 
 Build: `tsdown` → `dist/index.mjs` + `dist/index.d.mts`. All NestJS + infra deps are `peerDependencies`.
 

@@ -38,7 +38,16 @@ without pulling in any HTTP dependencies (`@onwealth/nest-http`).
 
 ## Codebase Review Findings Fix — COMPLETE
 
-24 correctness bugs fixed across 3 phases (1 Critical, 4 High, 13 Medium, 6 Low). 51 test cases added across 10 spec files. CI/tooling hardening applied (pnpm 10.32.1 pinned both CI jobs).
+24 correctness bugs fixed across 3 phases (1 Critical, 4 High, 13 Medium, 6 Low) + Phase 5 Medium Hygiene. 51+ test cases added across 10 spec files (global-pipeline.spec.ts added as regression gate). CI/tooling hardening applied (pnpm 10.32.1 pinned both CI jobs).
+
+**Phase 5 (Medium Hygiene) deliverables:**
+- Module bootstrap unified: `CacheModule`, `DrizzleModule`, `QueueModule` all self-load typed config via `ConfigModule.forFeature` — self-contained regardless of host-app wiring
+- Scoped CSP on `/swagger` + `/docs` HTML routes via per-route helmet middleware; global JSON routes unaffected
+- Health endpoint sanitization: thrown errors → static `ServiceUnavailableException`; logs emit `errorName` only
+- Graceful shutdown on `unhandledRejection`/`uncaughtException`: `app.close()` + 5 s hard-stop fallback
+- 200-LOC extractions: `database-error-mapper.ts` (from `all-exceptions.filter.ts`), `link-header-builder.ts` (from `link-header.interceptor.ts`)
+- DI restructuring: `LocationHeaderInterceptor`/`LinkHeaderInterceptor` are now DI providers; retrieved via `app.get()` in `configureHttpApp`
+- `THROTTLE_TTL` Zod validator enforces `.min(1000)` (milliseconds); documented in `.env.example`
 
 Ref: `plans/260518-1712-fix-codebase-review-findings/`, journal `docs/journals/2026-05-19-codebase-review-findings-fix.md`.
 
@@ -121,6 +130,13 @@ Enforcement blocked on M2/M3 — meaningful coverage requires domain code to tes
 ### M5 — Domain Events Reliability
 
 Replace at-most-once in-process events with a durable outbox pattern.
+
+Current state (post Codebase Review Round 2 / phase-02 H3): `DomainEventPublisher`
+is at-most-once for fully-published events; the FAILING event is dropped + logged
+and NOT restored to the aggregate (multi-listener `emitAsync` would re-fire
+succeeded listeners on retry). Listeners must be idempotent. This is acceptable
+ONLY while no transactional boundary requires guaranteed delivery — the outbox
+work below is the real fix.
 
 | Task | Notes |
 |------|-------|

@@ -165,6 +165,17 @@ Kubernetes uses `/readyz` for `readinessProbe`. During a release, new pods will 
 
 ---
 
+## Branch Protection — Required Checks
+
+Configure GitHub branch protection on `main` to require BOTH of the following CI status checks before merge:
+
+- `ci` — lint / typecheck / test / build / architecture check
+- `Migration Smoke Test` — empty-schema + idempotent migration run against an ephemeral Postgres
+
+`Migration Smoke Test` is gated on `ci` via `needs: [ci]` in `.github/workflows/ci.yml` — broken builds short-circuit before the smoke job spins up Postgres. Branch protection must still list it explicitly; otherwise a manual re-run can bypass the dependency.
+
+---
+
 ## Unresolved Questions
 
 - Should we add a `--skip-already-applied` short-circuit in the init-container variant to cut cold-start time on multi-replica deploys?
