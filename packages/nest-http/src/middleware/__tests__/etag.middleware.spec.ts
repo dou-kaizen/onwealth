@@ -91,6 +91,21 @@ describe('ETagMiddleware', () => {
     expect(res2.end).toHaveBeenCalled()
   })
 
+  it('returns 304 when If-None-Match contains weak ETag matching server ETag (RFC 9110 §8.8.3)', () => {
+    // First request: generate strong ETag.
+    const res1 = makeRes()
+    runMiddleware(makeReq(), res1, { id: 1 })
+    const strongETag = res1.headers.ETag
+
+    // Second request: simulate proxy that re-emits the ETag as weak (W/-prefixed).
+    const weakETag = `W/${strongETag}`
+    const res2 = makeRes()
+    runMiddleware(makeReq({ headers: { 'if-none-match': weakETag } }), res2, { id: 1 })
+
+    expect(res2.statusCode).toBe(304)
+    expect(res2.end).toHaveBeenCalled()
+  })
+
   it('returns 304 on If-None-Match: * wildcard', () => {
     const req = makeReq({ headers: { 'if-none-match': '*' } })
     const res = makeRes()

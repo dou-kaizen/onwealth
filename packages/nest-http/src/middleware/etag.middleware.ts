@@ -84,7 +84,10 @@ export class ETagMiddleware implements NestMiddleware {
 
     const ifNoneMatch = request.headers['if-none-match']
     if (ifNoneMatch) {
-      const etags = new Set(ifNoneMatch.split(',').map((e) => e.trim()))
+      // RFC 9110 §8.8.3: strip `W/` prefix for weak comparison so proxy-rewritten
+      // ETags (`W/"<hash>"`) match the strong ETags this middleware generates.
+      const normalise = (e: string) => (e.startsWith('W/') ? e.slice(2) : e)
+      const etags = new Set(ifNoneMatch.split(',').map((e) => normalise(e.trim())))
       if (etags.has(etag) || etags.has('*')) {
         return res.status(304).end()
       }

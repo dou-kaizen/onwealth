@@ -68,6 +68,10 @@ export async function configureHttpApp(
 ): Promise<NestExpressApplication> {
   const { testMode = false } = options
 
+  // CSP disabled globally: this app serves JSON only; CSP headers on
+  // `application/json` responses are ignored by browsers. Routes serving HTML
+  // (e.g. OAuth callbacks, email-verify redirects) MUST opt in to a scoped
+  // CSP — see the `/swagger` route block below for the pattern.
   app.use(helmet({ contentSecurityPolicy: false, crossOriginEmbedderPolicy: false }))
 
   /**
