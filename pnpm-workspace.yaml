@@ -10,6 +10,8 @@ packages:
 catalog:
   '@keyv/redis': ^5.1.6
   '@nestjs/bullmq': ^11.0.4
+  '@swc/cli': ^0.8.0
+  '@swc/core': ^1.15.18
   '@nestjs/cache-manager': ^3.1.0
   '@nestjs/common': ^11.1.17
   '@nestjs/config': 4.0.2
@@ -44,6 +46,8 @@ catalog:
   rxjs: ^7.8.2
   tsdown: ^0.21.4
   typescript: ^5.9.3
+  unplugin-swc: ^1.5.9
+  vite-tsconfig-paths: ^6.1.1
   vitest: ^4.1.0
   zod: ^4.3.6
 

@@ -53,6 +53,9 @@
     "rxjs": "catalog:",
     "tsdown": "catalog:",
     "typescript": "catalog:",
+    "@swc/core": "catalog:",
+    "unplugin-swc": "catalog:",
+    "vite-tsconfig-paths": "catalog:",
     "vitest": "catalog:"
   },
   "peerDependencies": {

@@ -1,3 +1,5 @@
+import swc from 'unplugin-swc'
+import tsconfigPaths from 'vite-tsconfig-paths'
 import { defineConfig } from 'vitest/config'
 
 export default defineConfig({
@@ -7,4 +9,25 @@ export default defineConfig({
     include: ['src/**/*.spec.ts'],
     exclude: ['**/*.integration.spec.ts', '**/node_modules/**', '**/dist/**'],
   },
+  plugins: [
+    swc.vite({
+      jsc: {
+        parser: {
+          syntax: 'typescript',
+          decorators: true,
+          dynamicImport: true,
+        },
+        transform: {
+          legacyDecorator: true,
+          decoratorMetadata: true,
+        },
+        target: 'esnext',
+        keepClassNames: true,
+      },
+      module: {
+        type: 'es6',
+      },
+    }),
+    tsconfigPaths(),
+  ],
 })
