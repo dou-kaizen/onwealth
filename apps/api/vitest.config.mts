@@ -21,8 +21,13 @@ export default defineConfig({
         'src/__tests__/**', // exclude test helpers/setup from denominator
       ],
       thresholds: {
-        // TODO: raise thresholds (lines: 80, branches: 70, functions: 80, statements: 80)
-        // as test suite grows beyond infrastructure bootstrapping specs.
+        // Ratcheted baseline. Policy: each phase measures current coverage and
+        // sets the floor at `max(previous_floor, current - 5%)`. Decay below the
+        // floor fails the build. Target: 80/70/80/80 once domain modules land.
+        // Current baseline is 0/0/0/0 — `apps/api` only exercises `main.ts`
+        // bootstrap; substantive code lives in `@boilerplate/nest-http` and
+        // `@boilerplate/shared-kernel` (their own test suites; coverage scripts
+        // to be added per package when their first domain module lands).
         lines: 0,
         branches: 0,
         functions: 0,
