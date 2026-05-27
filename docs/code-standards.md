@@ -180,7 +180,7 @@ the module that uses them — not pre-declared.
 ## Logging
 
 - `pino` via `nestjs-pino`. Production runs with the default formatter; dev uses `pino-pretty`.
-- Sensitive paths configured in `redaction.config.ts` (passwords, tokens, auth headers).
+- Sensitive paths configured in `redaction.config.ts` (passwords, tokens, auth headers, `res.headers["set-cookie"]`).
 - Access log suppression is controlled by `autoLoggingUrlPrefix` (passed to `createLoggerConfig`). Requests whose URL does not start with the prefix are suppressed — defaults to `'/api/'`. Health probe paths are excluded by passing them as `excludePaths` to the logger options.
 
 ## Database
@@ -189,7 +189,7 @@ the module that uses them — not pre-declared.
 - `DrizzleService` owns the pool lifecycle (`OnModuleDestroy` drains on SIGTERM).
 - Migration role has explicit `lock_timeout` set in `packages/database/sql/00-init-role-timeouts.sql`.
 - `withTimeout(db, ms, fn)` in `@boilerplate/shared-kernel` wraps a Drizzle transaction with a per-transaction `statement_timeout` via `SELECT set_config('statement_timeout', $1, true)` (PgBouncer-safe bound parameter; `ms` must be `> 0`). Use only for slow analytics queries — OLTP queries rely on the role-level default.
-- DB constraint errors map to `ErrorCode` values in `AllExceptionsFilter`: SQLSTATE `23505` (unique violation) → `RESOURCE_CONFLICT`; `23503` (FK), `23502` (not-null), `23514` (check) → `CONSTRAINT_VIOLATION`.
+- DB constraint errors map to `ErrorCode` values in `AllExceptionsFilter`: SQLSTATE `23505` (unique violation) → `RESOURCE_CONFLICT`; `23503` (FK), `23502` (not-null), `23514` (check) → `CONSTRAINT_VIOLATION`; `40001` (serialization failure) + `40P01` (deadlock) → `TRANSACTION_CONFLICT` (409 Conflict).
 
 ## Health Probes
 

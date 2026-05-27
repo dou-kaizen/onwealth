@@ -87,11 +87,11 @@ Currently empty (business modules land in future milestones). Reserved path: `sr
 
 BullMQ abstraction layer — production-hardened scaffold, no concrete queues registered. `apps/api` does NOT import `QueueModule` until a concrete queue is introduced.
 
-- **`QueueModule`** — `@Global()` static module; registers two named BullMQ root connections (`queue` producer key, `queue-processor` worker key), self-loads `queueConfig` via `ConfigModule.forFeature`. `defaultJobOptions`: `removeOnComplete: { count: 1000 }`, `removeOnFail: { count: 5000 }`.
+- **`QueueModule`** — `@Global()` static module; registers two named BullMQ root connections (`queue` producer key, `queue-processor` worker key), self-loads `queueConfig` via `ConfigModule.forFeature`. `defaultJobOptions`: `removeOnComplete: { count: 1000 }`, `removeOnFail: { count: 5000 }`, `attempts: 3`, `backoff: { type: 'exponential', delay: 1000 }`.
 - **`QueueProcessorBase`** — abstract `WorkerHost` subclass; `onFailed` emits structured NestJS `Logger` output. Failure-log branching in pure `_evaluateJobFailure(job, error)`. `onModuleDestroy` drains via `worker.close(false)` (waits for active jobs) with 5000 ms timeout race. `FatalQueueException` is treated as terminal regardless of attempt count (`instanceof` check — legacy `error.isFatal` dropped).
 - **`QueueProcessor`** — decorator wrapping `@Processor` with the shared processor connection key; JSDoc documents `limiter` rate-limit option with example.
 - **`FatalQueueException`** — subclass of `QueueException`; signals dead-letter routing without exhausting retries.
-- **`QueueDlqHelper`** — `getFailedJobs(queue)` + `retryFailedJob(queue, jobId)` + `FailedJobSummary` DTO. Pure delegation over BullMQ native `failed` set. Exported from barrel.
+- **`QueueDlqHelper`** — `getFailedJobs(queue)` + `retryFailedJob(queue, jobId)` + `FailedJobSummary` DTO. `FailedJobSummary` intentionally omits raw `data` field (PII risk — callers fetch full job if payload needed). Pure delegation over BullMQ native `failed` set. Exported from barrel.
 - **`QueueJobResult`** — return type contract for all processors. **`EnumQueuePriority`** — job priority levels.
 - **`queueConfig`** — `registerAs('queue', ...)` namespace; resolves `QUEUE_REDIS_URL ?? REDIS_URL`. Redis connection for queues is kept fully separate from the cache `@keyv/redis` client.
 - **`queue/README.md`** — Quick Start, Gotchas (4 production traps), Production Checklist (10 items), DLQ migration sketch.
@@ -167,7 +167,7 @@ This package exports schema types only.
 Two GitHub Actions jobs on push to `main`/`init-infrastructure` and PR to `main`:
 
 **`ci` job** (Node 22, pnpm 10.32.1):
-`typecheck` → `lint` → `turbo test` (all packages) → `deps` (arch check) → `build`
+`typecheck` → `lint` → `turbo test` (all packages) → `Integration Tests` (`pnpm --filter @boilerplate/shared-kernel test:integration`) → `deps` (arch check) → `build`
 
 **`migration-smoke` job** (postgres:16-alpine service):
 `build database package` → `db:init-roles` → `db:migrate` × 2 (second asserts idempotency)
@@ -180,8 +180,9 @@ Two GitHub Actions jobs on push to `main`/`init-infrastructure` and PR to `main`
 |-------|------|-----------|-------------|
 | `DB_TOKEN` | `Symbol` | `@boilerplate/shared-kernel` `database/db.port.ts` | `DrizzleModule.forRoot()` |
 | `CACHE_PORT` | `Symbol` | `@boilerplate/shared-kernel` `cache/cache.port.ts` | `CacheModule` → `CacheService` |
+| `KEYV_REDIS_TOKEN` | `Symbol` | `@boilerplate/shared-kernel` `cache/cache.module.ts` | `CacheModule` → shared `KeyvRedis` instance |
 
-Both symbols are defined in exactly one file and imported only from `@boilerplate/shared-kernel`.
+All symbols defined in exactly one file and imported only from `@boilerplate/shared-kernel`.
 
 ---
 

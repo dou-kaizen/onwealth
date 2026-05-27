@@ -30,6 +30,7 @@ business schemas. Infrastructure phases and subsequent codebase-review bug-fix e
 | JD | JSDoc Audit | Public APIs on all `@boilerplate/*` production source files annotated; internal helpers tagged `@internal` |
 | RC | ms()/bytes() Refactor | All timeout/size literals replaced with named `UPPER_SNAKE_CASE` constants using `ms()` / `bytes()` helpers |
 | N11 | Nest 11 Wildcard Fix | `logger.config.ts` overrides `forRoutes` to `{*path}` syntax (path-to-regexp v8 / Express 5 compatibility) |
+| PA | Production Readiness Audit | `TRANSACTION_CONFLICT` ErrorCode (SQLSTATE 40001/40P01); env prod hardening (ALLOWED_ORIGINS `*`/null rejection, DATABASE_URL SSL check, JWT_SECRET diversity gate); DLQ `FailedJobSummary` drops `data` field (PII); `QueueProcessorBase.process` forwards BullMQ lock token to `handleJob`; `QueueModule.defaultJobOptions` adds `attempts:3` + exponential backoff; `set-cookie` added to pino redactPaths; `KEYV_REDIS_TOKEN` shared `KeyvRedis` instance with `onModuleDestroy` drain; ETag `If-None-Match` strips `W/` prefix (RFC 9110 §8.8.3); `@Public` JSDoc documents NO-OP precondition; `unplugin-swc`/`vite-tsconfig-paths` added to vitest configs; CI adds `Integration Tests` step |
 
 ---
 
@@ -37,7 +38,7 @@ business schemas. Infrastructure phases and subsequent codebase-review bug-fix e
 
 ### FR-01 — Env Validation
 - All env vars parsed and validated at startup via Zod schema.
-- Production mode: rejects placeholder `JWT_SECRET`, `api.example.com` base URL, `redis://` scheme, `THROTTLE_LIMIT > 10000`.
+- Production mode: rejects placeholder `JWT_SECRET`, `api.example.com` base URL, `redis://` scheme, `THROTTLE_LIMIT > 10000`; `ALLOWED_ORIGINS` rejects `*`/`null`; `DATABASE_URL` requires SSL (`sslmode=require`, `ssl=true`, or `postgresql+ssl://`); `JWT_SECRET` requires charset diversity (upper+lower+digit) + ≥16 distinct chars.
 - App refuses to start if validation fails.
 
 ### FR-02 — Security Headers

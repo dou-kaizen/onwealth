@@ -102,6 +102,28 @@ Ref: `plans/260525-1515-queue-production-hardening/`
 
 ---
 
+## Production Readiness Audit — COMPLETE
+
+8-phase audit fix on `init-infrastructure`. No new modules — hardening-only pass.
+
+| Deliverable | Status |
+|-------------|--------|
+| `TRANSACTION_CONFLICT` ErrorCode; SQLSTATE 40001/40P01 → 409 Conflict | Done |
+| Env prod superRefine: `ALLOWED_ORIGINS` rejects `*`/`null`; `DATABASE_URL` requires SSL; `JWT_SECRET` charset diversity + ≥16 distinct chars | Done |
+| `QueueProcessorBase.process(job, token?)` forwards lock token to `handleJob(job, token?)` | Done |
+| `QueueModule.defaultJobOptions`: `attempts: 3`, `backoff: { type: 'exponential', delay: 1000 }` | Done |
+| `FailedJobSummary` drops `data` field (PII risk) | Done |
+| `set-cookie` added to pino `redactPaths` | Done |
+| `KEYV_REDIS_TOKEN` shared `KeyvRedis` instance; `CacheService.onModuleDestroy` drains via `disconnect(false)` | Done |
+| ETag `If-None-Match` strips `W/` prefix (RFC 9110 §8.8.3 weak comparison) | Done |
+| `@Public` JSDoc documents NO-OP precondition (no global guard wired) | Done |
+| `unplugin-swc` + `vite-tsconfig-paths` in vitest configs (shared-kernel + apps/api) | Done |
+| CI `Integration Tests` step: `pnpm --filter @boilerplate/shared-kernel test:integration` | Done |
+
+Ref: `plans/260527-1917-production-readiness-audit/`
+
+---
+
 ## Upcoming Milestones
 
 ### M1 — Cleanup & Reconciliation — Substantially Complete

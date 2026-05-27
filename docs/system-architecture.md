@@ -286,7 +286,7 @@ QueueModule [@Global()]
   └─ processor connection (configKey: 'queue-processor') ← BullMQ Worker instances
 ```
 
-Both connections resolve from `QUEUE_REDIS_URL ?? REDIS_URL`. Queue Redis is fully separate from the cache `@keyv/redis` client — no shared connection. `defaultJobOptions` set globally: `removeOnComplete: { count: 1000 }`, `removeOnFail: { count: 5000 }` (prevents Redis key accumulation in production).
+Both connections resolve from `QUEUE_REDIS_URL ?? REDIS_URL`. Queue Redis is fully separate from the cache `@keyv/redis` client — no shared connection. `defaultJobOptions` set globally: `removeOnComplete: { count: 1000 }`, `removeOnFail: { count: 5000 }`, `attempts: 3`, `backoff: { type: 'exponential', delay: 1000 }` (prevents Redis key accumulation; per-queue overrides allowed via `BullModule.registerQueue`).
 
 ### Failure & Retry Model
 
@@ -303,7 +303,7 @@ job attempt N fails
 BullMQ's native `failed` set is the dead-letter queue. No separate queue or topic needed.
 
 `QueueDlqHelper` provides:
-- `getFailedJobs(queue)` → `FailedJobSummary[]` — paginated inspection
+- `getFailedJobs(queue)` → `FailedJobSummary[]` — paginated inspection; raw `data` field intentionally omitted from `FailedJobSummary` (PII risk — caller must fetch full job if payload needed)
 - `retryFailedJob(queue, jobId)` — moves job back to `waiting`
 
 Migration path for future alerting: instrument `QueueProcessorBase.onFailed` with a metrics hook (deferred to Phase B).
@@ -318,7 +318,7 @@ Migration path for future alerting: instrument `QueueProcessorBase.onFailed` wit
 | CORS | Env-driven `ALLOWED_ORIGINS`; exposes `X-Request-Id` |
 | Rate limiting | `ThrottlerGuard` as `APP_GUARD`; `THROTTLE_TTL` ≥ 1000 ms enforced by Zod |
 | Payload | 100 KB JSON body limit (express.json) |
-| Env validation | Zod rejects placeholder secrets and insecure config in production |
+| Env validation | Zod rejects placeholder secrets and insecure config in production: `ALLOWED_ORIGINS` rejects `*`/`null`; `DATABASE_URL` requires SSL (`sslmode=require`, `ssl=true`, or `postgresql+ssl://`); `JWT_SECRET` requires charset diversity (upper+lower+digit) + ≥16 distinct chars |
 | Logging | Sensitive field redaction in pino config; health probe errors log `errorName` only — never `error.message` (prevents infra topology leaks) |
 
 ---
