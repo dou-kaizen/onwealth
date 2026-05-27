@@ -48,6 +48,15 @@ function parseRedisUrl(url: string): RedisOptions {
  *    retention so the `completed` / `failed` Redis lists cannot grow without
  *    limit. Per-queue overrides via `BullModule.registerQueue({ defaultJobOptions })`
  *    or per-call `queue.add(name, data, opts)`.
+ *
+ * 3. **`defaultJobOptions.attempts / backoff`** — system-wide retry baseline.
+ *    BullMQ defaults to `attempts: 1` (zero retries); a single transient Redis
+ *    blip permanently fails an otherwise recoverable job. Exponential backoff:
+ *    attempt 1 @ 1s, attempt 2 @ 2s, attempt 3 @ 4s. Per-queue producers may
+ *    override via `BullModule.registerQueue({ defaultJobOptions })` or by
+ *    passing `opts` to `queue.add()`. Non-retryable failures must throw
+ *    {@link FatalQueueException} (extends `UnrecoverableError`) — BullMQ
+ *    short-circuits remaining attempts.
  */
 function buildBullRootOptions(cfg: ConfigType<typeof queueConfig>) {
   return {
@@ -58,6 +67,8 @@ function buildBullRootOptions(cfg: ConfigType<typeof queueConfig>) {
     defaultJobOptions: {
       removeOnComplete: { count: 1000 },
       removeOnFail: { count: 5000 },
+      attempts: 3,
+      backoff: { type: 'exponential', delay: 1000 },
     },
   }
 }

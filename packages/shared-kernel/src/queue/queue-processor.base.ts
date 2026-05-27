@@ -64,7 +64,10 @@ export abstract class QueueProcessorBase extends WorkerHost implements OnModuleD
     this.logger.log('queue draining', { worker: name })
     try {
       await Promise.race([
-        this.worker.close(false),
+        // `.catch` suppresses a post-timeout rejection from `worker.close` so a
+        // late-throwing close does not surface as an unhandled rejection after
+        // the race already lost.
+        this.worker?.close(false).catch(() => undefined),
         new Promise<never>((_, reject) =>
           setTimeout(() => reject(new Error('queue drain timeout')), QUEUE_DRAIN_TIMEOUT_MS),
         ),
@@ -94,23 +97,31 @@ export abstract class QueueProcessorBase extends WorkerHost implements OnModuleD
    *
    * Concrete processors should STILL Zod-validate `job.data` before use —
    * sanitization is defense-in-depth, not a schema check.
+   *
+   * @param token BullMQ lock token. Forwarded to {@link handleJob} so concrete
+   *   processors can call `job.extendLock(token, ms)` for long-running work.
+   *   Optional — unit test harnesses that bypass the Worker may omit it.
    */
-  override async process(job: Job): Promise<QueueJobResult> {
+  override async process(job: Job, token?: string): Promise<QueueJobResult> {
     if (job.data && typeof job.data === 'object') {
       stripPrototypePollutionKeys(job.data)
     }
-    return this.handleJob(job)
+    return this.handleJob(job, token)
   }
 
   /**
    * Concrete processor entry point. Implement this — NOT `process`.
    *
+   * @param token BullMQ lock token forwarded from {@link process}. Use
+   *   `await job.extendLock(token, ms)` inside long-running handlers when
+   *   processing time may exceed `WorkerOptions.lockDuration` (default
+   *   30 000 ms). Prefer `AbortSignal.timeout(N)` to bound work instead.
    * @returns {@link QueueJobResult} describing the outcome.
    * @throws {@link QueueException} for retryable failures.
    * @throws {@link FatalQueueException} for non-retryable failures (BullMQ
    *         short-circuits remaining retries via `UnrecoverableError`).
    */
-  protected abstract handleJob(job: Job): Promise<QueueJobResult>
+  protected abstract handleJob(job: Job, token?: string): Promise<QueueJobResult>
 
   /**
    * BullMQ `failed` event hook.
