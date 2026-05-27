@@ -20,6 +20,9 @@ import type { DatabaseError } from 'pg'
  *   - `23503` foreign_key_violation → `422` (CONSTRAINT_VIOLATION)
  *   - `23502` not_null_violation → `422` (CONSTRAINT_VIOLATION)
  *   - `23514` check_violation → `422` (CONSTRAINT_VIOLATION)
+ * - **Class 40 — Transaction Rollback**
+ *   - `40001` serialization_failure → `409 Conflict` (TRANSACTION_CONFLICT)
+ *   - `40P01` deadlock_detected → `409 Conflict` (TRANSACTION_CONFLICT)
  * - **Class 08 — Connection Exception** (`08000/08001/08003/08004/08006`)
  *   → `503 Service Unavailable`. Transient — operators should retry.
  * - **Class 57 — Operator Intervention**
@@ -55,6 +58,18 @@ export function mapDatabaseError(error: DatabaseError): HttpException {
       return new UnprocessableEntityException({
         code: 'CONSTRAINT_VIOLATION',
         message: 'Data failed a database constraint check',
+      })
+    }
+    case '40001': {
+      return new ConflictException({
+        code: 'TRANSACTION_CONFLICT',
+        message: 'Transaction serialization conflict — retry the request',
+      })
+    }
+    case '40P01': {
+      return new ConflictException({
+        code: 'TRANSACTION_CONFLICT',
+        message: 'Deadlock detected — retry the request',
       })
     }
     case '08000':

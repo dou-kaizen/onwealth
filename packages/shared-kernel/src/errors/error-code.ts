@@ -31,6 +31,9 @@ export const ErrorCode = {
   /** FK violation (23503), not-null violation (23502), check violation (23514). */
   CONSTRAINT_VIOLATION: 'CONSTRAINT_VIOLATION',
 
+  /** Serialization failure (40001) or deadlock detected (40P01) — retriable. */
+  TRANSACTION_CONFLICT: 'TRANSACTION_CONFLICT',
+
   UNAUTHORIZED: 'UNAUTHORIZED',
   FORBIDDEN: 'FORBIDDEN',
 
