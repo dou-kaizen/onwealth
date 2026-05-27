@@ -12,6 +12,13 @@ import type { QueueJobBaseData } from './queue-job-data.types.js'
  * `failedAt` is the BullMQ `finishedOn` ms timestamp, set on the final
  * failed attempt. Absent only if the job is mid-flight — which cannot
  * happen for jobs pulled from the `failed` set, so `0` is a safe fallback.
+ *
+ * **Payload omitted:** the raw `job.data` is intentionally NOT included.
+ * Job payloads may contain PII (emails, addresses, financial values); an
+ * admin DLQ endpoint exposing this struct would leak that PII to any
+ * operator with DLQ read access. Callers needing the raw payload should
+ * fetch the underlying `Job` via `queue.getJob(id)` and apply their own
+ * PII-stripping logic before returning it.
  */
 export interface FailedJobSummary {
   id: string
@@ -21,7 +28,6 @@ export interface FailedJobSummary {
   failedReason: string
   failedAt: number
   correlationId?: string
-  data: unknown
 }
 
 /**
@@ -99,6 +105,5 @@ function toSummary(job: Job, queueName: string): FailedJobSummary {
     failedReason: job.failedReason ?? '',
     failedAt: job.finishedOn ?? 0,
     correlationId: data?.correlationId,
-    data: job.data,
   }
 }

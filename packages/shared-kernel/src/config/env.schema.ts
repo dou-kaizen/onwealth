@@ -81,7 +81,10 @@ export const envObjectSchema = z.object({
         ?.split(',')
         .map((s) => s.trim())
         .filter(Boolean),
-    ),
+    )
+    .refine((origins) => !origins?.some((o) => o === '*' || o === 'null'), {
+      message: 'ALLOWED_ORIGINS must not contain wildcard (*) or null entries',
+    }),
 
   REDIS_URL: z.string().refine((value) => /^rediss?:\/\/.+/.test(value), {
     message: 'REDIS_URL must start with redis:// or rediss://',
@@ -135,7 +138,10 @@ export const envObjectSchema = z.object({
  * - `THROTTLE_LIMIT ≤ 10000` — higher values effectively disable rate
  *   limiting.
  * - `REDIS_URL` / `QUEUE_REDIS_URL` MUST use `rediss://` (TLS).
- * - `JWT_SECRET` MUST NOT be the `.env.example` placeholder.
+ * - `DATABASE_URL` MUST include `sslmode=require` or `ssl=true` (or use
+ *   `postgresql+ssl://` scheme) so hosted Postgres connections are encrypted.
+ * - `JWT_SECRET` MUST NOT contain weak placeholder substrings AND MUST have
+ *   charset diversity (upper + lower + digit) AND ≥16 distinct characters.
  * - `API_BASE_URL` MUST NOT contain `api.example.com` (would emit RFC 9457
  *   type URIs pointing at an external domain).
  */
@@ -174,12 +180,52 @@ export const envSchema = envObjectSchema.superRefine((data, ctx) => {
     })
   }
 
-  if (isProd && data.JWT_SECRET === 'your-secret-key-change-me-in-production-min-32-chars') {
-    ctx.addIssue({
-      code: 'custom',
-      path: ['JWT_SECRET'],
-      message: 'JWT_SECRET must not use the example placeholder value in production',
-    })
+  if (isProd) {
+    const dbUrl = data.DATABASE_URL
+    const hasSSL =
+      dbUrl.includes('sslmode=require') ||
+      dbUrl.includes('ssl=true') ||
+      dbUrl.startsWith('postgresql+ssl://')
+    if (!hasSSL) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['DATABASE_URL'],
+        message:
+          'DATABASE_URL must include sslmode=require or ssl=true (or use postgresql+ssl://) in production',
+      })
+    }
+  }
+
+  if (isProd) {
+    const jwt = data.JWT_SECRET
+    const jwtLower = jwt.toLowerCase()
+    const weakPatterns = ['change-me', 'example', 'placeholder', 'your-secret']
+    if (weakPatterns.some((p) => jwtLower.includes(p))) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['JWT_SECRET'],
+        message: 'JWT_SECRET must not contain placeholder substrings in production',
+      })
+    }
+    const hasUpper = /[A-Z]/.test(jwt)
+    const hasLower = /[a-z]/.test(jwt)
+    const hasDigit = /[0-9]/.test(jwt)
+    if (!(hasUpper && hasLower && hasDigit)) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['JWT_SECRET'],
+        message:
+          'JWT_SECRET must contain uppercase, lowercase, and numeric characters in production',
+      })
+    }
+    const distinct = new Set(jwt).size
+    if (distinct < 16) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['JWT_SECRET'],
+        message: `JWT_SECRET must have at least 16 distinct characters in production (current: ${distinct})`,
+      })
+    }
   }
 
   if (isProd && data.API_BASE_URL?.includes('api.example.com')) {

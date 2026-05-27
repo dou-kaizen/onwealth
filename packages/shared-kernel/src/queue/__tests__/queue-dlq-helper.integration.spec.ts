@@ -105,7 +105,6 @@ describe('queue-dlq.helper (testcontainers + real Redis)', () => {
     expect(sample.attemptsMade).toBeGreaterThanOrEqual(1)
     expect(sample.failedReason).toMatch(/echo-throw/)
     expect(sample.failedAt).toBeGreaterThan(0)
-    expect(sample.data).toMatchObject({ behaviour: 'throw' })
     const withCorr = aOnly.find((s) => s.correlationId === 'corr-a-1')
     expect(withCorr).toBeDefined()
   })

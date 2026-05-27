@@ -40,6 +40,7 @@ export const redactPaths = [
   'res.body.token',
   'res.body.accessToken',
   'res.body.refreshToken',
+  'res.headers["set-cookie"]',
 
   '*.connectionOptions.password',
   '*.options.password',
