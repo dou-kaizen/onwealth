@@ -1,6 +1,6 @@
 # Code Standards
 
-Conventions and rationale for non-obvious decisions in the onwealth codebase.
+Conventions and rationale for non-obvious decisions in this NestJS boilerplate.
 
 ## TypeScript Compiler Settings
 
@@ -196,6 +196,51 @@ the module that uses them — not pre-declared.
 - `/livez` — process responsiveness only (no I/O dependencies).
 - `/readyz` — DB + Redis with a 3 s `Promise.race` deadline; degraded state returns 503.
 - `/health` — detailed multi-component breakdown (verbose, not for orchestrator probes).
+
+## Named Constants for Time and Size
+
+Any timeout or byte-size literal in **production source** must:
+1. Use `ms('30s')` / `bytes('300mb')` (catalog deps: `ms ^2.1.3`, `bytes ^3.1.2`, `@types/ms ^2.1.0`, `@types/bytes ^3.1.5`).
+2. Be bound to a module-level `UPPER_SNAKE_CASE` constant at the top of the file.
+3. Never be inlined directly into a function call.
+
+```ts
+// correct — named constant, human-readable string
+const REQUEST_TIMEOUT_MS = ms('30s')  // packages/nest-http bootstrap/configure-http-app.ts
+
+// correct — byte size
+const LIVENESS_HEAP_LIMIT = bytes('300mb')  // packages/nest-http health/health.controller.ts
+
+// wrong — magic number
+setTimeout(fn, 30000)
+```
+
+Real examples across the codebase:
+
+| Constant | Value | File |
+|----------|-------|------|
+| `SHUTDOWN_GRACE_MS` | `ms('5s')` | `apps/api/src/main.ts` |
+| `REQUEST_TIMEOUT_MS` | `ms('30s')` | `packages/nest-http/src/bootstrap/configure-http-app.ts` |
+| `DEFAULT_TIMEOUT_MS` | `ms('30s')` | `packages/nest-http/src/interceptors/timeout.interceptor.ts` |
+| `HEALTH_TIMEOUT_MS` | `ms('3s')` | `packages/nest-http/src/health/drizzle.health.ts`, `redis.health.ts` |
+| `LIVENESS_HEAP_LIMIT` | `bytes('300mb')` | `packages/nest-http/src/health/health.controller.ts` |
+| `DEFAULT_IDLE_TIMEOUT_MS` | `ms('30s')` | `packages/shared-kernel/src/database/db.provider.ts` |
+| `QUEUE_DRAIN_TIMEOUT_MS` | `ms('5s')` | `packages/shared-kernel/src/queue/queue-processor.base.ts` |
+
+## JSDoc Conventions
+
+Public APIs exported from `@boilerplate/*` packages carry concise JSDoc explaining intent and contract — not restating the signature. Focus on the "why" and any non-obvious constraints:
+
+```ts
+/**
+ * Wraps a Drizzle transaction with a per-transaction statement_timeout.
+ * PgBouncer-safe: uses bound parameter rather than string interpolation.
+ * Use only for known slow analytics queries — OLTP relies on the role-level default.
+ */
+export function withTimeout(db: DrizzleDb, ms: number, fn: TransactionFn): Promise<void>
+```
+
+Internal helpers (not exported from the package barrel) may use the `@internal` JSDoc tag to signal they are not part of the public contract, e.g. `_evaluateJobFailure` in `queue-processor.base.internal.ts`.
 
 ---
 

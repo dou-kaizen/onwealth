@@ -7,7 +7,7 @@ Monorepo: pnpm workspaces + Turborepo. Four workspaces: one app + three packages
 ## Workspace Map
 
 ```
-onwealth/
+boilerplate-monorepo/
 ├── apps/api/                          NestJS 11 application (composition root)
 ├── packages/database/                 @boilerplate/database — Drizzle ORM schema + migrations
 ├── packages/shared-kernel/            @boilerplate/shared-kernel — transport-agnostic NestJS modules
@@ -76,12 +76,12 @@ Currently empty (business modules land in future milestones). Reserved path: `sr
 |-----------|-----------|---------|
 | `cache/` | `cache.port.ts`, `cache.module.ts`, `cache.service.ts` | `CachePort` interface + `CACHE_PORT` Symbol; cache-manager + @keyv/redis adapter; self-loads `redisConfig` via `ConfigModule.forFeature(redisConfig)` |
 | `config/` | `app.config.ts`, `database.config.ts`, `redis.config.ts`, `env.schema.ts` | Config namespaces (`appConfig`, `databaseConfig`, `redisConfig`); Zod env schema + `validateEnv` |
-| `database/` | `db.port.ts`, `db.module.ts`, `db.provider.ts`, `drizzle.service.ts`, `db.helpers.ts` | `DB_TOKEN` Symbol; `DrizzleModule.forRoot()`; Pool factory; `DrizzleService`; self-loads `databaseConfig` via `ConfigModule.forFeature(databaseConfig)` |
+| `database/` | `db.port.ts`, `db.module.ts`, `db.provider.ts`, `drizzle.service.ts`, `db.helpers.ts` | `DB_TOKEN` Symbol; `DrizzleModule.forRoot()`; Pool factory; `DrizzleService`; self-loads `databaseConfig` via `ConfigModule.forFeature(databaseConfig)`; `DEFAULT_IDLE_TIMEOUT_MS = ms('30s')`, `DEFAULT_CONNECTION_TIMEOUT_MS = ms('5s')` in `db.provider.ts` |
 | `domain/` | `base-aggregate-root.ts`, `events/` | `BaseAggregateRoot` (private `#domainEvents[]`); `DomainEvent`, `IntegrationEvent` base classes |
 | `errors/` | `error-code.ts`, `validation-error.ts` | `ErrorCode` enum for problem type URIs |
 | `events/` | `domain-events.module.ts`, `domain-event-publisher.ts` | Global `DomainEventsModule`; clear-then-emit via EventEmitter2 (at-most-once) |
-| `logger/` | `logger.module.ts`, `logger.config.ts`, `redaction.config.ts` | nestjs-pino `LoggerModule`; sensitive field redaction |
-| `queue/` | `queue.module.ts`, `queue-processor.base.ts`, `queue.decorator.ts`, `queue.config.ts`, `queue.constant.ts`, `queue.enum.ts`, `queue.exception.ts`, `queue-job-result.type.ts` | BullMQ abstraction — scaffold only (see Queue Scaffold below) |
+| `logger/` | `logger.module.ts`, `logger.config.ts`, `redaction.config.ts` | nestjs-pino `LoggerModule`; sensitive field redaction; `logger.config.ts` overrides `forRoutes` to `{*path}` (Express 5 / path-to-regexp v8 — suppresses Nest 11 LegacyRouteConverter warning) |
+| `queue/` | `queue.module.ts`, `queue-processor.base.ts`, `queue-processor.base.internal.ts`, `queue-payload-size.guard.ts`, `queue-dlq.helper.ts`, `queue.decorator.ts`, `queue.config.ts`, `queue.constant.ts`, `queue.enum.ts`, `queue.exception.ts`, `queue-job-result.type.ts`, `queue-job-data.types.ts`, `queue/README.md` | BullMQ abstraction — production-hardened scaffold (see Queue Scaffold below); `QUEUE_DRAIN_TIMEOUT_MS = ms('5s')` named constant in `queue-processor.base.ts` |
 
 ### Queue (`packages/shared-kernel/src/queue/`)
 
@@ -122,12 +122,12 @@ Build: `tsdown` → `dist/index.mjs` + `dist/index.d.mts`. All NestJS + infra de
 
 | Directory | Key Files | Purpose |
 |-----------|-----------|---------|
-| `bootstrap/` | `configure-http-app.ts`, `create-http-app.ts`, `http-app-options.ts` | `configureHttpApp(app, options?)` — shared setup for prod + tests; retrieves `LocationHeaderInterceptor`/`LinkHeaderInterceptor` via `app.get()` (DI providers, not `new`); `createHttpApp(module, options?)` — prod entrypoint wrapper |
+| `bootstrap/` | `configure-http-app.ts`, `create-http-app.ts`, `http-app-options.ts` | `configureHttpApp(app, options?)` — shared setup for prod + tests; retrieves `LocationHeaderInterceptor`/`LinkHeaderInterceptor` via `app.get()` (DI providers, not `new`); `createHttpApp(module, options?)` — prod entrypoint wrapper; `REQUEST_TIMEOUT_MS = ms('30s')` named constant |
 | `config/` | `http.config.ts`, `throttle.config.ts`, `security.config.ts`, `swagger.config.ts`, `cls.config.ts`, `validation.config.ts` | `httpConfig`, `throttleConfig` namespaces; CORS factory; Swagger+Scalar; CLS config; `ValidationPipe` factory; `THROTTLE_TTL` enforced ≥ 1000 ms (milliseconds) |
 | `filters/` | `all-exceptions.filter.ts`, `database-error-mapper.ts`, `problem-details.filter.ts`, `throttler-exception.filter.ts` | AllExceptions catch-all (DB error mapping extracted to `database-error-mapper.ts`); RFC 9457 ProblemDetails; 429 throttler |
 | `interceptors/` | 7 interceptors + `trace-context.util.ts`, `link-header-builder.ts` | RequestContext, CorrelationId, TraceContext, Timeout, LocationHeader, LinkHeader (link building extracted to `link-header-builder.ts`), Transform; LocationHeader and LinkHeader are DI providers (`@Inject(httpConfig.KEY)`) |
 | `middleware/` | `etag.middleware.ts` | ETag on all routes |
-| `health/` | `health.module.ts`, `health.controller.ts`, `drizzle.health.ts`, `redis.health.ts` | `HealthModule`; `/livez`, `/readyz`, `/health`; Terminus indicators; thrown errors become static `ServiceUnavailableException` — error.message never surfaced (prevents infra topology leaks) |
+| `health/` | `health.module.ts`, `health.controller.ts`, `drizzle.health.ts`, `redis.health.ts` | `HealthModule`; `/livez`, `/readyz`, `/health`; Terminus indicators; thrown errors become static `ServiceUnavailableException` — error.message never surfaced (prevents infra topology leaks); `HEALTH_TIMEOUT_MS = ms('3s')` in `drizzle.health.ts` + `redis.health.ts`; `LIVENESS_HEAP_LIMIT = bytes('300mb')`, `DETAILED_HEAP_LIMIT = bytes('150mb')`, `DETAILED_RSS_LIMIT = bytes('300mb')` in `health.controller.ts` |
 | `decorators/` | `public.decorator.ts`, `use-envelope.decorator.ts`, `api-problem-responses.decorator.ts`, `validators/` | `@Public`, `@UseEnvelope`, `@ApiProblemResponses`, typed validators |
 | `dtos/` | `cursor-pagination.dto.ts`, `offset-pagination.dto.ts`, `list-response.dto.ts`, `problem-details.dto.ts` | Shared HTTP DTOs |
 

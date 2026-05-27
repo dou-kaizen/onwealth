@@ -1,6 +1,6 @@
-# onwealth
+# boilerplate-monorepo
 
-Production-grade NestJS API skeleton for the onwealth financial/wealth platform.
+Production-grade NestJS monorepo boilerplate for building backend APIs with Postgres + Redis.
 Current state: infrastructure-only (no business domain yet). Provides the DDD-lite foundation,
 security hardening, observability, and CI pipeline that all future domain modules build on.
 
@@ -114,7 +114,7 @@ Bypass (emergency only): `git commit --no-verify`. CI remains the hard gate.
 ## Workspace Layout
 
 ```
-onwealth/
+boilerplate-monorepo/
 ├── apps/
 │   └── api/                   # NestJS 11 application — composition root
 │       └── src/

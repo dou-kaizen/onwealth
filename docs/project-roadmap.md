@@ -51,6 +51,11 @@ without pulling in any HTTP dependencies (`@boilerplate/nest-http`).
 
 Ref: `plans/260518-1712-fix-codebase-review-findings/`, journal `docs/journals/2026-05-19-codebase-review-findings-fix.md`.
 
+**Subsequent hygiene commits (also complete):**
+- `ms()`/`bytes()` magic-number refactor (commit 875f309) — all timeout/size literals replaced with `UPPER_SNAKE_CASE` named constants using `ms ^2.1.3` / `bytes ^3.1.2` catalog deps.
+- JSDoc audit (commit 36d3bca) — public APIs on all `@boilerplate/*` production source files annotated; internal helpers tagged `@internal`.
+- Nest 11 LegacyRouteConverter fix (commit 1b1501a) — `logger.config.ts` overrides `nestjs-pino` default `forRoutes` from legacy `*` to `{*path}` (path-to-regexp v8 / Express 5 named-wildcard syntax).
+
 ---
 
 ## BullMQ Queue Scaffold — COMPLETE

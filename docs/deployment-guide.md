@@ -1,6 +1,6 @@
 # Deployment Guide
 
-Operational playbook for deploying the onwealth API and running database migrations.
+Operational playbook for deploying the API and running database migrations.
 
 This guide covers three migration-runner patterns. **Pick exactly one per environment and never run two of them concurrently** (concurrent runners can deadlock on `drizzle_migrations` or apply the same migration twice).
 
@@ -73,20 +73,20 @@ Embed migrations in the pod spec. Migrations run before the main container start
 ```yaml
 apiVersion: apps/v1
 kind: Deployment
-metadata: { name: onwealth-api }
+metadata: { name: boilerplate-api }
 spec:
   template:
     spec:
       initContainers:
         - name: migrate
-          image: ghcr.io/your-org/onwealth-api:${TAG}
+          image: ghcr.io/your-org/boilerplate-api:${TAG}
           command: ["pnpm", "--filter", "@boilerplate/database", "run", "db:migrate"]
           env:
             - name: DATABASE_URL
               valueFrom: { secretKeyRef: { name: db-credentials, key: url } }
       containers:
         - name: api
-          image: ghcr.io/your-org/onwealth-api:${TAG}
+          image: ghcr.io/your-org/boilerplate-api:${TAG}
           # ...
 ```
 
@@ -105,7 +105,7 @@ One-shot Job that runs once per release, gated before the Deployment rolls out.
 apiVersion: batch/v1
 kind: Job
 metadata:
-  name: onwealth-api-migrate-${RELEASE}
+  name: boilerplate-api-migrate-${RELEASE}
   annotations:
     "helm.sh/hook": pre-install,pre-upgrade
     "helm.sh/hook-delete-policy": before-hook-creation,hook-succeeded
@@ -117,7 +117,7 @@ spec:
       restartPolicy: Never
       containers:
         - name: migrate
-          image: ghcr.io/your-org/onwealth-api:${TAG}
+          image: ghcr.io/your-org/boilerplate-api:${TAG}
           command: ["pnpm", "--filter", "@boilerplate/database", "run", "db:migrate"]
           env:
             - name: DATABASE_URL

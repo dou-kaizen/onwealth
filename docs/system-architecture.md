@@ -124,7 +124,7 @@ AllExceptionsFilter        ← ultimate fallback (catch-all)
 | 1 | `RequestContextInterceptor` | Seeds CLS store with traceparent, writes tracing headers to response |
 | 2 | `CorrelationIdInterceptor` | Reads/generates `X-Request-Id`, stores in CLS |
 | 3 | `TraceContextInterceptor` | W3C `traceparent` + `tracestate` propagation |
-| 4 | `TimeoutInterceptor` | Cancels handler after 30 s with 408 |
+| 4 | `TimeoutInterceptor` | Cancels handler after `REQUEST_TIMEOUT_MS` (= `ms('30s')`) with 408 |
 | 5 | `LocationHeaderInterceptor` | Adds `Location` header on 201 Created |
 | 6 | `LinkHeaderInterceptor` | Adds `Link` header for paginated responses |
 | 7 | `TransformInterceptor` | Wraps successful responses in `{ data, meta }` envelope |
@@ -252,7 +252,7 @@ All `@Global()` modules are enforced by the architecture guard test
 | Endpoint | Route | Checks | Orchestrator Use |
 |----------|-------|--------|-----------------|
 | `GET /livez` | No `/api` prefix | Memory heap only | Liveness probe |
-| `GET /readyz` | No `/api` prefix | DB (SELECT 1) + Redis (SET/GET readback), 3 s timeout | Readiness probe |
+| `GET /readyz` | No `/api` prefix | DB (SELECT 1) + Redis (SET/GET readback), `HEALTH_TIMEOUT_MS` (= `ms('3s')`) timeout | Readiness probe |
 | `GET /health` | No `/api` prefix | All of readyz + heap + RSS + disk | Debugging only |
 
 503 responses have sanitized bodies (no internal details exposed).
@@ -267,10 +267,10 @@ All health routes are `@Public()` (bypass auth) and `@SkipThrottle()`.
 ```
 process.on('unhandledRejection' | 'uncaughtException')
   └─ app.close()          ← drains HTTP, Postgres pool, BullMQ workers
-       └─ setTimeout(5000).unref()  ← hard-stop fallback if drain stalls
+       └─ setTimeout(SHUTDOWN_GRACE_MS).unref()  ← hard-stop fallback; SHUTDOWN_GRACE_MS = ms('5s')
 ```
 
-`DrizzleService.onModuleDestroy()` ends the pg Pool. `QueueProcessorBase.onModuleDestroy()` calls `worker.close(false)` — `false` means "wait for active jobs" (note: BullMQ's `close(force)` param is inverted; `true` skips the wait) — with a 5000 ms timeout race before hard exit. The 5 s hard-stop prevents zombie processes in container environments where the orchestrator sends SIGKILL after its own timeout.
+`DrizzleService.onModuleDestroy()` ends the pg Pool. `QueueProcessorBase.onModuleDestroy()` calls `worker.close(false)` — `false` means "wait for active jobs" (note: BullMQ's `close(force)` param is inverted; `true` skips the wait) — with a `QUEUE_DRAIN_TIMEOUT_MS` (= `ms('5s')`) timeout race before hard exit. The 5 s hard-stop prevents zombie processes in container environments where the orchestrator sends SIGKILL after its own timeout.
 
 ---
 
@@ -332,6 +332,24 @@ Migration path for future alerting: instrument `QueueProcessorBase.onFailed` wit
 | Correlation | `X-Request-Id` via `CorrelationIdInterceptor` |
 | Health | `@nestjs/terminus` (Drizzle + Redis indicators) |
 | API docs | `@nestjs/swagger` + `@scalar/nestjs-api-reference` (non-prod) |
+
+### Known Compatibility Notes
+
+**Nest 11 + nestjs-pino: LegacyRouteConverter warning**
+
+`nestjs-pino` registers its middleware with a default `forRoutes: ['*']` (legacy Express 4 wildcard).
+Under NestJS 11 + Express 5 (path-to-regexp v8), this triggers a `LegacyRouteConverter` deprecation
+warning at startup because bare `*` is no longer a valid wildcard pattern.
+
+Fix applied in `packages/shared-kernel/src/logger/logger.config.ts`: the `LoggerModule` options override
+`forRoutes` to use the Express 5 / path-to-regexp v8 named-wildcard syntax:
+
+```ts
+forRoutes: [{ path: '{*path}', method: RequestMethod.ALL }]
+```
+
+This suppresses the warning while preserving identical coverage (all routes). Required whenever
+`setGlobalPrefix('api')` is used with `nestjs-pino` under NestJS 11 + path-to-regexp v8 / Express 5.
 
 ---
 

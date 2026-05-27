@@ -2,12 +2,11 @@
 
 ## Product Context
 
-**onwealth** is a financial/wealth platform (domain TBD — no business modules exist yet).
-The current codebase is a production-grade NestJS API skeleton that establishes the DDD-lite
-foundation, security posture, and CI pipeline on which all business domains will be built.
-
-**Description from `apps/api/package.json`:** _"meme token trading platform backend"_ —
-final product scope to be confirmed by product team.
+This is a **production-grade NestJS monorepo boilerplate** — no business domain locked in.
+It establishes the DDD-lite foundation, security posture, observability, and CI pipeline
+on which any backend API project can build. Domain modules are intentionally absent; the
+repo ships infrastructure-only so teams can layer their own domain on top without fighting
+pre-baked business logic.
 
 ---
 
@@ -25,6 +24,12 @@ business schemas. Infrastructure phases and subsequent codebase-review bug-fix e
 | 05 | Tooling & CI | Biome v2, Turborepo pipeline, dependency-cruiser arch guard (shared base + per-package extends), lefthook git hooks (pre-commit/commit-msg/pre-push), vitest + e2e harness, CI workflow (lint+typecheck+test+build+migration smoke) |
 | 06 | Minor Cleanups | Drop postgres.js dep (complete), Swagger annotations, log exclusions, CORS `X-Request-Id` |
 | CR | Codebase Review Fix | 24 correctness bugs fixed (1 Critical, 4 High, 13 Medium, 6 Low); 51 test cases added; CI/tooling hardening (pnpm 10.32.1 both jobs) |
+| Q1 | BullMQ Queue Scaffold | `QueueModule`, `QueueProcessorBase`, `FatalQueueException`, `QueueDlqHelper`, `queueConfig` in `@boilerplate/shared-kernel`; no concrete queues wired to `apps/api` yet |
+| Q2 | Queue Production Hardening Phase A | `defaultJobOptions`, graceful drain (`worker.close(false)` + 5 s timeout), DLQ helper, `queue/README.md`, integration tests via `@testcontainers/redis` |
+| GS | Graceful Shutdown (M12/M16) | `main.ts` SIGTERM/SIGINT → `app.close()` + 5 s hard-stop; BullMQ worker drain on shutdown |
+| JD | JSDoc Audit | Public APIs on all `@boilerplate/*` production source files annotated; internal helpers tagged `@internal` |
+| RC | ms()/bytes() Refactor | All timeout/size literals replaced with named `UPPER_SNAKE_CASE` constants using `ms()` / `bytes()` helpers |
+| N11 | Nest 11 Wildcard Fix | `logger.config.ts` overrides `forRoutes` to `{*path}` syntax (path-to-regexp v8 / Express 5 compatibility) |
 
 ---
 
@@ -56,9 +61,10 @@ business schemas. Infrastructure phases and subsequent codebase-review bug-fix e
 - `/readyz` — DB + Redis with 3 s race deadline; 503 on degraded.
 - `/health` — full component breakdown + heap/RSS/disk metrics.
 
-### FR-06 — Database
+### FR-06 — Database & Graceful Shutdown
 - Drizzle ORM + `node-postgres` Pool.
-- Pool drains on `SIGTERM` via `onModuleDestroy`.
+- Pool drains on `SIGTERM` via `DrizzleService.onModuleDestroy`.
+- BullMQ workers drain on shutdown via `QueueProcessorBase.onModuleDestroy` (`worker.close(false)` + 5 s timeout race before hard exit).
 - Migration role has `lock_timeout` / `statement_timeout` set before migrations run.
 - Idempotent migrations verified in CI smoke test.
 
