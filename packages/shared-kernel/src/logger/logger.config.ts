@@ -1,4 +1,5 @@
 import type { IncomingMessage, ServerResponse } from 'node:http'
+import { RequestMethod } from '@nestjs/common'
 import type { ConfigService } from '@nestjs/config'
 import type { Params } from 'nestjs-pino'
 import type { Env } from '../config/env.schema.js'
@@ -128,6 +129,12 @@ export function createLoggerConfig(
     },
 
     exclude: options.excludePaths ?? [],
+
+    // Override nestjs-pino default `[{ path: '*', method: ALL }]` which
+    // combines with `setGlobalPrefix('api')` into `/api/*` and trips Nest 11's
+    // LegacyRouteConverter on path-to-regexp v8 (Express 5). Use v11 named
+    // wildcard syntax instead.
+    forRoutes: [{ path: '{*path}', method: RequestMethod.ALL }],
   }
 }
 
