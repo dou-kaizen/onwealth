@@ -131,6 +131,12 @@ importers:
 
   apps/api:
     dependencies:
+      '@boilerplate/nest-http':
+        specifier: workspace:*
+        version: link:../../packages/nest-http
+      '@boilerplate/shared-kernel':
+        specifier: workspace:*
+        version: link:../../packages/shared-kernel
       '@nestjs/cache-manager':
         specifier: 'catalog:'
         version: 3.1.0(@nestjs/common@11.1.17(class-transformer@0.5.1)(class-validator@0.14.2)(reflect-metadata@0.2.2)(rxjs@7.8.2))(@nestjs/core@11.1.17)(cache-manager@7.2.8)(keyv@5.6.0)(rxjs@7.8.2)
@@ -158,12 +164,6 @@ importers:
       '@nestjs/throttler':
         specifier: 'catalog:'
         version: 6.5.0(@nestjs/common@11.1.17(class-transformer@0.5.1)(class-validator@0.14.2)(reflect-metadata@0.2.2)(rxjs@7.8.2))(@nestjs/core@11.1.17)(reflect-metadata@0.2.2)
-      '@onwealth/nest-http':
-        specifier: workspace:*
-        version: link:../../packages/nest-http
-      '@onwealth/shared-kernel':
-        specifier: workspace:*
-        version: link:../../packages/shared-kernel
       '@scalar/nestjs-api-reference':
         specifier: 'catalog:'
         version: 1.1.4
@@ -291,6 +291,9 @@ importers:
 
   packages/nest-http:
     devDependencies:
+      '@boilerplate/shared-kernel':
+        specifier: workspace:*
+        version: link:../shared-kernel
       '@nestjs/common':
         specifier: 'catalog:'
         version: 11.1.17(class-transformer@0.5.1)(class-validator@0.14.2)(reflect-metadata@0.2.2)(rxjs@7.8.2)
@@ -312,9 +315,6 @@ importers:
       '@nestjs/throttler':
         specifier: 'catalog:'
         version: 6.5.0(@nestjs/common@11.1.17(class-transformer@0.5.1)(class-validator@0.14.2)(reflect-metadata@0.2.2)(rxjs@7.8.2))(@nestjs/core@11.1.17)(reflect-metadata@0.2.2)
-      '@onwealth/shared-kernel':
-        specifier: workspace:*
-        version: link:../shared-kernel
       '@scalar/nestjs-api-reference':
         specifier: 'catalog:'
         version: 1.1.4
@@ -382,6 +382,9 @@ importers:
         specifier: '>=11'
         version: 13.1.3
     devDependencies:
+      '@boilerplate/database':
+        specifier: workspace:*
+        version: link:../database
       '@keyv/redis':
         specifier: 'catalog:'
         version: 5.1.6(keyv@5.6.0)
@@ -406,9 +409,6 @@ importers:
       '@nestjs/testing':
         specifier: ^11.1.17
         version: 11.1.17(@nestjs/common@11.1.17(class-transformer@0.5.1)(class-validator@0.14.2)(reflect-metadata@0.2.2)(rxjs@7.8.2))(@nestjs/core@11.1.17)(@nestjs/platform-express@11.1.17)
-      '@onwealth/database':
-        specifier: workspace:*
-        version: link:../database
       '@testcontainers/redis':
         specifier: ^12.0.0
         version: 12.0.0

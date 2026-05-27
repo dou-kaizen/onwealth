@@ -26,7 +26,7 @@ export default defineConfig({
       '@keyv/redis',
       'keyv',
       'zod',
-      '@onwealth/database',
+      '@boilerplate/database',
     ],
   },
 })

@@ -1,5 +1,3 @@
-import { ConfigModule } from '@nestjs/config'
-import { Test } from '@nestjs/testing'
 import {
   CACHE_PORT,
   CacheModule,
@@ -8,14 +6,16 @@ import {
   databaseConfig,
   redisConfig,
   withTimeout,
-} from '@onwealth/shared-kernel'
+} from '@boilerplate/shared-kernel'
+import { ConfigModule } from '@nestjs/config'
+import { Test } from '@nestjs/testing'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 /**
  * [H6] DI token identity smoke test.
  *
  * DrizzleModule / CacheModule register their providers under the DB_TOKEN /
- * CACHE_PORT symbols imported from @onwealth/shared-kernel. A consumer that
+ * CACHE_PORT symbols imported from @boilerplate/shared-kernel. A consumer that
  * resolves those same barrel-exported tokens must receive the registered
  * provider — if either symbol were ever defined twice (dual-`Symbol` across
  * the package boundary), DI resolution would fail silently. Typecheck cannot

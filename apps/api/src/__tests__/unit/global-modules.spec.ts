@@ -15,7 +15,7 @@ import path from 'node:path'
 import { beforeAll, describe, expect, it } from 'vitest'
 
 // The global infrastructure modules (Drizzle, DomainEvents, Cache) were
-// extracted into the @onwealth/shared-kernel package — their @Global() guard
+// extracted into the @boilerplate/shared-kernel package — their @Global() guard
 // now lives in that package's own global-modules.spec.ts. apps/api itself
 // declares no @Global() modules.
 const APPROVED_GLOBAL_MODULES = new Set<string>([])

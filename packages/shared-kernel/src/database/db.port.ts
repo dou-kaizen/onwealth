@@ -1,5 +1,5 @@
+import type * as schema from '@boilerplate/database'
 import type { InjectionToken, ModuleMetadata } from '@nestjs/common'
-import type * as schema from '@onwealth/database'
 import type { NodePgDatabase } from 'drizzle-orm/node-postgres'
 
 /**
@@ -22,7 +22,7 @@ export type DrizzleDb = NodePgDatabase<typeof schema>
 
 /**
  * Re-export of the full schema type for consumers that need to reference
- * table types without importing `@onwealth/database` directly.
+ * table types without importing `@boilerplate/database` directly.
  */
 export type Schema = typeof schema
 

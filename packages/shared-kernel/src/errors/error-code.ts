@@ -10,7 +10,7 @@
  * feature module when that domain actually lands — not pre-declared here.
  *
  * **Groupings:**
- * - Validation — emitted by class-validator decorators in `@onwealth/nest-http`.
+ * - Validation — emitted by class-validator decorators in `@boilerplate/nest-http`.
  * - Resource — 404/409 mapping for repository lookups + uniqueness conflicts.
  * - Constraint — Postgres `23xxx` SQLSTATE family mapped to a single code.
  * - Authorization — 401/403 split.

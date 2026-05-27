@@ -29,10 +29,10 @@ export default {
       name: 'service-no-database-runtime',
       severity: 'error',
       comment:
-        'Services must not runtime-import @onwealth/database. Go through repository ports instead. Type-only imports are allowed.',
+        'Services must not runtime-import @boilerplate/database. Go through repository ports instead. Type-only imports are allowed.',
       from: { path: '^src/modules/[^/]+/application/services/' },
       to: {
-        path: '^@onwealth/database',
+        path: '^@boilerplate/database',
         dependencyTypesNot: ['type-only'],
       },
     },
@@ -53,13 +53,13 @@ export default {
       comment:
         'Presentation layer must not access the database directly. Go through application services.',
       from: { path: '^src/modules/[^/]+/presentation/' },
-      to: { path: '^(@onwealth/database|drizzle-orm|pg|postgres)($|/)' },
+      to: { path: '^(@boilerplate/database|drizzle-orm|pg|postgres)($|/)' },
     },
     {
       name: 'api-uses-packages-not-internal-copies',
       severity: 'error',
       comment:
-        'apps/api must consume cross-cutting concerns (filters, interceptors, middleware, health checks, logger config) from @onwealth/nest-http and @onwealth/shared-kernel — not re-implement local copies. Retargeted from the obsolete src/app/ path to guard the post-extraction layout.',
+        'apps/api must consume cross-cutting concerns (filters, interceptors, middleware, health checks, logger config) from @boilerplate/nest-http and @boilerplate/shared-kernel — not re-implement local copies. Retargeted from the obsolete src/app/ path to guard the post-extraction layout.',
       from: { path: '^src/' },
       to: { path: '^src/(filters|interceptors|middleware|health|logger)/' },
     },

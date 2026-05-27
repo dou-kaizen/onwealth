@@ -1,4 +1,4 @@
-import * as schema from '@onwealth/database'
+import * as schema from '@boilerplate/database'
 import { drizzle } from 'drizzle-orm/node-postgres'
 import ms from 'ms'
 import { Pool } from 'pg'

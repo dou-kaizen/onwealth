@@ -7,7 +7,7 @@
 that can be evolved incrementally.
 
 Cross-cutting code is extracted into two pnpm workspace packages:
-`@onwealth/shared-kernel` (transport-agnostic) and `@onwealth/nest-http` (HTTP layer).
+`@boilerplate/shared-kernel` (transport-agnostic) and `@boilerplate/nest-http` (HTTP layer).
 `apps/api` is the composition root — it imports from both packages and owns only
 business modules (`AppModule`, `main.ts`, `modules/`).
 
@@ -17,25 +17,25 @@ business modules (`AppModule`, `main.ts`, `modules/`).
 
 | Package | Path | Layer |
 |---------|------|-------|
-| `@onwealth/database` | `packages/database/` | Drizzle ORM schema + migrations |
-| `@onwealth/shared-kernel` | `packages/shared-kernel/` | Transport-agnostic NestJS modules: config namespaces, DB module + `DB_TOKEN`, cache port + `CACHE_PORT`, domain events, logger, `Env`/zod schema, BullMQ queue scaffold (`QueueModule` — no concrete queues registered yet) |
-| `@onwealth/nest-http` | `packages/nest-http/` | HTTP cross-cutting: exception filters, interceptors, ETag middleware, health module, HTTP configs, `configureHttpApp` / `createHttpApp` bootstrap, decorators, DTOs |
+| `@boilerplate/database` | `packages/database/` | Drizzle ORM schema + migrations |
+| `@boilerplate/shared-kernel` | `packages/shared-kernel/` | Transport-agnostic NestJS modules: config namespaces, DB module + `DB_TOKEN`, cache port + `CACHE_PORT`, domain events, logger, `Env`/zod schema, BullMQ queue scaffold (`QueueModule` — no concrete queues registered yet) |
+| `@boilerplate/nest-http` | `packages/nest-http/` | HTTP cross-cutting: exception filters, interceptors, ETag middleware, health module, HTTP configs, `configureHttpApp` / `createHttpApp` bootstrap, decorators, DTOs |
 | `apps/api` | `apps/api/` | Composition root — `AppModule`, `main.ts`, business `modules/` |
 
 ### Package Dependency DAG
 
 ```
-apps/api ──────────────────────────────────────────────────► @onwealth/nest-http
+apps/api ──────────────────────────────────────────────────► @boilerplate/nest-http
                                                                       │
                                                                       ▼
-future-worker ──────────────────────────────────────► @onwealth/shared-kernel
+future-worker ──────────────────────────────────────► @boilerplate/shared-kernel
                                                                       │
                                                                       ▼
-                                                          @onwealth/database
+                                                          @boilerplate/database
 ```
 
 Edges are one-directional and enforced by per-package dependency-cruiser configs that extend a shared root base (`.dependency-cruiser.base.mjs`).
-A future NestJS worker app can depend on `@onwealth/shared-kernel` directly
+A future NestJS worker app can depend on `@boilerplate/shared-kernel` directly
 without pulling in any HTTP dependencies.
 
 ---
@@ -59,7 +59,7 @@ without pulling in any HTTP dependencies.
 ```
 
 Domain modules live under `apps/api/src/modules/<domain>/<layer>/`.
-Cross-cutting concerns live in `@onwealth/shared-kernel` and `@onwealth/nest-http`.
+Cross-cutting concerns live in `@boilerplate/shared-kernel` and `@boilerplate/nest-http`.
 
 ---
 
@@ -93,7 +93,7 @@ sequenceDiagram
 ### Filter Execution Order
 
 NestJS invokes exception filters in **reverse registration order**.
-Filters are registered inside `configureHttpApp` in `@onwealth/nest-http` (top → bottom):
+Filters are registered inside `configureHttpApp` in `@boilerplate/nest-http` (top → bottom):
 
 ```
 ThrottlerExceptionFilter   ← most specific, runs first on ThrottlerException
@@ -220,7 +220,7 @@ DrizzleModule.forRoot() [Global Dynamic Module]
                  └─ onModuleDestroy → pool.end()  (SIGTERM drain)
 ```
 
-Schema types imported from `@onwealth/database` workspace package.
+Schema types imported from `@boilerplate/database` workspace package.
 No repository abstraction layer yet — handlers receive `DB_TOKEN` directly.
 
 ---
@@ -230,14 +230,14 @@ No repository abstraction layer yet — handlers receive `DB_TOKEN` directly.
 ```
 AppModule
 ├── ConfigModule (global)          ← Zod env validation; loads appConfig, databaseConfig, redisConfig, httpConfig, throttleConfig
-├── ClsModule (global)             ← request-scoped context store  (@onwealth/nest-http createClsConfig)
-├── LoggerModule                   ← nestjs-pino  (@onwealth/shared-kernel)
+├── ClsModule (global)             ← request-scoped context store  (@boilerplate/nest-http createClsConfig)
+├── LoggerModule                   ← nestjs-pino  (@boilerplate/shared-kernel)
 ├── EventEmitterModule             ← wildcard, delimiter "."
-├── DrizzleModule (global)         ← DB_TOKEN  (@onwealth/shared-kernel); self-loads databaseConfig via ConfigModule.forFeature
-├── DomainEventsModule (global)    ← DomainEventPublisher  (@onwealth/shared-kernel)
-├── ThrottlerModule                ← rate limiting  (throttleConfig from @onwealth/nest-http)
-├── HealthModule                   ← /livez /readyz /health  (@onwealth/nest-http)
-└── CacheModule                    ← CACHE_PORT adapter  (@onwealth/shared-kernel); self-loads redisConfig via ConfigModule.forFeature
+├── DrizzleModule (global)         ← DB_TOKEN  (@boilerplate/shared-kernel); self-loads databaseConfig via ConfigModule.forFeature
+├── DomainEventsModule (global)    ← DomainEventPublisher  (@boilerplate/shared-kernel)
+├── ThrottlerModule                ← rate limiting  (throttleConfig from @boilerplate/nest-http)
+├── HealthModule                   ← /livez /readyz /health  (@boilerplate/nest-http)
+└── CacheModule                    ← CACHE_PORT adapter  (@boilerplate/shared-kernel); self-loads redisConfig via ConfigModule.forFeature
 ```
 
 `DrizzleModule`, `CacheModule`, and `QueueModule` are self-contained: each calls `ConfigModule.forFeature(...)` internally to register its typed config factory regardless of how the host app wires `ConfigModule`. Host app does not need to pass config to these modules explicitly.

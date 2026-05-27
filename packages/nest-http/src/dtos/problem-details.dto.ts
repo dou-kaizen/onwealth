@@ -62,7 +62,7 @@ export class FieldError {
  *    correlated with structured logs across services.
  * 3. **Business error extensions** — `code` (machine-readable),
  *    `detail` (human-readable). Set by the all-exceptions filter when the
- *    underlying error carries an {@link import('@onwealth/shared-kernel').ErrorCode}.
+ *    underlying error carries an {@link import('@boilerplate/shared-kernel').ErrorCode}.
  * 4. **Validation error extensions** — `errors[]`. Populated only when the
  *    underlying exception originated from class-validator.
  *

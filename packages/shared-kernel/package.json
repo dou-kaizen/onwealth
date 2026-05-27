@@ -1,5 +1,5 @@
 {
-  "name": "@onwealth/shared-kernel",
+  "name": "@boilerplate/shared-kernel",
   "version": "1.0.0",
   "files": [
     "dist"
@@ -35,7 +35,7 @@
     "@nestjs/core": "catalog:",
     "@nestjs/event-emitter": "catalog:",
     "@nestjs/testing": "^11.1.17",
-    "@onwealth/database": "workspace:*",
+    "@boilerplate/database": "workspace:*",
     "@testcontainers/redis": "^12.0.0",
     "@types/ms": "catalog:",
     "@types/node": "catalog:",
@@ -62,7 +62,7 @@
     "@nestjs/config": "^4",
     "@nestjs/core": "^11",
     "@nestjs/event-emitter": "^3",
-    "@onwealth/database": "workspace:*",
+    "@boilerplate/database": "workspace:*",
     "bullmq": "^5",
     "cache-manager": "^7",
     "drizzle-orm": "0.44.7",

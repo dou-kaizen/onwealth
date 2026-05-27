@@ -1,7 +1,7 @@
+import { appConfig } from '@boilerplate/shared-kernel'
 import type { ArgumentsHost, ExceptionFilter } from '@nestjs/common'
 import { Catch, HttpException, HttpStatus, Inject, Logger, Optional } from '@nestjs/common'
 import type { ConfigType } from '@nestjs/config'
-import { appConfig } from '@onwealth/shared-kernel'
 import { DrizzleQueryError } from 'drizzle-orm'
 import type { Request, Response } from 'express'
 import { ClsService } from 'nestjs-cls'

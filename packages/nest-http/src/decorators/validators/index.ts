@@ -1,5 +1,5 @@
+import { ErrorCode } from '@boilerplate/shared-kernel'
 import { applyDecorators } from '@nestjs/common'
-import { ErrorCode } from '@onwealth/shared-kernel'
 import type { ValidationOptions } from 'class-validator'
 import {
   IsBoolean,

@@ -113,10 +113,10 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Build database package
-        run: pnpm --filter @onwealth/database build
+        run: pnpm --filter @boilerplate/database build
 
       - name: Init role timeouts
-        run: pnpm --filter @onwealth/database db:init-roles
+        run: pnpm --filter @boilerplate/database db:init-roles
         env:
           DATABASE_URL: postgresql://postgres:postgres@localhost:5432/smoke
 
@@ -132,12 +132,12 @@ jobs:
 
       - name: Run migrations
         if: steps.migrations.outputs.exists == 'true'
-        run: pnpm --filter @onwealth/database db:migrate
+        run: pnpm --filter @boilerplate/database db:migrate
         env:
           DATABASE_URL: postgresql://postgres:postgres@localhost:5432/smoke
 
       - name: Assert idempotent (second run must be no-op)
         if: steps.migrations.outputs.exists == 'true'
-        run: pnpm --filter @onwealth/database db:migrate
+        run: pnpm --filter @boilerplate/database db:migrate
         env:
           DATABASE_URL: postgresql://postgres:postgres@localhost:5432/smoke

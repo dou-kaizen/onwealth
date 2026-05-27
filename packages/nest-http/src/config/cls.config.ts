@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto'
-import { sanitizeHeaderValue } from '@onwealth/shared-kernel'
+import { sanitizeHeaderValue } from '@boilerplate/shared-kernel'
 import type { Request } from 'express'
 import type { ClsModuleOptions, ClsService } from 'nestjs-cls'
 import { parseTraceparent } from '../interceptors/trace-context.util.js'

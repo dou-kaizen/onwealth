@@ -1,3 +1,4 @@
+import type { Env } from '@boilerplate/shared-kernel'
 import { Controller, Get, Header, Logger, ServiceUnavailableException } from '@nestjs/common'
 import { ConfigService } from '@nestjs/config'
 import { ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger'
@@ -9,7 +10,6 @@ import {
   MemoryHealthIndicator,
 } from '@nestjs/terminus'
 import { SkipThrottle } from '@nestjs/throttler'
-import type { Env } from '@onwealth/shared-kernel'
 import bytes from 'bytes'
 import { Public } from '../decorators/public.decorator.js'
 import { DrizzleHealthIndicator } from './drizzle.health.js'

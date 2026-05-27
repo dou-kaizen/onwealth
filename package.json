@@ -1,5 +1,5 @@
 {
-  "name": "onwealth",
+  "name": "boilerplate-monorepo",
   "type": "module",
   "scripts": {
     "dev": "turbo run dev",
@@ -11,9 +11,9 @@
     "typecheck": "turbo run typecheck",
     "test": "turbo run test",
     "deps": "turbo run deps",
-    "db:dev": "pnpm --filter @onwealth/database run db:init-roles && pnpm --filter @onwealth/database run db:migrate",
+    "db:dev": "pnpm --filter @boilerplate/database run db:init-roles && pnpm --filter @boilerplate/database run db:migrate",
     "prepare": "lefthook install && pnpm run setup:env",
-    "setup:env": "pnpm --filter api --filter @onwealth/database exec sh -c 'test -f .env || cp .env.example .env'"
+    "setup:env": "pnpm --filter @boilerplate/api --filter @boilerplate/database exec sh -c 'test -f .env || cp .env.example .env'"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.0.0",

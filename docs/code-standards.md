@@ -108,7 +108,7 @@ infrastructure ─► application (implements ports) ─► domain
 ```
 
 `domain/` imports nothing outside itself, except domain primitives from
-`@onwealth/shared-kernel` (`BaseAggregateRoot`, `DomainEvent`). Infrastructure
+`@boilerplate/shared-kernel` (`BaseAggregateRoot`, `DomainEvent`). Infrastructure
 depends on application, never the reverse — that inversion is the whole point of
 the `ports/` folder.
 
@@ -163,7 +163,7 @@ controller or repository.
 
 Register each module in `AppModule.imports`. A domain's DB schema goes in
 `packages/database/src/schemas/<domain>.schema.ts` with a matching migration.
-Domain-specific `ErrorCode` values are added to `@onwealth/shared-kernel` alongside
+Domain-specific `ErrorCode` values are added to `@boilerplate/shared-kernel` alongside
 the module that uses them — not pre-declared.
 
 ## Validation
@@ -188,7 +188,7 @@ the module that uses them — not pre-declared.
 - Drizzle ORM with `node-postgres` Pool. `postgres-js` is NOT a dependency — pick one driver, stick with it.
 - `DrizzleService` owns the pool lifecycle (`OnModuleDestroy` drains on SIGTERM).
 - Migration role has explicit `lock_timeout` set in `packages/database/sql/00-init-role-timeouts.sql`.
-- `withTimeout(db, ms, fn)` in `@onwealth/shared-kernel` wraps a Drizzle transaction with a per-transaction `statement_timeout` via `SELECT set_config('statement_timeout', $1, true)` (PgBouncer-safe bound parameter; `ms` must be `> 0`). Use only for slow analytics queries — OLTP queries rely on the role-level default.
+- `withTimeout(db, ms, fn)` in `@boilerplate/shared-kernel` wraps a Drizzle transaction with a per-transaction `statement_timeout` via `SELECT set_config('statement_timeout', $1, true)` (PgBouncer-safe bound parameter; `ms` must be `> 0`). Use only for slow analytics queries — OLTP queries rely on the role-level default.
 - DB constraint errors map to `ErrorCode` values in `AllExceptionsFilter`: SQLSTATE `23505` (unique violation) → `RESOURCE_CONFLICT`; `23503` (FK), `23502` (not-null), `23514` (check) → `CONSTRAINT_VIOLATION`.
 
 ## Health Probes
@@ -222,7 +222,7 @@ All NestJS and infra deps (`@nestjs/*`, `drizzle-orm`, `nestjs-pino`, `nestjs-cl
 
 ### DI Token Identity
 
-`DB_TOKEN` and `CACHE_PORT` are defined in exactly one file each inside `@onwealth/shared-kernel`. Every consumer (including `@onwealth/nest-http` and `apps/api`) imports the tokens **only** from `@onwealth/shared-kernel` — never redeclaring them locally.
+`DB_TOKEN` and `CACHE_PORT` are defined in exactly one file each inside `@boilerplate/shared-kernel`. Every consumer (including `@boilerplate/nest-http` and `apps/api`) imports the tokens **only** from `@boilerplate/shared-kernel` — never redeclaring them locally.
 
 ### tsconfig — Auto-Generated, Never Hand-Edit
 

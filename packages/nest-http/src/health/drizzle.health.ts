@@ -1,7 +1,7 @@
+import type { DrizzleDb } from '@boilerplate/shared-kernel'
+import { DB_TOKEN } from '@boilerplate/shared-kernel'
 import { Inject, Injectable, Logger } from '@nestjs/common'
 import type { HealthIndicatorResult } from '@nestjs/terminus'
-import type { DrizzleDb } from '@onwealth/shared-kernel'
-import { DB_TOKEN } from '@onwealth/shared-kernel'
 import { sql } from 'drizzle-orm'
 import ms from 'ms'
 

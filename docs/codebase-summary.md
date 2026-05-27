@@ -9,9 +9,9 @@ Monorepo: pnpm workspaces + Turborepo. Four workspaces: one app + three packages
 ```
 onwealth/
 ├── apps/api/                          NestJS 11 application (composition root)
-├── packages/database/                 @onwealth/database — Drizzle ORM schema + migrations
-├── packages/shared-kernel/            @onwealth/shared-kernel — transport-agnostic NestJS modules
-├── packages/nest-http/                @onwealth/nest-http — HTTP cross-cutting layer
+├── packages/database/                 @boilerplate/database — Drizzle ORM schema + migrations
+├── packages/shared-kernel/            @boilerplate/shared-kernel — transport-agnostic NestJS modules
+├── packages/nest-http/                @boilerplate/nest-http — HTTP cross-cutting layer
 ├── biome.json                         Root lint + format config (Biome v2)
 ├── lefthook.yml                       Git hooks: pre-commit (biome), commit-msg (Conventional Commits), pre-push (typecheck+test)
 ├── turbo.json                         Task pipeline (build, test, typecheck, lint, dev); globalDependencies includes .dependency-cruiser.base.mjs
@@ -28,7 +28,7 @@ onwealth/
 **Stack:** NestJS 11, Express, ESM, TypeScript 5 strict, Vitest + SWC
 
 Composition root only. `src/` contains: `app.module.ts`, `main.ts`, `modules/` (business modules), `__tests__/`.
-All cross-cutting infrastructure moved to `@onwealth/shared-kernel` and `@onwealth/nest-http`.
+All cross-cutting infrastructure moved to `@boilerplate/shared-kernel` and `@boilerplate/nest-http`.
 
 ### Entry Points
 
@@ -48,7 +48,7 @@ Currently empty (business modules land in future milestones). Reserved path: `sr
 | File | Purpose |
 |------|---------|
 | `setup.ts` | Global test setup (Vitest) |
-| `helpers/create-app.ts` | Creates `TestingModule`, calls `configureHttpApp(app, { testMode: true })` from `@onwealth/nest-http` |
+| `helpers/create-app.ts` | Creates `TestingModule`, calls `configureHttpApp(app, { testMode: true })` from `@boilerplate/nest-http` |
 | `helpers/create-request.ts` | Supertest request factory for integration tests |
 | `unit/global-modules.spec.ts` | Architecture guard: every `@Global()` must be in approved whitelist (3 cases) |
 | `integration/di-token-identity.spec.ts` | Verifies DI token singletons across module boundaries (2 cases) |
@@ -70,7 +70,7 @@ Currently empty (business modules land in future milestones). Reserved path: `sr
 
 ## packages/shared-kernel
 
-**Package:** `@onwealth/shared-kernel` — transport-agnostic NestJS modules (no HTTP deps)
+**Package:** `@boilerplate/shared-kernel` — transport-agnostic NestJS modules (no HTTP deps)
 
 | Directory | Key Files | Purpose |
 |-----------|-----------|---------|
@@ -118,7 +118,7 @@ Build: `tsdown` → `dist/index.mjs` + `dist/index.d.mts`. All NestJS + infra de
 
 ## packages/nest-http
 
-**Package:** `@onwealth/nest-http` — HTTP cross-cutting layer
+**Package:** `@boilerplate/nest-http` — HTTP cross-cutting layer
 
 | Directory | Key Files | Purpose |
 |-----------|-----------|---------|
@@ -147,7 +147,7 @@ Build: `tsdown` → `dist/index.mjs` + `dist/index.d.mts`. All NestJS + infra de
 
 ## packages/database
 
-**Package:** `@onwealth/database` — Drizzle ORM 0.44.7, pg 8.16.3 (peer), drizzle-kit 0.31.6, tsdown ESM build
+**Package:** `@boilerplate/database` — Drizzle ORM 0.44.7, pg 8.16.3 (peer), drizzle-kit 0.31.6, tsdown ESM build
 
 | File/Dir | Purpose |
 |----------|---------|
@@ -157,7 +157,7 @@ Build: `tsdown` → `dist/index.mjs` + `dist/index.d.mts`. All NestJS + infra de
 | `sql/00-init-role-timeouts.sql` | Sets `lock_timeout` + `statement_timeout` for migration role |
 | `drizzle.config.ts` | drizzle-kit config: schema `./src/schemas`, dialect postgresql, strict mode |
 
-Pool creation is **not** in this package — owned by `DrizzleService` in `@onwealth/shared-kernel`.
+Pool creation is **not** in this package — owned by `DrizzleService` in `@boilerplate/shared-kernel`.
 This package exports schema types only.
 
 ---
@@ -178,10 +178,10 @@ Two GitHub Actions jobs on push to `main`/`init-infrastructure` and PR to `main`
 
 | Token | Type | Defined In | Provided By |
 |-------|------|-----------|-------------|
-| `DB_TOKEN` | `Symbol` | `@onwealth/shared-kernel` `database/db.port.ts` | `DrizzleModule.forRoot()` |
-| `CACHE_PORT` | `Symbol` | `@onwealth/shared-kernel` `cache/cache.port.ts` | `CacheModule` → `CacheService` |
+| `DB_TOKEN` | `Symbol` | `@boilerplate/shared-kernel` `database/db.port.ts` | `DrizzleModule.forRoot()` |
+| `CACHE_PORT` | `Symbol` | `@boilerplate/shared-kernel` `cache/cache.port.ts` | `CacheModule` → `CacheService` |
 
-Both symbols are defined in exactly one file and imported only from `@onwealth/shared-kernel`.
+Both symbols are defined in exactly one file and imported only from `@boilerplate/shared-kernel`.
 
 ---
 
@@ -189,9 +189,9 @@ Both symbols are defined in exactly one file and imported only from `@onwealth/s
 
 These are the only modules permitted to be `@Global()` — enforced by `packages/shared-kernel/src/__tests__/unit/global-modules.spec.ts`:
 
-- `DrizzleModule` (from `@onwealth/shared-kernel`)
-- `DomainEventsModule` (from `@onwealth/shared-kernel`)
+- `DrizzleModule` (from `@boilerplate/shared-kernel`)
+- `DomainEventsModule` (from `@boilerplate/shared-kernel`)
 - `ClsModule` (via `nestjs-cls`)
 - `ConfigModule` (via `@nestjs/config`)
-- `LoggerModule` (from `@onwealth/shared-kernel`, via `nestjs-pino`)
-- `QueueModule` (from `@onwealth/shared-kernel`)
+- `LoggerModule` (from `@boilerplate/shared-kernel`, via `nestjs-pino`)
+- `QueueModule` (from `@boilerplate/shared-kernel`)

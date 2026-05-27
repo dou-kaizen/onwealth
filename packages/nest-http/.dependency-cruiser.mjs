@@ -1,5 +1,5 @@
 /**
- * @onwealth/nest-http dependency rules — extends the root base config.
+ * @boilerplate/nest-http dependency rules — extends the root base config.
  * Base supplies `no-circular` + cruise options; rules below guard this
  * package's position in the DAG (consumed by apps/api, sits above database).
  */
@@ -19,9 +19,9 @@ export default {
       name: 'nest-http-no-database-direct',
       severity: 'error',
       comment:
-        'nest-http must not import @onwealth/database directly. Database access goes through @onwealth/shared-kernel (DB_TOKEN).',
+        'nest-http must not import @boilerplate/database directly. Database access goes through @boilerplate/shared-kernel (DB_TOKEN).',
       from: { path: '^src/' },
-      to: { path: '(packages/database|@onwealth/database)' },
+      to: { path: '(packages/database|@boilerplate/database)' },
     },
   ],
 }

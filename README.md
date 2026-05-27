@@ -99,7 +99,7 @@ Bypass (emergency only): `git commit --no-verify`. CI remains the hard gate.
 | `typecheck` | `tsc -b --noEmit` |
 | `deps` | dependency-cruiser architecture check |
 
-### packages/database (run with `pnpm --filter @onwealth/database <script>`)
+### packages/database (run with `pnpm --filter @boilerplate/database <script>`)
 
 | Script | Description |
 |--------|-------------|
@@ -123,11 +123,11 @@ onwealth/
 │           ├── app.module.ts  # Root module — imports workspace packages
 │           └── main.ts        # Thin entrypoint: createHttpApp + listen
 ├── packages/
-│   ├── database/              # @onwealth/database — Drizzle ORM schema + migrations
+│   ├── database/              # @boilerplate/database — Drizzle ORM schema + migrations
 │   │   ├── src/schemas/       # Schema definitions (placeholder — TODO)
 │   │   ├── drizzle/           # Generated migration files
 │   │   └── sql/               # Raw SQL (role timeout init)
-│   ├── shared-kernel/         # @onwealth/shared-kernel — transport-agnostic NestJS modules
+│   ├── shared-kernel/         # @boilerplate/shared-kernel — transport-agnostic NestJS modules
 │   │   └── src/
 │   │       ├── cache/         # CachePort interface + CACHE_PORT token + CacheService
 │   │       ├── config/        # appConfig, databaseConfig, redisConfig; Zod env schema
@@ -136,7 +136,7 @@ onwealth/
 │   │       ├── errors/        # ErrorCode enum, ValidationError
 │   │       ├── events/        # DomainEventsModule, DomainEventPublisher
 │   │       └── logger/        # LoggerModule (nestjs-pino) + redaction config
-│   └── nest-http/             # @onwealth/nest-http — HTTP cross-cutting layer
+│   └── nest-http/             # @boilerplate/nest-http — HTTP cross-cutting layer
 │       └── src/
 │           ├── bootstrap/     # configureHttpApp / createHttpApp + HttpAppOptions
 │           ├── config/        # httpConfig, throttleConfig, CLS, CORS, Swagger, ValidationPipe
@@ -158,8 +158,8 @@ onwealth/
 ### Package Dependency DAG
 
 ```
-apps/api → @onwealth/nest-http → @onwealth/shared-kernel → @onwealth/database
-future-worker → @onwealth/shared-kernel
+apps/api → @boilerplate/nest-http → @boilerplate/shared-kernel → @boilerplate/database
+future-worker → @boilerplate/shared-kernel
 ```
 
 ## Health Endpoints

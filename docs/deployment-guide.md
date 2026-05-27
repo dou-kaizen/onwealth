@@ -47,10 +47,10 @@ jobs:
       - uses: actions/setup-node@v4
         with: { node-version: 22, cache: pnpm }
       - run: pnpm install --frozen-lockfile
-      - run: pnpm --filter @onwealth/database run db:init-roles
+      - run: pnpm --filter @boilerplate/database run db:init-roles
         env:
           DATABASE_URL: ${{ secrets.PROD_DATABASE_URL }}
-      - run: pnpm --filter @onwealth/database run db:migrate
+      - run: pnpm --filter @boilerplate/database run db:migrate
         env:
           DATABASE_URL: ${{ secrets.PROD_DATABASE_URL }}
 
@@ -80,7 +80,7 @@ spec:
       initContainers:
         - name: migrate
           image: ghcr.io/your-org/onwealth-api:${TAG}
-          command: ["pnpm", "--filter", "@onwealth/database", "run", "db:migrate"]
+          command: ["pnpm", "--filter", "@boilerplate/database", "run", "db:migrate"]
           env:
             - name: DATABASE_URL
               valueFrom: { secretKeyRef: { name: db-credentials, key: url } }
@@ -118,7 +118,7 @@ spec:
       containers:
         - name: migrate
           image: ghcr.io/your-org/onwealth-api:${TAG}
-          command: ["pnpm", "--filter", "@onwealth/database", "run", "db:migrate"]
+          command: ["pnpm", "--filter", "@boilerplate/database", "run", "db:migrate"]
           env:
             - name: DATABASE_URL
               valueFrom: { secretKeyRef: { name: db-credentials, key: url } }
@@ -140,7 +140,7 @@ For local dev (one developer, ephemeral DB):
 pnpm db:dev    # init-roles + migrate, in order
 ```
 
-This composite script lives at the workspace root and chains the two `@onwealth/database` scripts.
+This composite script lives at the workspace root and chains the two `@boilerplate/database` scripts.
 
 ---
 

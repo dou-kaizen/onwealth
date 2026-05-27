@@ -1,7 +1,7 @@
+import type { CachePort } from '@boilerplate/shared-kernel'
+import { CACHE_PORT } from '@boilerplate/shared-kernel'
 import { Inject, Injectable, Logger } from '@nestjs/common'
 import type { HealthIndicatorResult } from '@nestjs/terminus'
-import type { CachePort } from '@onwealth/shared-kernel'
-import { CACHE_PORT } from '@onwealth/shared-kernel'
 import ms from 'ms'
 
 /** Probe key — written then read back to assert round-trip integrity. */

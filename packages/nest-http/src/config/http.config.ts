@@ -1,5 +1,5 @@
+import { envObjectSchema } from '@boilerplate/shared-kernel'
 import { registerAs } from '@nestjs/config'
-import { envObjectSchema } from '@onwealth/shared-kernel'
 
 /**
  * HTTP env subset — validates ONLY the HTTP-transport slice.

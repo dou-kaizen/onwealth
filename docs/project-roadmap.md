@@ -24,15 +24,15 @@ Six-phase refactor extracted cross-cutting code from `apps/api/src/` into two ne
 | 1 | Shared-Kernel scaffold | Done |
 | 2 | Shared-Kernel infra modules | Done |
 | 3 | Config namespace migration | Done |
-| 4 | `@onwealth/nest-http` package | Done |
+| 4 | `@boilerplate/nest-http` package | Done |
 | 5 | Bootstrap slim + API composition root | Done |
 | 6 | Tooling & docs sync | Done |
 
 **Result:** `apps/api/src/` now contains only `app.module.ts`, `main.ts`, `modules/`, `__tests__/`.
-`main.ts` is a thin entrypoint — all HTTP setup lives in `@onwealth/nest-http` `configureHttpApp`.
+`main.ts` is a thin entrypoint — all HTTP setup lives in `@boilerplate/nest-http` `configureHttpApp`.
 
-**Unlocked capability:** a future NestJS worker app can depend on `@onwealth/shared-kernel` directly
-without pulling in any HTTP dependencies (`@onwealth/nest-http`).
+**Unlocked capability:** a future NestJS worker app can depend on `@boilerplate/shared-kernel` directly
+without pulling in any HTTP dependencies (`@boilerplate/nest-http`).
 
 ---
 

@@ -1,9 +1,3 @@
-import type { MiddlewareConsumer, NestModule } from '@nestjs/common'
-import { Module, RequestMethod } from '@nestjs/common'
-import { ConfigModule, type ConfigType } from '@nestjs/config'
-import { APP_GUARD } from '@nestjs/core'
-import { EventEmitterModule } from '@nestjs/event-emitter'
-import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler'
 import {
   AllExceptionsFilter,
   CorrelationIdInterceptor,
@@ -18,7 +12,7 @@ import {
   ThrottlerExceptionFilter,
   TraceContextInterceptor,
   throttleConfig,
-} from '@onwealth/nest-http'
+} from '@boilerplate/nest-http'
 import {
   appConfig,
   CacheModule,
@@ -28,7 +22,13 @@ import {
   LoggerModule,
   redisConfig,
   validateEnv,
-} from '@onwealth/shared-kernel'
+} from '@boilerplate/shared-kernel'
+import type { MiddlewareConsumer, NestModule } from '@nestjs/common'
+import { Module, RequestMethod } from '@nestjs/common'
+import { ConfigModule, type ConfigType } from '@nestjs/config'
+import { APP_GUARD } from '@nestjs/core'
+import { EventEmitterModule } from '@nestjs/event-emitter'
+import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler'
 import { ClsModule } from 'nestjs-cls'
 
 /**
@@ -51,7 +51,7 @@ const LOG_EXCLUDED_ROUTES = [
  *
  * **Architecture:**
  * - Modular layered architecture as the baseline.
- * - Dependency Inversion (DIP) via DI tokens in `@onwealth/shared-kernel`.
+ * - Dependency Inversion (DIP) via DI tokens in `@boilerplate/shared-kernel`.
  * - DDD primitives ({@link BaseAggregateRoot}, {@link DomainEventPublisher})
  *   adopted on demand by feature modules.
  *

@@ -1,5 +1,5 @@
+import { envObjectSchema } from '@boilerplate/shared-kernel'
 import { registerAs } from '@nestjs/config'
-import { envObjectSchema } from '@onwealth/shared-kernel'
 
 /**
  * Throttle env subset — validates ONLY the rate-limit slice.

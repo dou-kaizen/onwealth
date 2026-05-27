@@ -46,7 +46,7 @@ const {
   RequestContextInterceptor,
   ThrottlerExceptionFilter,
   TraceContextInterceptor,
-} = await import('@onwealth/nest-http')
+} = await import('@boilerplate/nest-http')
 
 describe('[M16] global filters/interceptors wiring after configureHttpApp', () => {
   let app: NestExpressApplication

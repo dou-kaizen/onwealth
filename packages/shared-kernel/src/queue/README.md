@@ -1,6 +1,6 @@
 # Queue Module — Production Usage Guide
 
-BullMQ + NestJS scaffold living in `@onwealth/shared-kernel`. Boilerplate
+BullMQ + NestJS scaffold living in `@boilerplate/shared-kernel`. Boilerplate
 only — `QueueModule` is **not** imported by `apps/api` until the first
 feature wires a queue. This guide is the cloner's 5-minute start.
 
@@ -17,7 +17,7 @@ End-to-end: register a queue, write a processor, enqueue a job. ~30 LOC.
 ```ts
 // apps/api/src/app.module.ts
 import { Module } from '@nestjs/common'
-import { QueueModule } from '@onwealth/shared-kernel'
+import { QueueModule } from '@boilerplate/shared-kernel'
 import { EmailModule } from './email/email.module.js'
 
 @Module({ imports: [QueueModule, EmailModule] })
@@ -33,7 +33,7 @@ under the named key `QueueConfigKey`. All feature queues inherit it.
 // apps/api/src/email/email.module.ts
 import { BullModule } from '@nestjs/bullmq'
 import { Module } from '@nestjs/common'
-import { QueueConfigKey } from '@onwealth/shared-kernel'
+import { QueueConfigKey } from '@boilerplate/shared-kernel'
 import { EmailProcessor } from './email.processor.js'
 import { EmailService } from './email.service.js'
 
@@ -63,7 +63,7 @@ import {
   QueueProcessorBase,
   type QueueJobBaseData,
   type QueueJobResult,
-} from '@onwealth/shared-kernel'
+} from '@boilerplate/shared-kernel'
 
 interface SendEmailJobData extends QueueJobBaseData {
   toEmail: string
@@ -97,7 +97,7 @@ export class EmailProcessor extends QueueProcessorBase {
 // apps/api/src/email/email.service.ts
 import { InjectQueue } from '@nestjs/bullmq'
 import { Injectable } from '@nestjs/common'
-import { assertPayloadSize } from '@onwealth/shared-kernel'
+import { assertPayloadSize } from '@boilerplate/shared-kernel'
 import type { Queue } from 'bullmq'
 
 @Injectable()
@@ -224,7 +224,7 @@ BullMQ's `failed` set, retained per `removeOnFail`. Two helpers expose
 that set:
 
 ```ts
-import { getFailedJobs, retryFailedJob } from '@onwealth/shared-kernel'
+import { getFailedJobs, retryFailedJob } from '@boilerplate/shared-kernel'
 
 // List the most recent 50 failures from a queue
 const failed = await getFailedJobs(emailQueue, 0, 50)

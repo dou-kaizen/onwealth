@@ -1,5 +1,5 @@
 {
-  "name": "@onwealth/nest-http",
+  "name": "@boilerplate/nest-http",
   "version": "1.0.0",
   "files": [
     "dist"
@@ -34,7 +34,7 @@
     "@nestjs/swagger": "catalog:",
     "@nestjs/terminus": "catalog:",
     "@nestjs/throttler": "catalog:",
-    "@onwealth/shared-kernel": "workspace:*",
+    "@boilerplate/shared-kernel": "workspace:*",
     "@scalar/nestjs-api-reference": "catalog:",
     "@types/bytes": "catalog:",
     "@types/express": "catalog:",
@@ -63,7 +63,7 @@
     "@nestjs/swagger": "^11",
     "@nestjs/terminus": "^11",
     "@nestjs/throttler": "^6",
-    "@onwealth/shared-kernel": "workspace:*",
+    "@boilerplate/shared-kernel": "workspace:*",
     "@scalar/nestjs-api-reference": "^1",
     "bytes": "^3",
     "class-transformer": "^0.5.1",
