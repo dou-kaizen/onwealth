@@ -3,6 +3,7 @@ import type { HealthIndicatorResult } from '@nestjs/terminus'
 import type { DrizzleDb } from '@onwealth/shared-kernel'
 import { DB_TOKEN } from '@onwealth/shared-kernel'
 import { sql } from 'drizzle-orm'
+import ms from 'ms'
 
 /**
  * Health-check query deadline.
@@ -12,7 +13,7 @@ import { sql } from 'drizzle-orm'
  * deliver a response — otherwise the probe would hang until the LB itself
  * times out.
  */
-const HEALTH_TIMEOUT_MS = 3_000
+const HEALTH_TIMEOUT_MS = ms('3s')
 
 /**
  * Terminus health indicator for the primary database connection.

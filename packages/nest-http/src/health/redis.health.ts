@@ -2,6 +2,7 @@ import { Inject, Injectable, Logger } from '@nestjs/common'
 import type { HealthIndicatorResult } from '@nestjs/terminus'
 import type { CachePort } from '@onwealth/shared-kernel'
 import { CACHE_PORT } from '@onwealth/shared-kernel'
+import ms from 'ms'
 
 /** Probe key — written then read back to assert round-trip integrity. */
 const PROBE_KEY = '__health_probe__'
@@ -16,7 +17,7 @@ const PROBE_VALUE = '1'
  * reports `down`. Catches half-open TCP connections that the client
  * library still considers alive.
  */
-const HEALTH_TIMEOUT_MS = 3_000
+const HEALTH_TIMEOUT_MS = ms('3s')
 
 /**
  * Terminus health indicator for the Redis cache backend.

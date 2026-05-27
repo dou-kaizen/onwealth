@@ -1,8 +1,14 @@
 import * as schema from '@onwealth/database'
 import { drizzle } from 'drizzle-orm/node-postgres'
+import ms from 'ms'
 import { Pool } from 'pg'
 
 import type { DrizzleDb, DrizzleModuleOptions } from './db.port.js'
+
+/** Default idle-connection eviction window (ms). */
+const DEFAULT_IDLE_TIMEOUT_MS = ms('30s')
+/** Default connect-attempt deadline (ms). */
+const DEFAULT_CONNECTION_TIMEOUT_MS = ms('5s')
 
 /**
  * Build a Drizzle database instance alongside its underlying pg `Pool`.
@@ -37,8 +43,8 @@ export function createDrizzleInstance(options: DrizzleModuleOptions): {
     connectionString: options.connectionString,
     max: options.pool?.max ?? 10,
     min: options.pool?.min ?? 2,
-    idleTimeoutMillis: options.pool?.idleTimeoutMillis ?? 30_000,
-    connectionTimeoutMillis: options.pool?.connectionTimeoutMillis ?? 5000,
+    idleTimeoutMillis: options.pool?.idleTimeoutMillis ?? DEFAULT_IDLE_TIMEOUT_MS,
+    connectionTimeoutMillis: options.pool?.connectionTimeoutMillis ?? DEFAULT_CONNECTION_TIMEOUT_MS,
   })
 
   pool.on('error', (err: Error) => {

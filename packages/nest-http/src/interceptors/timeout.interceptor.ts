@@ -1,8 +1,12 @@
 import type { CallHandler, ExecutionContext, NestInterceptor } from '@nestjs/common'
 import { Injectable, RequestTimeoutException } from '@nestjs/common'
+import ms from 'ms'
 import type { Observable } from 'rxjs'
 import { TimeoutError, throwError } from 'rxjs'
 import { catchError, timeout } from 'rxjs/operators'
+
+/** Default per-request deadline (ms). */
+const DEFAULT_TIMEOUT_MS = ms('30s')
 
 /**
  * Cap controller execution time so a hung handler can never wedge a
@@ -26,7 +30,7 @@ export class TimeoutInterceptor implements NestInterceptor {
   /**
    * @param timeoutMs — hard deadline in milliseconds; defaults to 30 s.
    */
-  constructor(timeoutMs = 30_000) {
+  constructor(timeoutMs: number = DEFAULT_TIMEOUT_MS) {
     this.timeoutMs = timeoutMs
   }
 

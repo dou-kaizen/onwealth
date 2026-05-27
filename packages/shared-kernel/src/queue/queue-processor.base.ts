@@ -2,6 +2,7 @@ import { OnWorkerEvent, WorkerHost } from '@nestjs/bullmq'
 import type { OnModuleDestroy } from '@nestjs/common'
 import { Logger } from '@nestjs/common'
 import type { Job } from 'bullmq'
+import ms from 'ms'
 import { stripPrototypePollutionKeys } from '../utils/strip-prototype-pollution-keys.js'
 import type { QueueJobBaseData } from './queue-job-data.types.js'
 import type { QueueJobResult } from './queue-job-result.type.js'
@@ -15,7 +16,7 @@ import { _evaluateJobFailure } from './queue-processor.base.internal.js'
  * `main.ts` changes, update this in lockstep (or extract to a shared
  * constant).
  */
-const QUEUE_DRAIN_TIMEOUT_MS = 5000
+const QUEUE_DRAIN_TIMEOUT_MS = ms('5s')
 
 /**
  * Abstract base for all BullMQ job processors.

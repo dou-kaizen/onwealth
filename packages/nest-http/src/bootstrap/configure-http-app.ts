@@ -5,6 +5,7 @@ import type { NestExpressApplication } from '@nestjs/platform-express'
 import { appConfig } from '@onwealth/shared-kernel'
 import express from 'express'
 import helmet from 'helmet'
+import ms from 'ms'
 import { httpConfig } from '../config/http.config.js'
 import { createCorsConfig } from '../config/security.config.js'
 import { setupSwagger } from '../config/swagger.config.js'
@@ -24,7 +25,7 @@ import type { HttpAppOptions } from './http-app-options.js'
 /** Fixed CORS origin used in test mode for deterministic, isolated requests. */
 const TEST_CORS_ORIGINS = ['http://localhost:3000']
 /** Global request timeout (ms). */
-const REQUEST_TIMEOUT_MS = 30_000
+const REQUEST_TIMEOUT_MS = ms('30s')
 /** Explicit JSON body limit — guards against payload amplification attacks. */
 const BODY_LIMIT = '100kb'
 

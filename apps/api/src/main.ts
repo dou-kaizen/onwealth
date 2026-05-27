@@ -2,6 +2,7 @@ import type { INestApplication } from '@nestjs/common'
 import type { ConfigType } from '@nestjs/config'
 import { createHttpApp, httpConfig } from '@onwealth/nest-http'
 import { appConfig } from '@onwealth/shared-kernel'
+import ms from 'ms'
 import { Logger } from 'nestjs-pino'
 import { AppModule } from './app.module.js'
 
@@ -10,7 +11,7 @@ import { AppModule } from './app.module.js'
  * the process indefinitely. Kept aligned with `QueueProcessorBase`'s
  * `SHUTDOWN_GRACE_MS` so HTTP + queue drain windows match.
  */
-const SHUTDOWN_GRACE_MS = 5000
+const SHUTDOWN_GRACE_MS = ms('5s')
 
 /**
  * App reference hoisted out of `bootstrap()` so the `unhandledRejection` and

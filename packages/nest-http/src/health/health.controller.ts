@@ -10,11 +10,19 @@ import {
 } from '@nestjs/terminus'
 import { SkipThrottle } from '@nestjs/throttler'
 import type { Env } from '@onwealth/shared-kernel'
+import bytes from 'bytes'
 import { Public } from '../decorators/public.decorator.js'
 import { DrizzleHealthIndicator } from './drizzle.health.js'
 import { RedisHealthIndicator } from './redis.health.js'
 
 type HealthEntry = { status: 'up' | 'down'; message: string }
+
+/** Liveness heap ceiling — generous to avoid spurious restarts under warm cache / GC pressure. */
+const LIVENESS_HEAP_LIMIT = bytes('300mb') as number
+/** Full-detail heap ceiling — tighter than liveness so dashboards flag pressure earlier. */
+const DETAILED_HEAP_LIMIT = bytes('150mb') as number
+/** Full-detail RSS ceiling — accounts for native allocations on top of V8 heap. */
+const DETAILED_RSS_LIMIT = bytes('300mb') as number
 
 /**
  * Health check controller — three probe endpoints following k8s / Spring Boot Actuator conventions.
@@ -64,7 +72,7 @@ export class HealthController {
   @ApiResponse({ status: 200, description: 'Process is alive' })
   @ApiResponse({ status: 503, description: 'Process memory exceeded threshold' })
   async liveness() {
-    return this.runChecks([() => this.memory.checkHeap('memory_heap', 300 * 1024 * 1024)])
+    return this.runChecks([() => this.memory.checkHeap('memory_heap', LIVENESS_HEAP_LIMIT)])
   }
 
   /**
@@ -127,8 +135,8 @@ export class HealthController {
     return this.runChecks([
       () => this.drizzle.isHealthy('database'),
       () => this.redis.isHealthy('redis'),
-      () => this.memory.checkHeap('memory_heap', 150 * 1024 * 1024),
-      () => this.memory.checkRSS('memory_rss', 300 * 1024 * 1024),
+      () => this.memory.checkHeap('memory_heap', DETAILED_HEAP_LIMIT),
+      () => this.memory.checkRSS('memory_rss', DETAILED_RSS_LIMIT),
       () => this.disk.checkStorage('storage', { path: '/', thresholdPercent: 0.9 }),
     ])
   }
