@@ -71,6 +71,16 @@ jobs:
           API_BASE_URL: http://localhost:3000
           ALLOWED_ORIGINS: http://localhost:3000
 
+      - name: Integration Tests
+        run: pnpm --filter @boilerplate/shared-kernel test:integration
+        env:
+          NODE_ENV: test
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/test
+          REDIS_URL: redis://localhost:6379
+          JWT_SECRET: test-secret-key-minimum-32-characters-for-ci-runs
+          API_BASE_URL: http://localhost:3000
+          ALLOWED_ORIGINS: http://localhost:3000
+
       - name: Architecture check
         run: pnpm deps
 
