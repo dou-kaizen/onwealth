@@ -33,10 +33,19 @@ function makeMockCacheManager() {
   }
 }
 
-function makeService(cacheManager: ReturnType<typeof makeMockCacheManager>): CacheService {
-  // CacheService only uses the injected cacheManager — construct directly.
+function makeMockKeyvRedis() {
+  return {
+    disconnect: vi.fn(async (_force?: boolean) => undefined),
+  }
+}
+
+function makeService(
+  cacheManager: ReturnType<typeof makeMockCacheManager>,
+  keyvRedis: ReturnType<typeof makeMockKeyvRedis> = makeMockKeyvRedis(),
+): CacheService {
+  // CacheService only uses the injected cacheManager and keyvRedis — construct directly.
   // eslint-disable-next-line @typescript-eslint/no-explicit-any -- test-only direct construction bypassing DI
-  return new CacheService(cacheManager as any)
+  return new CacheService(cacheManager as any, keyvRedis as any)
 }
 
 describe('CacheService.wrap', () => {

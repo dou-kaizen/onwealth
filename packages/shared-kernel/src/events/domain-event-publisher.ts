@@ -45,6 +45,16 @@ export class DomainEventPublisher {
    * 3. The original error is rethrown so the caller can decide whether to
    *    retry, transaction-rollback, or surface the failure.
    *
+   * **Per-event fan-out semantics:** `EventEmitter2.emitAsync` runs all
+   * listeners registered for the SAME event name in parallel
+   * (Promise.all internally). If ANY listener throws, the remaining
+   * listeners for that event are aborted — listeners registered after the
+   * throwing one never execute. This is abort-on-first-failure within an
+   * event, NOT independent fan-out. Listeners needing all-listeners-run
+   * semantics MUST wrap their handler in a private try/catch when
+   * registering — do NOT mutate this publisher to swallow per-listener
+   * errors, since that loses the failure signal at the aggregate boundary.
+   *
    * @throws Rethrows any listener error after restoring the unsent tail.
    */
   async publishEventsForAggregate(aggregate: BaseAggregateRoot): Promise<void> {

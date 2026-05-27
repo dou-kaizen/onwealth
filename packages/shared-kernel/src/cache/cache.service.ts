@@ -1,6 +1,9 @@
+import type KeyvRedis from '@keyv/redis'
 import { CACHE_MANAGER } from '@nestjs/cache-manager'
+import type { OnModuleDestroy } from '@nestjs/common'
 import { Inject, Injectable, Logger } from '@nestjs/common'
 import type { Cache } from 'cache-manager'
+import { KEYV_REDIS_TOKEN } from './cache.module.js'
 import type { CachePort } from './cache.port.js'
 
 /**
@@ -48,13 +51,34 @@ function isUndefinedSentinel(raw: unknown): boolean {
  * milliseconds, so every set multiplies by 1000 at the boundary.
  */
 @Injectable()
-export class CacheService implements CachePort {
+export class CacheService implements CachePort, OnModuleDestroy {
   private readonly logger = new Logger(CacheService.name)
 
   constructor(
     @Inject(CACHE_MANAGER)
     private readonly cacheManager: Cache,
+    @Inject(KEYV_REDIS_TOKEN)
+    private readonly keyvRedis: KeyvRedis<unknown>,
   ) {}
+
+  /**
+   * Graceful disconnect on Nest shutdown (SIGTERM).
+   *
+   * Calls `KeyvRedis.disconnect(false)` — the `false` flag drains in-flight
+   * commands via `QUIT` before closing the socket. Errors are swallowed at
+   * `warn` because cache shutdown must never block the process exit chain;
+   * a hung disconnect should fall through to the main.ts hard-stop timer.
+   */
+  async onModuleDestroy(): Promise<void> {
+    try {
+      await this.keyvRedis.disconnect(false)
+      this.logger.log('Cache Redis disconnected')
+    } catch (err) {
+      this.logger.warn('Cache Redis disconnect failed', {
+        error: (err as Error).message,
+      })
+    }
+  }
 
   async get<T>(key: string): Promise<T | undefined> {
     try {
