@@ -1,6 +1,12 @@
 # Code Standards
 
+> Full documentation navigation: [docs/README.md](./README.md)
+
 Conventions and rationale for non-obvious decisions in this NestJS boilerplate.
+
+> Validation conventions are implemented in `@boilerplate/nest-http`: see [Request Validation](./infrastructure/request-validation.md).
+> Error handling conventions and RFC 9457 filter chain: see [Handling Error](./infrastructure/handling-error.md).
+> Security and middleware conventions: see [Security and Middleware](./infrastructure/security-and-middleware.md).
 
 ## TypeScript Compiler Settings
 

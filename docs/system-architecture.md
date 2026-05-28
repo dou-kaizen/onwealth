@@ -11,6 +11,9 @@ Cross-cutting code is extracted into two pnpm workspace packages:
 `apps/api` is the composition root — it imports from both packages and owns only
 business modules (`AppModule`, `main.ts`, `modules/`).
 
+For per-module file inventories, DI token lists, and code-level details see the
+[Infrastructure deep-dive docs](./infrastructure/README.md).
+
 ---
 
 ## Workspace Package Inventory
@@ -18,7 +21,7 @@ business modules (`AppModule`, `main.ts`, `modules/`).
 | Package | Path | Layer |
 |---------|------|-------|
 | `@boilerplate/database` | `packages/database/` | Drizzle ORM schema + migrations |
-| `@boilerplate/shared-kernel` | `packages/shared-kernel/` | Transport-agnostic NestJS modules: config namespaces, DB module + `DB_TOKEN`, cache port + `CACHE_PORT`, domain events, logger, `Env`/zod schema, BullMQ queue scaffold (`QueueModule` — no concrete queues registered yet) |
+| `@boilerplate/shared-kernel` | `packages/shared-kernel/` | Transport-agnostic NestJS modules: config namespaces, DB module + `DB_TOKEN`, cache port + `CACHE_PORT`, domain events, logger, `Env`/zod schema, BullMQ queue scaffold |
 | `@boilerplate/nest-http` | `packages/nest-http/` | HTTP cross-cutting: exception filters, interceptors, ETag middleware, health module, HTTP configs, `configureHttpApp` / `createHttpApp` bootstrap, decorators, DTOs |
 | `apps/api` | `apps/api/` | Composition root — `AppModule`, `main.ts`, business `modules/` |
 
@@ -101,6 +104,8 @@ ProblemDetailsFilter       ← shapes all HttpException → RFC 9457
 AllExceptionsFilter        ← ultimate fallback (catch-all)
 ```
 
+See [Handling Error](./infrastructure/handling-error.md) for filter implementation details.
+
 ---
 
 ## Cross-Cutting Pipeline
@@ -134,6 +139,10 @@ AllExceptionsFilter        ← ultimate fallback (catch-all)
 | Pipe | Config |
 |------|--------|
 | `ValidationPipe` | `whitelist`, `forbidNonWhitelisted`, `enableImplicitConversion: false` |
+
+See [Security and Middleware](./infrastructure/security-and-middleware.md) for full pipeline configuration.
+See [Request Validation](./infrastructure/request-validation.md) for `ValidationPipe` details and DTO conventions.
+See [Response](./infrastructure/response.md) for envelope shape and pagination.
 
 ---
 
@@ -223,6 +232,8 @@ DrizzleModule.forRoot() [Global Dynamic Module]
 Schema types imported from `@boilerplate/database` workspace package.
 No repository abstraction layer yet — handlers receive `DB_TOKEN` directly.
 
+See [Database](./infrastructure/database.md) for pool config, migration workflow, and `withTimeout` helper.
+
 ---
 
 ## Module Dependency Graph (Infrastructure)
@@ -240,7 +251,7 @@ AppModule
 └── CacheModule                    ← CACHE_PORT adapter  (@boilerplate/shared-kernel); self-loads redisConfig via ConfigModule.forFeature
 ```
 
-`DrizzleModule`, `CacheModule`, and `QueueModule` are self-contained: each calls `ConfigModule.forFeature(...)` internally to register its typed config factory regardless of how the host app wires `ConfigModule`. Host app does not need to pass config to these modules explicitly.
+`DrizzleModule`, `CacheModule`, and `QueueModule` are self-contained: each calls `ConfigModule.forFeature(...)` internally to register its typed config factory regardless of how the host app wires `ConfigModule`.
 
 All `@Global()` modules are enforced by the architecture guard test
 (`packages/shared-kernel/src/__tests__/unit/global-modules.spec.ts`).
@@ -270,15 +281,14 @@ process.on('unhandledRejection' | 'uncaughtException')
        └─ setTimeout(SHUTDOWN_GRACE_MS).unref()  ← hard-stop fallback; SHUTDOWN_GRACE_MS = ms('5s')
 ```
 
-`DrizzleService.onModuleDestroy()` ends the pg Pool. `QueueProcessorBase.onModuleDestroy()` calls `worker.close(false)` — `false` means "wait for active jobs" (note: BullMQ's `close(force)` param is inverted; `true` skips the wait) — with a `QUEUE_DRAIN_TIMEOUT_MS` (= `ms('5s')`) timeout race before hard exit. The 5 s hard-stop prevents zombie processes in container environments where the orchestrator sends SIGKILL after its own timeout.
+`DrizzleService.onModuleDestroy()` ends the pg Pool. `QueueProcessorBase.onModuleDestroy()` calls `worker.close(false)` with a `QUEUE_DRAIN_TIMEOUT_MS` (= `ms('5s')`) timeout race before hard exit.
 
 ---
 
 ## Queue Architecture
 
-### Connection Model
-
-`QueueModule` registers a single shared Redis connection per role, keyed by `QueueConfigKey`:
+Connection model, failure/retry logic, and DLQ approach:
+see [Queue](./infrastructure/queue.md).
 
 ```
 QueueModule [@Global()]
@@ -286,27 +296,7 @@ QueueModule [@Global()]
   └─ processor connection (configKey: 'queue-processor') ← BullMQ Worker instances
 ```
 
-Both connections resolve from `QUEUE_REDIS_URL ?? REDIS_URL`. Queue Redis is fully separate from the cache `@keyv/redis` client — no shared connection. `defaultJobOptions` set globally: `removeOnComplete: { count: 1000 }`, `removeOnFail: { count: 5000 }`, `attempts: 3`, `backoff: { type: 'exponential', delay: 1000 }` (prevents Redis key accumulation; per-queue overrides allowed via `BullModule.registerQueue`).
-
-### Failure & Retry Model
-
-```
-job attempt N fails
-  ├─ error instanceof FatalQueueException → moveToFailed immediately (no more retries)
-  └─ else → BullMQ retry backoff until maxAttempts exhausted → moveToFailed
-```
-
-`FatalQueueException` short-circuits retry logic regardless of attempt count. Legacy `error.isFatal` flag is dropped — use `FatalQueueException` subclass instead.
-
-### DLQ Approach
-
-BullMQ's native `failed` set is the dead-letter queue. No separate queue or topic needed.
-
-`QueueDlqHelper` provides:
-- `getFailedJobs(queue)` → `FailedJobSummary[]` — paginated inspection; raw `data` field intentionally omitted from `FailedJobSummary` (PII risk — caller must fetch full job if payload needed)
-- `retryFailedJob(queue, jobId)` — moves job back to `waiting`
-
-Migration path for future alerting: instrument `QueueProcessorBase.onFailed` with a metrics hook (deferred to Phase B).
+Both connections resolve from `QUEUE_REDIS_URL ?? REDIS_URL`. Queue Redis is fully separate from the cache `@keyv/redis` client.
 
 ---
 
@@ -314,12 +304,14 @@ Migration path for future alerting: instrument `QueueProcessorBase.onFailed` wit
 
 | Layer | Mechanism |
 |-------|-----------|
-| Headers | Helmet (HSTS, X-Content-Type-Options, X-Frame-Options, …); scoped CSP on `/swagger` + `/docs` HTML routes (per-route middleware); CSP off on JSON API routes |
+| Headers | Helmet (HSTS, X-Content-Type-Options, X-Frame-Options, …); scoped CSP on `/swagger` + `/docs` HTML routes; CSP off on JSON API routes |
 | CORS | Env-driven `ALLOWED_ORIGINS`; exposes `X-Request-Id` |
 | Rate limiting | `ThrottlerGuard` as `APP_GUARD`; `THROTTLE_TTL` ≥ 1000 ms enforced by Zod |
 | Payload | 100 KB JSON body limit (express.json) |
-| Env validation | Zod rejects placeholder secrets and insecure config in production: `ALLOWED_ORIGINS` rejects `*`/`null`; `DATABASE_URL` requires SSL (`sslmode=require`, `ssl=true`, or `postgresql+ssl://`); `JWT_SECRET` requires charset diversity (upper+lower+digit) + ≥16 distinct chars |
-| Logging | Sensitive field redaction in pino config; health probe errors log `errorName` only — never `error.message` (prevents infra topology leaks) |
+| Env validation | Zod rejects placeholder secrets and insecure config in production |
+| Logging | Sensitive field redaction in pino config; health probe errors log `errorName` only |
+
+See [Security and Middleware](./infrastructure/security-and-middleware.md) for full details.
 
 ---
 
@@ -332,6 +324,8 @@ Migration path for future alerting: instrument `QueueProcessorBase.onFailed` wit
 | Correlation | `X-Request-Id` via `CorrelationIdInterceptor` |
 | Health | `@nestjs/terminus` (Drizzle + Redis indicators) |
 | API docs | `@nestjs/swagger` + `@scalar/nestjs-api-reference` (non-prod) |
+
+See [Logger](./infrastructure/logger.md) for pino configuration, redaction paths, and CLS correlation.
 
 ### Known Compatibility Notes
 

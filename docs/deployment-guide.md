@@ -2,6 +2,9 @@
 
 Operational playbook for deploying the API and running database migrations.
 
+> Environment variables and Zod validation rules: see [Environment Variables](./infrastructure/environment.md).
+> For a full env var listing with types and defaults, check `apps/api/.env.example`.
+
 This guide covers three migration-runner patterns. **Pick exactly one per environment and never run two of them concurrently** (concurrent runners can deadlock on `drizzle_migrations` or apply the same migration twice).
 
 ---
@@ -175,6 +178,15 @@ Configure GitHub branch protection on `main` to require BOTH of the following CI
 `Migration Smoke Test` is gated on `ci` via `needs: [ci]` in `.github/workflows/ci.yml` — broken builds short-circuit before the smoke job spins up Postgres. Branch protection must still list it explicitly; otherwise a manual re-run can bypass the dependency.
 
 ---
+
+## Related Documents
+
+| Topic | Document |
+|-------|----------|
+| All env vars + Zod production rules | [Environment Variables](./infrastructure/environment.md) |
+| Database module + pool config | [Database](./infrastructure/database.md) |
+| Configuration namespaces | [Configuration](./infrastructure/configuration.md) |
+| Full system architecture | [System Architecture](./system-architecture.md) |
 
 ## Unresolved Questions
 
