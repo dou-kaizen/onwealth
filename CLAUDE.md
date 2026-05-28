@@ -77,17 +77,29 @@ This ensures packages installed by `install.sh` (google-genai, pypdf, etc.) are 
 
 ## Documentation Management
 
-We keep all important docs in `./docs` folder and keep updating them, structure like below:
+All docs live in `./docs`. Navigation entry point: `./docs/README.md`.
 
-```
-./docs
-├── project-overview-pdr.md
-├── code-standards.md
-├── codebase-summary.md
-├── design-guidelines.md
-├── deployment-guide.md
-├── system-architecture.md
-└── project-roadmap.md
-```
+### Layout
+
+- `docs/README.md` — top-level navigation index
+- `docs/project-overview-pdr.md` — product vision and goals
+- `docs/system-architecture.md` — high-level architecture, module dependency DAG
+- `docs/codebase-summary.md` — high-level workspace map, injection tokens, global module whitelist
+- `docs/code-standards.md` — coding conventions, DDD module pattern, TypeScript config
+- `docs/deployment-guide.md` — deployment recipe, migration runner patterns
+- `docs/project-roadmap.md` — milestones and progress
+- `docs/infrastructure/` — per-topic deep-dive docs for infrastructure concerns
+  (installation, environment, configuration, project-structure, database, cache, queue, logger,
+  response, request-validation, handling-error, security-and-middleware)
+- `docs/features/` — per-feature docs (placeholder, populated as features land in M2+)
+- `docs/journals/` — milestone and decision journals
+
+### Rules for AI Agents
+
+When asked about an infra concern, ALWAYS check `docs/infrastructure/<topic>.md` first.
+When asked about codebase structure, start at `docs/codebase-summary.md` for the overview, then
+`docs/infrastructure/project-structure.md` for per-folder/per-layer detail.
+When asked about an env var, check `docs/infrastructure/environment.md`.
+When asked about a config namespace, check `docs/infrastructure/configuration.md`.
 
 **IMPORTANT:** *MUST READ* and *MUST COMPLY* all *INSTRUCTIONS* in project `./CLAUDE.md`, especially *WORKFLOWS* section is *CRITICALLY IMPORTANT*, this rule is *MANDATORY. NON-NEGOTIABLE. NO EXCEPTIONS. MUST REMEMBER AT ALL TIMES!!!*

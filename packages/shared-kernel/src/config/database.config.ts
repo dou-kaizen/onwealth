@@ -5,12 +5,13 @@ import { envObjectSchema } from './env.schema.js'
  * Database env subset — validates ONLY the database slice.
  *
  * Derived from {@link envObjectSchema} via `.pick()` so the field rules stay
- * identical to the full gate (single source of truth). The factory parses this
- * subset directly — it never calls the full `validateEnv`, so a non-HTTP app
- * loading only `databaseConfig` does not depend on `JWT_SECRET`/`API_BASE_URL`.
+ * identical to the full gate (single source of truth). The factory parses
+ * this subset directly — it never calls the full `validateEnv`, so a
+ * non-HTTP app loading only `databaseConfig` does not depend on
+ * `JWT_SECRET` / `API_BASE_URL`.
  *
- * The cross-field pool min/max check is added here explicitly because
- * `.pick()` strips the `envSchema` superRefine — this schema is parsed
+ * The cross-field pool min/max check is re-attached here because `.pick()`
+ * strips the parent `envSchema.superRefine`; this schema is parsed
  * independently by non-HTTP workers that skip the full envSchema.
  */
 export const databaseEnvSchema = envObjectSchema
@@ -33,6 +34,11 @@ export const databaseEnvSchema = envObjectSchema
 
 /**
  * Typed `database` namespace config factory.
+ *
+ * Returns the parsed shape consumed by Drizzle/pg pool wiring.
+ *
+ * @returns Object exposing `{ url, pool: { max, min, idleTimeoutMillis, connectionTimeoutMillis } }`
+ *          via `ConfigService.get('database')`.
  */
 export const databaseConfig = registerAs('database', () => {
   const env = databaseEnvSchema.parse(process.env)

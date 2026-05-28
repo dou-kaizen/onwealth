@@ -7,9 +7,12 @@
 that can be evolved incrementally.
 
 Cross-cutting code is extracted into two pnpm workspace packages:
-`@onwealth/shared-kernel` (transport-agnostic) and `@onwealth/nest-http` (HTTP layer).
+`@boilerplate/shared-kernel` (transport-agnostic) and `@boilerplate/nest-http` (HTTP layer).
 `apps/api` is the composition root — it imports from both packages and owns only
 business modules (`AppModule`, `main.ts`, `modules/`).
+
+For per-module file inventories, DI token lists, and code-level details see the
+[Infrastructure deep-dive docs](./infrastructure/README.md).
 
 ---
 
@@ -17,25 +20,25 @@ business modules (`AppModule`, `main.ts`, `modules/`).
 
 | Package | Path | Layer |
 |---------|------|-------|
-| `@onwealth/database` | `packages/database/` | Drizzle ORM schema + migrations |
-| `@onwealth/shared-kernel` | `packages/shared-kernel/` | Transport-agnostic NestJS modules: config namespaces, DB module + `DB_TOKEN`, cache port + `CACHE_PORT`, domain events, logger, `Env`/zod schema |
-| `@onwealth/nest-http` | `packages/nest-http/` | HTTP cross-cutting: exception filters, interceptors, ETag middleware, health module, HTTP configs, `configureHttpApp` / `createHttpApp` bootstrap, decorators, DTOs |
+| `@boilerplate/database` | `packages/database/` | Drizzle ORM schema + migrations |
+| `@boilerplate/shared-kernel` | `packages/shared-kernel/` | Transport-agnostic NestJS modules: config namespaces, DB module + `DB_TOKEN`, cache port + `CACHE_PORT`, domain events, logger, `Env`/zod schema, BullMQ queue scaffold |
+| `@boilerplate/nest-http` | `packages/nest-http/` | HTTP cross-cutting: exception filters, interceptors, ETag middleware, health module, HTTP configs, `configureHttpApp` / `createHttpApp` bootstrap, decorators, DTOs |
 | `apps/api` | `apps/api/` | Composition root — `AppModule`, `main.ts`, business `modules/` |
 
 ### Package Dependency DAG
 
 ```
-apps/api ──────────────────────────────────────────────────► @onwealth/nest-http
+apps/api ──────────────────────────────────────────────────► @boilerplate/nest-http
                                                                       │
                                                                       ▼
-future-worker ──────────────────────────────────────► @onwealth/shared-kernel
+future-worker ──────────────────────────────────────► @boilerplate/shared-kernel
                                                                       │
                                                                       ▼
-                                                          @onwealth/database
+                                                          @boilerplate/database
 ```
 
 Edges are one-directional and enforced by per-package dependency-cruiser configs that extend a shared root base (`.dependency-cruiser.base.mjs`).
-A future NestJS worker app can depend on `@onwealth/shared-kernel` directly
+A future NestJS worker app can depend on `@boilerplate/shared-kernel` directly
 without pulling in any HTTP dependencies.
 
 ---
@@ -59,7 +62,7 @@ without pulling in any HTTP dependencies.
 ```
 
 Domain modules live under `apps/api/src/modules/<domain>/<layer>/`.
-Cross-cutting concerns live in `@onwealth/shared-kernel` and `@onwealth/nest-http`.
+Cross-cutting concerns live in `@boilerplate/shared-kernel` and `@boilerplate/nest-http`.
 
 ---
 
@@ -93,13 +96,15 @@ sequenceDiagram
 ### Filter Execution Order
 
 NestJS invokes exception filters in **reverse registration order**.
-Filters are registered inside `configureHttpApp` in `@onwealth/nest-http` (top → bottom):
+Filters are registered inside `configureHttpApp` in `@boilerplate/nest-http` (top → bottom):
 
 ```
 ThrottlerExceptionFilter   ← most specific, runs first on ThrottlerException
 ProblemDetailsFilter       ← shapes all HttpException → RFC 9457
 AllExceptionsFilter        ← ultimate fallback (catch-all)
 ```
+
+See [Handling Error](./infrastructure/handling-error.md) for filter implementation details.
 
 ---
 
@@ -124,7 +129,7 @@ AllExceptionsFilter        ← ultimate fallback (catch-all)
 | 1 | `RequestContextInterceptor` | Seeds CLS store with traceparent, writes tracing headers to response |
 | 2 | `CorrelationIdInterceptor` | Reads/generates `X-Request-Id`, stores in CLS |
 | 3 | `TraceContextInterceptor` | W3C `traceparent` + `tracestate` propagation |
-| 4 | `TimeoutInterceptor` | Cancels handler after 30 s with 408 |
+| 4 | `TimeoutInterceptor` | Cancels handler after `REQUEST_TIMEOUT_MS` (= `ms('30s')`) with 408 |
 | 5 | `LocationHeaderInterceptor` | Adds `Location` header on 201 Created |
 | 6 | `LinkHeaderInterceptor` | Adds `Link` header for paginated responses |
 | 7 | `TransformInterceptor` | Wraps successful responses in `{ data, meta }` envelope |
@@ -134,6 +139,10 @@ AllExceptionsFilter        ← ultimate fallback (catch-all)
 | Pipe | Config |
 |------|--------|
 | `ValidationPipe` | `whitelist`, `forbidNonWhitelisted`, `enableImplicitConversion: false` |
+
+See [Security and Middleware](./infrastructure/security-and-middleware.md) for full pipeline configuration.
+See [Request Validation](./infrastructure/request-validation.md) for `ValidationPipe` details and DTO conventions.
+See [Response](./infrastructure/response.md) for envelope shape and pagination.
 
 ---
 
@@ -220,8 +229,10 @@ DrizzleModule.forRoot() [Global Dynamic Module]
                  └─ onModuleDestroy → pool.end()  (SIGTERM drain)
 ```
 
-Schema types imported from `@onwealth/database` workspace package.
+Schema types imported from `@boilerplate/database` workspace package.
 No repository abstraction layer yet — handlers receive `DB_TOKEN` directly.
+
+See [Database](./infrastructure/database.md) for pool config, migration workflow, and `withTimeout` helper.
 
 ---
 
@@ -230,15 +241,17 @@ No repository abstraction layer yet — handlers receive `DB_TOKEN` directly.
 ```
 AppModule
 ├── ConfigModule (global)          ← Zod env validation; loads appConfig, databaseConfig, redisConfig, httpConfig, throttleConfig
-├── ClsModule (global)             ← request-scoped context store  (@onwealth/nest-http createClsConfig)
-├── LoggerModule                   ← nestjs-pino  (@onwealth/shared-kernel)
+├── ClsModule (global)             ← request-scoped context store  (@boilerplate/nest-http createClsConfig)
+├── LoggerModule                   ← nestjs-pino  (@boilerplate/shared-kernel)
 ├── EventEmitterModule             ← wildcard, delimiter "."
-├── DrizzleModule (global)         ← DB_TOKEN  (@onwealth/shared-kernel)
-├── DomainEventsModule (global)    ← DomainEventPublisher  (@onwealth/shared-kernel)
-├── ThrottlerModule                ← rate limiting  (throttleConfig from @onwealth/nest-http)
-├── HealthModule                   ← /livez /readyz /health  (@onwealth/nest-http)
-└── CacheModule                    ← CACHE_PORT adapter  (@onwealth/shared-kernel)
+├── DrizzleModule (global)         ← DB_TOKEN  (@boilerplate/shared-kernel); self-loads databaseConfig via ConfigModule.forFeature
+├── DomainEventsModule (global)    ← DomainEventPublisher  (@boilerplate/shared-kernel)
+├── ThrottlerModule                ← rate limiting  (throttleConfig from @boilerplate/nest-http)
+├── HealthModule                   ← /livez /readyz /health  (@boilerplate/nest-http)
+└── CacheModule                    ← CACHE_PORT adapter  (@boilerplate/shared-kernel); self-loads redisConfig via ConfigModule.forFeature
 ```
+
+`DrizzleModule`, `CacheModule`, and `QueueModule` are self-contained: each calls `ConfigModule.forFeature(...)` internally to register its typed config factory regardless of how the host app wires `ConfigModule`.
 
 All `@Global()` modules are enforced by the architecture guard test
 (`packages/shared-kernel/src/__tests__/unit/global-modules.spec.ts`).
@@ -250,7 +263,7 @@ All `@Global()` modules are enforced by the architecture guard test
 | Endpoint | Route | Checks | Orchestrator Use |
 |----------|-------|--------|-----------------|
 | `GET /livez` | No `/api` prefix | Memory heap only | Liveness probe |
-| `GET /readyz` | No `/api` prefix | DB (SELECT 1) + Redis (SET/GET readback), 3 s timeout | Readiness probe |
+| `GET /readyz` | No `/api` prefix | DB (SELECT 1) + Redis (SET/GET readback), `HEALTH_TIMEOUT_MS` (= `ms('3s')`) timeout | Readiness probe |
 | `GET /health` | No `/api` prefix | All of readyz + heap + RSS + disk | Debugging only |
 
 503 responses have sanitized bodies (no internal details exposed).
@@ -258,16 +271,47 @@ All health routes are `@Public()` (bypass auth) and `@SkipThrottle()`.
 
 ---
 
+## Graceful Shutdown
+
+`main.ts` hoists the `app` reference before `app.listen()` so that fatal process signal handlers can call it:
+
+```
+process.on('unhandledRejection' | 'uncaughtException')
+  └─ app.close()          ← drains HTTP, Postgres pool, BullMQ workers
+       └─ setTimeout(SHUTDOWN_GRACE_MS).unref()  ← hard-stop fallback; SHUTDOWN_GRACE_MS = ms('5s')
+```
+
+`DrizzleService.onModuleDestroy()` ends the pg Pool. `QueueProcessorBase.onModuleDestroy()` calls `worker.close(false)` with a `QUEUE_DRAIN_TIMEOUT_MS` (= `ms('5s')`) timeout race before hard exit.
+
+---
+
+## Queue Architecture
+
+Connection model, failure/retry logic, and DLQ approach:
+see [Queue](./infrastructure/queue.md).
+
+```
+QueueModule [@Global()]
+  ├─ producer connection  (configKey: 'queue')           ← BullMQ Queue instances
+  └─ processor connection (configKey: 'queue-processor') ← BullMQ Worker instances
+```
+
+Both connections resolve from `QUEUE_REDIS_URL ?? REDIS_URL`. Queue Redis is fully separate from the cache `@keyv/redis` client.
+
+---
+
 ## Security Layers
 
 | Layer | Mechanism |
 |-------|-----------|
-| Headers | Helmet (HSTS, X-Content-Type-Options, X-Frame-Options, …) |
+| Headers | Helmet (HSTS, X-Content-Type-Options, X-Frame-Options, …); scoped CSP on `/swagger` + `/docs` HTML routes; CSP off on JSON API routes |
 | CORS | Env-driven `ALLOWED_ORIGINS`; exposes `X-Request-Id` |
-| Rate limiting | `ThrottlerGuard` as `APP_GUARD`; configurable TTL + limit |
+| Rate limiting | `ThrottlerGuard` as `APP_GUARD`; `THROTTLE_TTL` ≥ 1000 ms enforced by Zod |
 | Payload | 100 KB JSON body limit (express.json) |
 | Env validation | Zod rejects placeholder secrets and insecure config in production |
-| Logging | Sensitive field redaction in pino config |
+| Logging | Sensitive field redaction in pino config; health probe errors log `errorName` only |
+
+See [Security and Middleware](./infrastructure/security-and-middleware.md) for full details.
 
 ---
 
@@ -280,6 +324,26 @@ All health routes are `@Public()` (bypass auth) and `@SkipThrottle()`.
 | Correlation | `X-Request-Id` via `CorrelationIdInterceptor` |
 | Health | `@nestjs/terminus` (Drizzle + Redis indicators) |
 | API docs | `@nestjs/swagger` + `@scalar/nestjs-api-reference` (non-prod) |
+
+See [Logger](./infrastructure/logger.md) for pino configuration, redaction paths, and CLS correlation.
+
+### Known Compatibility Notes
+
+**Nest 11 + nestjs-pino: LegacyRouteConverter warning**
+
+`nestjs-pino` registers its middleware with a default `forRoutes: ['*']` (legacy Express 4 wildcard).
+Under NestJS 11 + Express 5 (path-to-regexp v8), this triggers a `LegacyRouteConverter` deprecation
+warning at startup because bare `*` is no longer a valid wildcard pattern.
+
+Fix applied in `packages/shared-kernel/src/logger/logger.config.ts`: the `LoggerModule` options override
+`forRoutes` to use the Express 5 / path-to-regexp v8 named-wildcard syntax:
+
+```ts
+forRoutes: [{ path: '{*path}', method: RequestMethod.ALL }]
+```
+
+This suppresses the warning while preserving identical coverage (all routes). Required whenever
+`setGlobalPrefix('api')` is used with `nestjs-pino` under NestJS 11 + path-to-regexp v8 / Express 5.
 
 ---
 

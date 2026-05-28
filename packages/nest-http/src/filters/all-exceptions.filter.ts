@@ -1,105 +1,41 @@
+import { appConfig } from '@boilerplate/shared-kernel'
 import type { ArgumentsHost, ExceptionFilter } from '@nestjs/common'
-import {
-  Catch,
-  ConflictException,
-  HttpException,
-  HttpStatus,
-  Inject,
-  InternalServerErrorException,
-  Logger,
-  Optional,
-  ServiceUnavailableException,
-  UnprocessableEntityException,
-} from '@nestjs/common'
+import { Catch, HttpException, HttpStatus, Inject, Logger, Optional } from '@nestjs/common'
 import type { ConfigType } from '@nestjs/config'
-import { appConfig } from '@onwealth/shared-kernel'
 import { DrizzleQueryError } from 'drizzle-orm'
 import type { Request, Response } from 'express'
 import { ClsService } from 'nestjs-cls'
 import { DatabaseError } from 'pg'
 import type { ProblemDetailsDto } from '../dtos/problem-details.dto.js'
+import { mapDatabaseError } from './database-error-mapper.js'
 import { ProblemDetailsFilter } from './problem-details.filter.js'
 
 /**
- * Maps a pg DatabaseError to a NestJS HttpException.
+ * Global catch-all exception filter — last line of defence for anything
+ * that escapes the typed filters.
  *
- * Postgres error class reference:
- * https://www.postgresql.org/docs/current/errcodes-appendix.html
- */
-function mapDatabaseError(error: DatabaseError): HttpException {
-  switch (error.code) {
-    // Class 23 — Integrity Constraint Violation
-    case '23505': {
-      // unique_violation
-      return new ConflictException({
-        code: 'RESOURCE_CONFLICT',
-        message: 'A resource with the same unique field already exists',
-      })
-    }
-    case '23503': {
-      // foreign_key_violation — referenced row does not exist; this is a data
-      // integrity constraint, not a uniqueness conflict (23505).
-      return new UnprocessableEntityException({
-        code: 'CONSTRAINT_VIOLATION',
-        message: 'Referenced resource does not exist',
-      })
-    }
-    case '23502': {
-      // not_null_violation — a required column was omitted; integrity constraint.
-      return new UnprocessableEntityException({
-        code: 'CONSTRAINT_VIOLATION',
-        message: 'A required field is missing',
-      })
-    }
-    case '23514': {
-      // check_violation — data failed a CHECK constraint; integrity constraint.
-      return new UnprocessableEntityException({
-        code: 'CONSTRAINT_VIOLATION',
-        message: 'Data failed a database constraint check',
-      })
-    }
-    // Class 08 — Connection Exception
-    case '08000':
-    case '08003':
-    case '08006':
-    case '08001':
-    case '08004': {
-      return new ServiceUnavailableException({
-        code: 'INTERNAL_SERVER_ERROR',
-        message: 'Database connection error',
-      })
-    }
-    // Class 57 — Operator Intervention (e.g. query_canceled, admin_shutdown)
-    case '57014': {
-      // query_canceled (e.g. statement_timeout)
-      return new ServiceUnavailableException({
-        code: 'INTERNAL_SERVER_ERROR',
-        message: 'Database query timed out',
-      })
-    }
-    default: {
-      return new InternalServerErrorException({
-        code: 'INTERNAL_SERVER_ERROR',
-        message: 'An unexpected database error occurred',
-      })
-    }
-  }
-}
-
-/**
- * Global exception filter
+ * **Dispatch order:**
+ * 1. `HttpException` → delegated to {@link ProblemDetailsFilter}.
+ * 2. `DrizzleQueryError` wrapping a `pg.DatabaseError` → mapped via
+ *    {@link mapDatabaseError} to an appropriate `HttpException`, then
+ *    re-delegated.
+ * 3. Anything else → rendered as a 500 Problem Details body. The original
+ *    error message is swapped for a static string in production so
+ *    internal details (file paths, SQL fragments) cannot leak.
  *
- * Catches all unhandled exceptions, including non-HTTP exceptions.
- * Prevents sensitive error information from leaking to the client.
- *
- * For HTTP exceptions, delegates to ProblemDetailsFilter (RFC 9457 format).
+ * `ClsService` and `appConfig` are `@Optional()` so non-CLS / non-Nest
+ * test harnesses can still construct the filter; missing config falls
+ * back to the prod-safe path (no message leakage).
  */
 @Catch()
 export class AllExceptionsFilter implements ExceptionFilter {
   private readonly logger = new Logger(AllExceptionsFilter.name)
 
   constructor(
-    // Required: misconfigured DI must fail loudly at startup, not silently produce wrong status codes
+    /**
+     * Required: misconfigured DI must fail loudly at startup, not silently
+     * produce wrong status codes by skipping the RFC 9457 path.
+     */
     @Inject(ProblemDetailsFilter)
     private readonly problemDetailsFilter: ProblemDetailsFilter,
     @Optional() private readonly cls?: ClsService,
@@ -113,12 +49,10 @@ export class AllExceptionsFilter implements ExceptionFilter {
     const response = context.getResponse<Response>()
     const request = context.getRequest<Request>()
 
-    // For HTTP exceptions, delegate to ProblemDetailsFilter (RFC 9457 format)
     if (exception instanceof HttpException) {
       return this.problemDetailsFilter.catch(exception, host)
     }
 
-    // Map Postgres DatabaseError to an appropriate HttpException, then re-delegate
     if (exception instanceof DrizzleQueryError) {
       const cause = exception.cause
       if (cause instanceof DatabaseError) {
@@ -128,28 +62,30 @@ export class AllExceptionsFilter implements ExceptionFilter {
         )
         return this.problemDetailsFilter.catch(httpException, host)
       }
-      // cause is not a pg.DatabaseError (rare), fall through to 500 fallback
+      // Cause is NOT a pg.DatabaseError (rare — driver-level wrap or network error).
+      // Log a breadcrumb before falling through to the generic 500 path so operators
+      // can trace it instead of seeing a silent black hole.
+      this.logger.warn('DrizzleQueryError with non-pg cause', {
+        causeName: (cause as { constructor?: { name?: string } })?.constructor?.name ?? 'Unknown',
+      })
     }
 
-    // Only handle non-HTTP exceptions (system errors)
     const status = HttpStatus.INTERNAL_SERVER_ERROR
-
-    // Default to true (prod-safe) when appConfig is absent to avoid leaking error.message
+    // Default to true (prod-safe) when appConfig is absent — never leak error.message
+    // in test harnesses or misconfigured environments.
     const isProduction = this.appCfg ? this.appCfg.nodeEnv === 'production' : true
     let message = 'Internal server error'
     if (exception instanceof Error) {
       message = isProduction ? 'The server encountered an unexpected error' : exception.message
     }
 
-    // Get tracing IDs
     const requestId = this.cls?.getId()
     const correlationId = this.cls?.get<string>('correlationId')
     const traceId = this.cls?.get<string>('traceId')
 
-    // Build Problem Details response (RFC 9457 format).
-    // RFC 9457 §3: use 'about:blank' when no specific documentation URI exists for the
-    // error type. Non-HTTP system errors are unclassified — 'about:blank' is correct here;
-    // it signals "no additional semantics beyond the HTTP status code".
+    // RFC 9457 §3: `about:blank` is the canonical default when no documented
+    // problem type URI exists. Non-HTTP system errors are unclassified by
+    // definition, so we never invent a fake `/errors/unknown` doc URI.
     const problemDetails: ProblemDetailsDto = {
       type: 'about:blank',
       title: 'Internal Server Error',
@@ -163,10 +99,7 @@ export class AllExceptionsFilter implements ExceptionFilter {
       detail: message,
     }
 
-    // Build trace prefix for log message
     const tracePrefix = this.buildTracePrefix(requestId, correlationId, traceId)
-
-    // Log full error stack
     const logMessage = `${tracePrefix}${request.method} ${request.url} ${status}`
     if (exception instanceof Error) {
       this.logger.error(logMessage, exception.stack)
@@ -174,30 +107,21 @@ export class AllExceptionsFilter implements ExceptionFilter {
       this.logger.error(logMessage, JSON.stringify(exception))
     }
 
-    // Set response headers (RFC 9457 recommended media type)
     response.setHeader('Content-Type', 'application/problem+json')
-    // Prevent browsers from caching error responses
     response.setHeader('Cache-Control', 'no-store')
-
     response.status(status).json(problemDetails)
   }
 
   /**
-   * Build trace ID prefix
+   * Compose a `[req:…|corr:…|trace:…]` log prefix from the optional
+   * tracing IDs. Empty when none are present, so log lines stay clean
+   * outside request scope.
    */
   private buildTracePrefix(requestId?: string, correlationId?: string, traceId?: string): string {
     const parts: string[] = []
-
-    if (requestId) {
-      parts.push(`req:${requestId}`)
-    }
-    if (correlationId) {
-      parts.push(`corr:${correlationId}`)
-    }
-    if (traceId) {
-      parts.push(`trace:${traceId}`)
-    }
-
+    if (requestId) parts.push(`req:${requestId}`)
+    if (correlationId) parts.push(`corr:${correlationId}`)
+    if (traceId) parts.push(`trace:${traceId}`)
     return parts.length > 0 ? `[${parts.join('|')}] ` : ''
   }
 }

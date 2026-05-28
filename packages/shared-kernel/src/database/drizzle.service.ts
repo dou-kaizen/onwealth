@@ -5,13 +5,16 @@ import type { Pool } from 'pg'
 import type { DrizzleDb } from './db.port.js'
 
 /**
- * DrizzleService holds the Drizzle db instance and the underlying pg Pool.
+ * Lifecycle owner for the Drizzle `db` and its underlying pg `Pool`.
  *
- * Implements OnModuleDestroy so that when NestJS receives SIGTERM/SIGINT
- * (enabled via app.enableShutdownHooks() in main.ts), the pool is drained
- * gracefully — waiting for all active clients before closing.
+ * Implements {@link OnModuleDestroy} so that when NestJS receives
+ * `SIGTERM`/`SIGINT` (enabled via `app.enableShutdownHooks()` in `main.ts`),
+ * `pool.end()` drains active clients gracefully before the process exits.
  *
- * Injected into consumers via DB_TOKEN (see db.module.ts).
+ * Consumers receive the typed db handle via `@Inject(DB_TOKEN)`; the pool
+ * itself is private — repositories should never touch it directly.
+ *
+ * @see DrizzleModule for the DI wiring.
  */
 @Injectable()
 export class DrizzleService implements OnModuleDestroy {
@@ -23,7 +26,12 @@ export class DrizzleService implements OnModuleDestroy {
     this.pool = pool
   }
 
-  /** Called by NestJS on SIGTERM/SIGINT. Drains all active pool connections. */
+  /**
+   * Drain all pool connections on shutdown.
+   *
+   * Awaits in-flight queries before resolving. Triggered by NestJS shutdown
+   * hooks (`SIGTERM` / `SIGINT`).
+   */
   async onModuleDestroy(): Promise<void> {
     await this.pool.end()
   }

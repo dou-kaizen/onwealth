@@ -1,17 +1,22 @@
 /**
- * Sensitive field redaction configuration
+ * Field paths redacted from pino log output.
  *
- * Defines field paths that should be redacted in log output.
- * Supports wildcard * for matching nested fields.
+ * Path syntax follows pino's `redact.paths` (supports `*` wildcards). Three
+ * groupings, intentionally over-broad to fail-closed on new payload shapes:
+ *
+ * 1. **Request headers** — explicit, fixed paths so we never log auth tokens
+ *    even if a downstream pretty-printer would otherwise dump headers.
+ * 2. **Generic credentials** — wildcard paths catch any nesting depth so a
+ *    DTO renamed/reshaped does not silently leak a `password` field.
+ * 3. **Redis / BullMQ connection objects** — close the credential-leak path
+ *    where ioredis logs the full connection options on a reconnect error.
  */
 export const redactPaths = [
-  // Sensitive fields in request headers
   'req.headers.authorization',
   'req.headers.cookie',
   'req.headers["x-api-key"]',
   'req.headers["x-auth-token"]',
 
-  // Generic sensitive fields (supports any nesting depth)
   '*.password',
   '*.confirmPassword',
   '*.oldPassword',
@@ -27,19 +32,21 @@ export const redactPaths = [
   '*.cvv',
   '*.ssn',
 
-  // Sensitive fields in request body
   'req.body.password',
   'req.body.confirmPassword',
   'req.body.token',
   'req.body.secret',
 
-  // Sensitive fields in response body
   'res.body.token',
   'res.body.accessToken',
   'res.body.refreshToken',
+  'res.headers["set-cookie"]',
+
+  '*.connectionOptions.password',
+  '*.options.password',
+  '*.connection.password',
+  '*.redisOpts.password',
 ]
 
-/**
- * Replacement text for redacted values
- */
+/** Placeholder value substituted for any path matched by {@link redactPaths}. */
 export const redactCensor = '[REDACTED]'

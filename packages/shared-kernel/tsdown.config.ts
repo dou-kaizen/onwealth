@@ -15,6 +15,8 @@ export default defineConfig({
       '@nestjs/config',
       '@nestjs/event-emitter',
       '@nestjs/cache-manager',
+      '@nestjs/bullmq',
+      'bullmq',
       'drizzle-orm',
       'drizzle-orm/pg-core',
       'drizzle-orm/node-postgres',
@@ -24,7 +26,7 @@ export default defineConfig({
       '@keyv/redis',
       'keyv',
       'zod',
-      '@onwealth/database',
+      '@boilerplate/database',
     ],
   },
 })

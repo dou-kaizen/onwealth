@@ -27,7 +27,7 @@ export default defineConfig({
       'rxjs/operators',
       'drizzle-orm',
       'pg',
-      '@onwealth/shared-kernel',
+      '@boilerplate/shared-kernel',
     ],
   },
 })

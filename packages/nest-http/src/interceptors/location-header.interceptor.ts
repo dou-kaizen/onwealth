@@ -1,39 +1,38 @@
 import type { CallHandler, ExecutionContext, NestInterceptor } from '@nestjs/common'
-import { Injectable } from '@nestjs/common'
+import { Inject, Injectable } from '@nestjs/common'
+import type { ConfigType } from '@nestjs/config'
 import type { Request, Response } from 'express'
 import type { Observable } from 'rxjs'
 import { tap } from 'rxjs/operators'
+import { httpConfig } from '../config/http.config.js'
 
 /**
- * Location header interceptor
+ * Auto-emit the `Location` header on `201 Created` responses, pointing
+ * at the canonical URI of the newly-created resource.
  *
- * Spec: RFC 9110 §15.3.2 (201 Created)
- * https://httpwg.org/specs/rfc9110.html#status.201
+ * **Source of `id`:** the response body's `id` field. Numeric ids are
+ * coerced to string — RFC 9110 §15.3.2 requires a URI, and auto-increment
+ * PKs are valid once stringified.
  *
- * Features:
- * - Automatically adds a Location header to 201 Created responses
- * - The Location header points to the URI of the newly created resource
- * - Automatically constructs the URI from the id field in the response data
+ * **Origin trust model:** the absolute URL is composed from
+ * `httpConfig.apiBaseUrl`, NOT from `request.protocol` / `request.get('host')`.
+ * Behind a reverse proxy the Host header is attacker-influenced and the
+ * protocol is unreliable (TLS terminated at the LB), so the canonical
+ * external origin must come from configuration.
  *
- * RFC 9110:
- * > "The origin server SHOULD send a Location header field in the response
- * > containing a URI reference for the primary resource created."
+ * Silently skips when status ≠ 201, when the body has no `id`, or when
+ * `id` is not a string or number — non-conformant handlers degrade
+ * gracefully rather than blowing up the response.
  *
- * Use cases:
- * - Successful POST resource creation (returns 201)
- * - Response data contains an id field
- *
- * @example
- * // Usage in Controller
- * @Post()
- * @HttpCode(HttpStatus.CREATED)
- * async create(@Body() dto: CreateDto) {
- *   return this.service.create(dto);
- *   // Location header added automatically: /api/users/{id}
- * }
+ * @see {@link https://httpwg.org/specs/rfc9110.html#status.201} — RFC 9110 §15.3.2
  */
 @Injectable()
 export class LocationHeaderInterceptor implements NestInterceptor {
+  constructor(
+    @Inject(httpConfig.KEY)
+    private readonly http: ConfigType<typeof httpConfig>,
+  ) {}
+
   intercept(context: ExecutionContext, next: CallHandler): Observable<unknown> {
     return next.handle().pipe(
       tap((data: unknown) => {
@@ -41,43 +40,34 @@ export class LocationHeaderInterceptor implements NestInterceptor {
         const response = httpContext.getResponse<Response>()
         const request = httpContext.getRequest<Request>()
 
-        // Only process 201 Created responses
-        if (response.statusCode !== 201) {
-          return
-        }
+        if (response.statusCode !== 201) return
+        if (!data || typeof data !== 'object' || !('id' in data)) return
 
-        // Check whether the response data contains an id field.
-        // Coerce numeric ids to string (e.g. auto-increment PKs) — RFC 9110 §15.3.2
-        // requires a URI, so numeric ids are valid once stringified.
-        if (!data || typeof data !== 'object' || !('id' in data)) {
-          return
-        }
         const rawId = (data as Record<string, unknown>).id
-        if (rawId === null || rawId === undefined || (typeof rawId !== 'string' && typeof rawId !== 'number')) {
+        if (
+          rawId === null ||
+          rawId === undefined ||
+          (typeof rawId !== 'string' && typeof rawId !== 'number')
+        ) {
           return
         }
         const resourceId = String(rawId)
 
-        // Build Location header; buildResourcePath applies encodeURIComponent on the id
-        const baseUrl = `${request.protocol}://${request.get('host')}`
+        const origin = new URL(this.http.apiBaseUrl).origin
         const resourcePath = this.buildResourcePath(request.path, resourceId)
-
-        response.setHeader('Location', `${baseUrl}${resourcePath}`)
+        response.setHeader('Location', `${origin}${resourcePath}`)
       }),
     )
   }
 
   /**
-   * Build the resource path
+   * Append `id` to the request path as a fresh URI segment.
    *
-   * @param requestPath - Request path (e.g. /api/users)
-   * @param resourceId - Resource ID
-   * @returns full resource path (e.g. /api/users/usr_123)
+   * `encodeURIComponent` guards against path traversal (`../`) and
+   * reserved-character injection in raw ids.
    */
   private buildResourcePath(requestPath: string, resourceId: string): string {
-    // Remove trailing slash
     const cleanPath = requestPath.replace(/\/$/, '')
-    // encodeURIComponent prevents path traversal via ../ or special chars in the id
     const safeId = encodeURIComponent(resourceId)
     return `${cleanPath}/${safeId}`
   }

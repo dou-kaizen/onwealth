@@ -3,21 +3,34 @@ import { z } from 'zod'
 /**
  * Base environment object schema — the flat, per-field validation rules.
  *
- * Exported separately from {@link envSchema} so per-namespace config factories
- * (`databaseConfig`, `redisConfig`, …) can derive subset schemas via `.pick()`.
- * This keeps a single source of truth for each field's rule: subsets never
- * retype a field, they pick it. The cross-field production hardening checks
- * live in {@link envSchema} below (a `.superRefine()` is not a `ZodObject`, so
- * it has no `.pick()`).
+ * Exported separately from {@link envSchema} so per-namespace config
+ * factories (`databaseConfig`, `redisConfig`, …) can derive subset schemas
+ * via `.pick()`. Subsets never retype a field; they pick it — one source of
+ * truth per field rule.
  *
- * All required vars have NO default — startup fails with a clear error if absent.
+ * Cross-field production hardening lives in {@link envSchema} below: a
+ * `.superRefine()` does not return a `ZodObject`, so it cannot be `.pick()`'d.
+ *
+ * **All required vars have NO default** — startup fails with a clear error
+ * if absent. Defaults are only set for tunables where a sane fallback won't
+ * mask a misconfiguration.
+ *
+ * **Field rationale summary:**
+ * - `PORT` — restricted to 1024–65535 because binding <1024 needs root on
+ *   POSIX and is almost never what an app wants.
+ * - `DATABASE_URL` / `REDIS_URL` — no default, prevents silent fail-open to
+ *   localhost / unauthenticated dev DB.
+ * - `QUEUE_REDIS_URL` — optional; falls back to `REDIS_URL`. Production TLS
+ *   enforced via the {@link envSchema} cross-field refine.
+ * - `JWT_SECRET` — `min(32)` blocks trivially brute-forceable secrets.
+ * - `THROTTLE_TTL` — explicit ms unit (`min 1000`) guards against the
+ *   foot-gun of treating it as seconds.
+ * - `API_BASE_URL` — type URI prefix for RFC 9457 Problem Details; a wrong
+ *   value emits URIs pointing at someone else's domain.
  */
 export const envObjectSchema = z.object({
-  // Application environment
   NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
 
-  // Application port — restricted to unprivileged range (1024–65535).
-  // Binding to ports <1024 needs root on POSIX and is almost never what the app wants.
   PORT: z
     .string()
     .default('3000')
@@ -26,10 +39,8 @@ export const envObjectSchema = z.object({
       message: 'PORT must be between 1024 and 65535',
     }),
 
-  // Database connection string — REQUIRED, no default to prevent silent wrong-DB connections
   DATABASE_URL: z.url('DATABASE_URL must be a valid URL'),
 
-  // Database connection pool configuration
   DB_POOL_MAX: z
     .string()
     .default('20')
@@ -62,7 +73,6 @@ export const envObjectSchema = z.object({
       message: 'DB_POOL_CONNECTION_TIMEOUT must be at least 1000ms',
     }),
 
-  // CORS configuration
   ALLOWED_ORIGINS: z
     .string()
     .optional()
@@ -71,9 +81,11 @@ export const envObjectSchema = z.object({
         ?.split(',')
         .map((s) => s.trim())
         .filter(Boolean),
-    ),
+    )
+    .refine((origins) => !origins?.some((o) => o === '*' || o === 'null'), {
+      message: 'ALLOWED_ORIGINS must not contain wildcard (*) or null entries',
+    }),
 
-  // Redis connection string — REQUIRED, no default to prevent fail-open to unauthenticated localhost
   REDIS_URL: z.string().refine((value) => /^rediss?:\/\/.+/.test(value), {
     message: 'REDIS_URL must start with redis:// or rediss://',
   }),
@@ -86,19 +98,24 @@ export const envObjectSchema = z.object({
       message: 'REDIS_TTL must be greater than 0',
     }),
 
-  // JWT secret — REQUIRED, min 32 chars to prevent trivially brute-forceable secrets
+  QUEUE_REDIS_URL: z
+    .string()
+    .refine((value) => /^rediss?:\/\/.+/.test(value), {
+      message: 'QUEUE_REDIS_URL must start with redis:// or rediss://',
+    })
+    .optional(),
+
   JWT_SECRET: z.string().min(32, 'JWT_SECRET must be at least 32 characters'),
 
-  // API base URL — REQUIRED; used as the type URI prefix for RFC 9457 Problem Details.
-  // No default: a wrong URL would produce type URIs pointing to an external domain.
   API_BASE_URL: z.url('API_BASE_URL must be a valid URL'),
 
-  // Rate limiting — default 100 req/window; prod superRefine rejects >10 000
   THROTTLE_TTL: z
     .string()
     .default('60000')
     .transform((value) => Number.parseInt(value, 10))
-    .refine((value) => value > 0, { message: 'THROTTLE_TTL must be greater than 0' }),
+    .refine((value) => value >= 1000, {
+      message: 'THROTTLE_TTL must be at least 1000ms (millisecond unit)',
+    }),
 
   THROTTLE_LIMIT: z
     .string()
@@ -110,16 +127,27 @@ export const envObjectSchema = z.object({
 /**
  * Full environment variable schema — the HTTP app's fail-closed validation gate.
  *
- * Wraps {@link envObjectSchema} with cross-field production hardening checks.
- * Used by {@link validateEnv} as `ConfigModule.forRoot({ validate })` in the
- * HTTP app only. Non-HTTP apps (e.g. a worker) compose their own gate from the
- * subset schemas they need — see the per-namespace config factories.
+ * Wraps {@link envObjectSchema} with cross-field production hardening.
+ * Wired by {@link validateEnv} as `ConfigModule.forRoot({ validate })` in the
+ * HTTP app only. Non-HTTP apps (e.g. a worker) compose their own gate from
+ * the subset schemas they actually need — see the per-namespace config
+ * factories in this folder.
+ *
+ * **Production-only refines:**
+ * - `DB_POOL_MIN ≤ DB_POOL_MAX` (also enforced in `databaseConfig`).
+ * - `THROTTLE_LIMIT ≤ 10000` — higher values effectively disable rate
+ *   limiting.
+ * - `REDIS_URL` / `QUEUE_REDIS_URL` MUST use `rediss://` (TLS).
+ * - `DATABASE_URL` MUST include `sslmode=require` or `ssl=true` (or use
+ *   `postgresql+ssl://` scheme) so hosted Postgres connections are encrypted.
+ * - `JWT_SECRET` MUST NOT contain weak placeholder substrings AND MUST have
+ *   charset diversity (upper + lower + digit) AND ≥16 distinct characters.
+ * - `API_BASE_URL` MUST NOT contain `api.example.com` (would emit RFC 9457
+ *   type URIs pointing at an external domain).
  */
 export const envSchema = envObjectSchema.superRefine((data, ctx) => {
   const isProd = data.NODE_ENV === 'production'
 
-  // Reject illogical pool bounds — min > max means the pool can never satisfy its
-  // minimum connection requirement, leading to immediate startup failure.
   if (data.DB_POOL_MIN > data.DB_POOL_MAX) {
     ctx.addIssue({
       code: 'custom',
@@ -128,7 +156,6 @@ export const envSchema = envObjectSchema.superRefine((data, ctx) => {
     })
   }
 
-  // Reject THROTTLE_LIMIT >10 000 in prod — values this high effectively disable rate limiting
   if (isProd && data.THROTTLE_LIMIT > 10_000) {
     ctx.addIssue({
       code: 'custom',
@@ -137,7 +164,6 @@ export const envSchema = envObjectSchema.superRefine((data, ctx) => {
     })
   }
 
-  // Reject plain redis:// in prod — Redis traffic must be TLS-encrypted
   if (isProd && data.REDIS_URL?.startsWith('redis://')) {
     ctx.addIssue({
       code: 'custom',
@@ -146,16 +172,62 @@ export const envSchema = envObjectSchema.superRefine((data, ctx) => {
     })
   }
 
-  // Reject placeholder JWT_SECRET to prevent accidental use of the .env.example value
-  if (isProd && data.JWT_SECRET === 'your-secret-key-change-me-in-production-min-32-chars') {
+  if (isProd && data.QUEUE_REDIS_URL?.startsWith('redis://')) {
     ctx.addIssue({
       code: 'custom',
-      path: ['JWT_SECRET'],
-      message: 'JWT_SECRET must not use the example placeholder value in production',
+      path: ['QUEUE_REDIS_URL'],
+      message: 'QUEUE_REDIS_URL must use rediss:// (TLS) in production',
     })
   }
 
-  // Reject api.example.com in prod — would produce RFC 9457 type URIs pointing to an external domain
+  if (isProd) {
+    const dbUrl = data.DATABASE_URL
+    const hasSSL =
+      dbUrl.includes('sslmode=require') ||
+      dbUrl.includes('ssl=true') ||
+      dbUrl.startsWith('postgresql+ssl://')
+    if (!hasSSL) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['DATABASE_URL'],
+        message:
+          'DATABASE_URL must include sslmode=require or ssl=true (or use postgresql+ssl://) in production',
+      })
+    }
+  }
+
+  if (isProd) {
+    const jwt = data.JWT_SECRET
+    const jwtLower = jwt.toLowerCase()
+    const weakPatterns = ['change-me', 'example', 'placeholder', 'your-secret']
+    if (weakPatterns.some((p) => jwtLower.includes(p))) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['JWT_SECRET'],
+        message: 'JWT_SECRET must not contain placeholder substrings in production',
+      })
+    }
+    const hasUpper = /[A-Z]/.test(jwt)
+    const hasLower = /[a-z]/.test(jwt)
+    const hasDigit = /[0-9]/.test(jwt)
+    if (!(hasUpper && hasLower && hasDigit)) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['JWT_SECRET'],
+        message:
+          'JWT_SECRET must contain uppercase, lowercase, and numeric characters in production',
+      })
+    }
+    const distinct = new Set(jwt).size
+    if (distinct < 16) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['JWT_SECRET'],
+        message: `JWT_SECRET must have at least 16 distinct characters in production (current: ${distinct})`,
+      })
+    }
+  }
+
   if (isProd && data.API_BASE_URL?.includes('api.example.com')) {
     ctx.addIssue({
       code: 'custom',
@@ -166,14 +238,24 @@ export const envSchema = envObjectSchema.superRefine((data, ctx) => {
 })
 
 /**
- * Environment variable type
+ * Inferred shape of a fully-parsed env object — every field present, every
+ * numeric/transformed field already coerced to its runtime type.
  */
 export type Env = z.infer<typeof envSchema>
 
 /**
- * Validate environment variables
+ * Validate `process.env` against {@link envSchema} and return the parsed
+ * shape, or throw a wrapped {@link Error} listing every offending field.
  *
- * @throws {z.ZodError} if environment variable validation fails
+ * Wired into `ConfigModule.forRoot({ validate: validateEnv })` so the HTTP
+ * app fails closed at boot if any required var is missing/invalid.
+ *
+ * @param config Typically `process.env` (NestJS passes it for you).
+ * @returns Parsed, type-safe env.
+ *
+ * @throws {Error} on any Zod failure. The `cause` is the original
+ *         {@link z.ZodError}; the message lists `path: reason` per issue,
+ *         one per line, so operator output is immediately actionable.
  */
 export function validateEnv(config: Record<string, unknown>): Env {
   try {

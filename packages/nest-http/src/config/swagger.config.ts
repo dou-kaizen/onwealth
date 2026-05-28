@@ -4,9 +4,7 @@ import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger'
 import { apiReference } from '@scalar/nestjs-api-reference'
 import { ProblemDetailsDto } from '../dtos/problem-details.dto.js'
 
-/**
- * Swagger base configuration
- */
+/** Static metadata embedded in the generated OpenAPI document. */
 export const swaggerConfig = {
   title: 'NestJs API',
   description: 'NestJS modular layered architecture example project API documentation',
@@ -14,7 +12,11 @@ export const swaggerConfig = {
 }
 
 /**
- * Swagger UI custom configuration options
+ * Swagger UI custom options.
+ *
+ * `persistAuthorization: true` keeps the bearer token across page reloads.
+ * See the CSP note in `configure-http-app.ts` for the residual XSS risk this
+ * introduces and the re-evaluation trigger.
  */
 export const swaggerCustomOptions: SwaggerCustomOptions = {
   swaggerOptions: {
@@ -23,12 +25,15 @@ export const swaggerCustomOptions: SwaggerCustomOptions = {
 }
 
 /**
- * Add a generic default error response to all endpoints
+ * Inject a generic RFC 9457 Problem Details `default` response into every
+ * endpoint missing one.
  *
- * Uses the OpenAPI default response feature to automatically add the standard
- * Problem Details error response format (RFC 9457) to all undefined status codes.
+ * Uses the OpenAPI `default` response feature so any undefined status code
+ * (400/401/403/404/422/429/500, …) renders the standard error shape rather
+ * than an empty schema. Skips operations that already declare a `default`.
  *
- * @param document - OpenAPI document object
+ * Pure mutation of the supplied `document` for ergonomics (mirrors how
+ * `SwaggerModule.setup` consumes the doc).
  */
 function addDefaultErrorResponses(document: OpenAPIObject): void {
   if (!document.paths) return
@@ -38,7 +43,6 @@ function addDefaultErrorResponses(document: OpenAPIObject): void {
     if (!pathItem) continue
 
     for (const method of Object.keys(pathItem ?? {})) {
-      // Skip non-HTTP method properties (e.g. parameters, servers)
       if (!['get', 'post', 'put', 'patch', 'delete', 'options', 'head'].includes(method)) {
         continue
       }
@@ -48,7 +52,6 @@ function addDefaultErrorResponses(document: OpenAPIObject): void {
         continue
       }
 
-      // Skip if a default response is already defined
       if (operation.responses && !operation.responses.default) {
         operation.responses.default = {
           description: 'Error response (includes 400/401/403/404/422/429/500, etc.)',
@@ -66,10 +69,14 @@ function addDefaultErrorResponses(document: OpenAPIObject): void {
 }
 
 /**
- * Set up API documentation
+ * Mount API documentation routes:
+ * - `GET /docs` — Scalar API Reference (richer UI, default-facing route).
+ * - `GET /swagger` — classic Swagger UI fallback.
+ * - `GET /openapi.yaml` — YAML mirror of the JSON document (exposed by
+ *   Swagger via `yamlDocumentUrl`).
  *
- * - /docs - Scalar API Reference (default)
- * - /swagger - Swagger UI (fallback)
+ * `deepScanRoutes: true` with an empty `include` makes `SwaggerModule` walk
+ * EVERY registered module instead of filtering against an allowlist.
  */
 export function setupSwagger(app: INestApplication): void {
   const config = new DocumentBuilder()
@@ -86,8 +93,6 @@ export function setupSwagger(app: INestApplication): void {
     .build()
 
   const document = SwaggerModule.createDocument(app, config, {
-    // Empty `include` paired with `deepScanRoutes: true` makes SwaggerModule
-    // walk every registered module rather than filter to an allowlist.
     include: [],
     deepScanRoutes: true,
     extraModels: [ProblemDetailsDto],
@@ -95,7 +100,6 @@ export function setupSwagger(app: INestApplication): void {
       `${controllerKey}_${methodKey}`,
   })
 
-  // Add generic default error response to all endpoints
   addDefaultErrorResponses(document)
 
   SwaggerModule.setup('swagger', app, document, {

@@ -1,6 +1,9 @@
 # Deployment Guide
 
-Operational playbook for deploying the onwealth API and running database migrations.
+Operational playbook for deploying the API and running database migrations.
+
+> Environment variables and Zod validation rules: see [Environment Variables](./infrastructure/environment.md).
+> For a full env var listing with types and defaults, check `apps/api/.env.example`.
 
 This guide covers three migration-runner patterns. **Pick exactly one per environment and never run two of them concurrently** (concurrent runners can deadlock on `drizzle_migrations` or apply the same migration twice).
 
@@ -47,10 +50,10 @@ jobs:
       - uses: actions/setup-node@v4
         with: { node-version: 22, cache: pnpm }
       - run: pnpm install --frozen-lockfile
-      - run: pnpm --filter @onwealth/database run db:init-roles
+      - run: pnpm --filter @boilerplate/database run db:init-roles
         env:
           DATABASE_URL: ${{ secrets.PROD_DATABASE_URL }}
-      - run: pnpm --filter @onwealth/database run db:migrate
+      - run: pnpm --filter @boilerplate/database run db:migrate
         env:
           DATABASE_URL: ${{ secrets.PROD_DATABASE_URL }}
 
@@ -73,20 +76,20 @@ Embed migrations in the pod spec. Migrations run before the main container start
 ```yaml
 apiVersion: apps/v1
 kind: Deployment
-metadata: { name: onwealth-api }
+metadata: { name: boilerplate-api }
 spec:
   template:
     spec:
       initContainers:
         - name: migrate
-          image: ghcr.io/your-org/onwealth-api:${TAG}
-          command: ["pnpm", "--filter", "@onwealth/database", "run", "db:migrate"]
+          image: ghcr.io/your-org/boilerplate-api:${TAG}
+          command: ["pnpm", "--filter", "@boilerplate/database", "run", "db:migrate"]
           env:
             - name: DATABASE_URL
               valueFrom: { secretKeyRef: { name: db-credentials, key: url } }
       containers:
         - name: api
-          image: ghcr.io/your-org/onwealth-api:${TAG}
+          image: ghcr.io/your-org/boilerplate-api:${TAG}
           # ...
 ```
 
@@ -105,7 +108,7 @@ One-shot Job that runs once per release, gated before the Deployment rolls out.
 apiVersion: batch/v1
 kind: Job
 metadata:
-  name: onwealth-api-migrate-${RELEASE}
+  name: boilerplate-api-migrate-${RELEASE}
   annotations:
     "helm.sh/hook": pre-install,pre-upgrade
     "helm.sh/hook-delete-policy": before-hook-creation,hook-succeeded
@@ -117,8 +120,8 @@ spec:
       restartPolicy: Never
       containers:
         - name: migrate
-          image: ghcr.io/your-org/onwealth-api:${TAG}
-          command: ["pnpm", "--filter", "@onwealth/database", "run", "db:migrate"]
+          image: ghcr.io/your-org/boilerplate-api:${TAG}
+          command: ["pnpm", "--filter", "@boilerplate/database", "run", "db:migrate"]
           env:
             - name: DATABASE_URL
               valueFrom: { secretKeyRef: { name: db-credentials, key: url } }
@@ -140,7 +143,7 @@ For local dev (one developer, ephemeral DB):
 pnpm db:dev    # init-roles + migrate, in order
 ```
 
-This composite script lives at the workspace root and chains the two `@onwealth/database` scripts.
+This composite script lives at the workspace root and chains the two `@boilerplate/database` scripts.
 
 ---
 
@@ -164,6 +167,26 @@ The `/readyz` probe depends on the DB. If a migration is in flight and holds an 
 Kubernetes uses `/readyz` for `readinessProbe`. During a release, new pods will hold themselves out of the Service until the schema is consistent. This is the intended ordering: **migrate → ready → traffic**.
 
 ---
+
+## Branch Protection — Required Checks
+
+Configure GitHub branch protection on `main` to require BOTH of the following CI status checks before merge:
+
+- `ci` — lint / typecheck / test / build / architecture check
+- `Migration Smoke Test` — empty-schema + idempotent migration run against an ephemeral Postgres
+
+`Migration Smoke Test` is gated on `ci` via `needs: [ci]` in `.github/workflows/ci.yml` — broken builds short-circuit before the smoke job spins up Postgres. Branch protection must still list it explicitly; otherwise a manual re-run can bypass the dependency.
+
+---
+
+## Related Documents
+
+| Topic | Document |
+|-------|----------|
+| All env vars + Zod production rules | [Environment Variables](./infrastructure/environment.md) |
+| Database module + pool config | [Database](./infrastructure/database.md) |
+| Configuration namespaces | [Configuration](./infrastructure/configuration.md) |
+| Full system architecture | [System Architecture](./system-architecture.md) |
 
 ## Unresolved Questions
 

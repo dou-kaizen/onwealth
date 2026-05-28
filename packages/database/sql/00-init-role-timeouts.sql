@@ -1,6 +1,6 @@
 -- Role-level timeout defaults for the application DB role.
 -- Run once per environment BEFORE the first migration, connected via DATABASE_URL:
---   pnpm --filter @onwealth/database db:init-roles
+--   pnpm --filter @boilerplate/database db:init-roles
 --
 -- Applies to current_user -- the role embedded in DATABASE_URL -- so no
 -- parameterisation is needed across environments. statement_timeout,

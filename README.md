@@ -1,6 +1,6 @@
-# onwealth
+# boilerplate-monorepo
 
-Production-grade NestJS API skeleton for the onwealth financial/wealth platform.
+Production-grade NestJS monorepo boilerplate for building backend APIs with Postgres + Redis.
 Current state: infrastructure-only (no business domain yet). Provides the DDD-lite foundation,
 security hardening, observability, and CI pipeline that all future domain modules build on.
 
@@ -99,7 +99,7 @@ Bypass (emergency only): `git commit --no-verify`. CI remains the hard gate.
 | `typecheck` | `tsc -b --noEmit` |
 | `deps` | dependency-cruiser architecture check |
 
-### packages/database (run with `pnpm --filter @onwealth/database <script>`)
+### packages/database (run with `pnpm --filter @boilerplate/database <script>`)
 
 | Script | Description |
 |--------|-------------|
@@ -114,7 +114,7 @@ Bypass (emergency only): `git commit --no-verify`. CI remains the hard gate.
 ## Workspace Layout
 
 ```
-onwealth/
+boilerplate-monorepo/
 ├── apps/
 │   └── api/                   # NestJS 11 application — composition root
 │       └── src/
@@ -123,11 +123,11 @@ onwealth/
 │           ├── app.module.ts  # Root module — imports workspace packages
 │           └── main.ts        # Thin entrypoint: createHttpApp + listen
 ├── packages/
-│   ├── database/              # @onwealth/database — Drizzle ORM schema + migrations
+│   ├── database/              # @boilerplate/database — Drizzle ORM schema + migrations
 │   │   ├── src/schemas/       # Schema definitions (placeholder — TODO)
 │   │   ├── drizzle/           # Generated migration files
 │   │   └── sql/               # Raw SQL (role timeout init)
-│   ├── shared-kernel/         # @onwealth/shared-kernel — transport-agnostic NestJS modules
+│   ├── shared-kernel/         # @boilerplate/shared-kernel — transport-agnostic NestJS modules
 │   │   └── src/
 │   │       ├── cache/         # CachePort interface + CACHE_PORT token + CacheService
 │   │       ├── config/        # appConfig, databaseConfig, redisConfig; Zod env schema
@@ -136,7 +136,7 @@ onwealth/
 │   │       ├── errors/        # ErrorCode enum, ValidationError
 │   │       ├── events/        # DomainEventsModule, DomainEventPublisher
 │   │       └── logger/        # LoggerModule (nestjs-pino) + redaction config
-│   └── nest-http/             # @onwealth/nest-http — HTTP cross-cutting layer
+│   └── nest-http/             # @boilerplate/nest-http — HTTP cross-cutting layer
 │       └── src/
 │           ├── bootstrap/     # configureHttpApp / createHttpApp + HttpAppOptions
 │           ├── config/        # httpConfig, throttleConfig, CLS, CORS, Swagger, ValidationPipe
@@ -158,8 +158,8 @@ onwealth/
 ### Package Dependency DAG
 
 ```
-apps/api → @onwealth/nest-http → @onwealth/shared-kernel → @onwealth/database
-future-worker → @onwealth/shared-kernel
+apps/api → @boilerplate/nest-http → @boilerplate/shared-kernel → @boilerplate/database
+future-worker → @boilerplate/shared-kernel
 ```
 
 ## Health Endpoints
@@ -174,14 +174,19 @@ All return `503` with sanitized body on degraded state.
 
 ## Documentation
 
-| Doc | Description |
-|-----|-------------|
-| [docs/project-overview-pdr.md](./docs/project-overview-pdr.md) | Product context + requirements |
-| [docs/system-architecture.md](./docs/system-architecture.md) | Architecture, layers, request lifecycle |
-| [docs/codebase-summary.md](./docs/codebase-summary.md) | File map, key modules |
-| [docs/code-standards.md](./docs/code-standards.md) | Conventions, error model, TypeScript config |
-| [docs/deployment-guide.md](./docs/deployment-guide.md) | Migration runner patterns |
-| [docs/project-roadmap.md](./docs/project-roadmap.md) | Phase status + upcoming work |
+Full documentation lives in [`docs/`](./docs/README.md).
+
+| Document | Description |
+|----------|-------------|
+| [Project Overview (PDR)](./docs/project-overview-pdr.md) | Product context + requirements |
+| [System Architecture](./docs/system-architecture.md) | Architecture, layers, request lifecycle |
+| [Codebase Summary](./docs/codebase-summary.md) | Workspace map, key modules, injection tokens |
+| [Code Standards](./docs/code-standards.md) | Conventions, error model, TypeScript config |
+| [Deployment Guide](./docs/deployment-guide.md) | Migration runner patterns, production checklist |
+| [Project Roadmap](./docs/project-roadmap.md) | Phase status + upcoming work |
+| [Infrastructure Deep-Dive Docs](./docs/infrastructure/README.md) | Per-topic docs: installation, environment, configuration, project structure, database, cache, queue, logger, response, request validation, error handling, security and middleware |
+| [Features Documentation](./docs/features/README.md) | Per-feature docs — populated as features land (M2+) |
+| [Journals](./docs/journals/) | Milestone and decision journals |
 
 ## Known Issues
 

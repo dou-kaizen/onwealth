@@ -1,5 +1,5 @@
 {
-  "name": "@onwealth/database",
+  "name": "@boilerplate/database",
   "version": "1.0.0",
   "files": [
     "dist"
@@ -22,7 +22,7 @@
     "check": "biome check .",
     "check:fix": "biome check --write .",
     "typecheck": "tsc --noEmit",
-    "db:init-roles": "psql \"$DATABASE_URL\" -v ON_ERROR_STOP=1 -f sql/00-init-role-timeouts.sql",
+    "db:init-roles": "tsx scripts/init-roles.ts",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
     "db:push": "drizzle-kit push",

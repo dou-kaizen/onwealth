@@ -1,7 +1,7 @@
+import { configureHttpApp } from '@boilerplate/nest-http'
 import type { Type } from '@nestjs/common'
 import type { NestExpressApplication } from '@nestjs/platform-express'
 import { Test } from '@nestjs/testing'
-import { configureHttpApp } from '@onwealth/nest-http'
 import { AppModule } from '@/app.module'
 
 export interface CreateTestAppOptions {

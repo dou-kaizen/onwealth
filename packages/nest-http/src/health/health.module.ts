@@ -6,17 +6,17 @@ import { HealthController } from './health.controller.js'
 import { RedisHealthIndicator } from './redis.health.js'
 
 /**
- * Health check module
+ * Wires liveness/readiness/full health endpoints.
  *
- * Provides application health check functionality including database, Redis, memory, and disk checks.
- * Note: DB and Cache are provided by global modules (DrizzleModule, CacheModule).
+ * @remarks
+ * Only registers Terminus + the two custom indicators. The DB and cache
+ * dependencies are injected from the global `DrizzleModule` and
+ * `CacheModule` — re-importing them here would double-register their
+ * providers and break the shared connection pool / client.
  */
 @Module({
   imports: [TerminusModule],
   controllers: [HealthController],
-  providers: [
-    DrizzleHealthIndicator, // database health indicator
-    RedisHealthIndicator, // Redis health indicator
-  ],
+  providers: [DrizzleHealthIndicator, RedisHealthIndicator],
 })
 export class HealthModule {}

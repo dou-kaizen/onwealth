@@ -5,7 +5,7 @@ import { config } from 'dotenv'
 import { defineConfig } from 'drizzle-kit'
 
 // Resolve .env relative to this file, not CWD — prevents broken CI migration paths
-config({ path: path.resolve(fileURLToPath(import.meta.url), '../../.env') })
+config({ path: path.resolve(path.dirname(fileURLToPath(import.meta.url)), '.env') })
 
 const dbUrl = process.env.DATABASE_URL
 if (!dbUrl) {

@@ -1,7 +1,13 @@
 import { ApiProperty } from '@nestjs/swagger'
 
 /**
- * Base class for non-paginated list responses
+ * Base envelope for non-paginated collection responses.
+ *
+ * Shape `{ object: 'list', data: [...] }` matches the Google AIP-158 +
+ * Stripe API convention so clients can branch on `object` to distinguish
+ * collections from single resources without inspecting payload structure.
+ *
+ * @typeParam T — element type of the `data` array.
  */
 export class ListResponseDto<T> {
   @ApiProperty({
@@ -19,11 +25,13 @@ export class ListResponseDto<T> {
 }
 
 /**
- * Base class for offset-paginated list responses
+ * Envelope for offset-paginated collection responses.
  *
- * Spec:
- * - Google AIP-158 + Stripe API hybrid style
- * - Flat structure, computed fields removed
+ * Adds 1-based `page`, `pageSize`, `total`, and `hasMore` siblings to the
+ * base list envelope. Flat layout (no nested `pagination` object) keeps
+ * client code direct.
+ *
+ * @typeParam T — element type of the `data` array.
  */
 export class OffsetListResponseDto<T> extends ListResponseDto<T> {
   @ApiProperty({
@@ -52,7 +60,13 @@ export class OffsetListResponseDto<T> extends ListResponseDto<T> {
 }
 
 /**
- * Base class for cursor-paginated list responses
+ * Envelope for cursor-paginated collection responses.
+ *
+ * `nextCursor` is `null` on the final page so clients can stop fetching
+ * without inspecting `hasMore`. Both fields are kept for parity with the
+ * offset variant — `hasMore` is the boolean clients usually branch on.
+ *
+ * @typeParam T — element type of the `data` array.
  */
 export class CursorListResponseDto<T> extends ListResponseDto<T> {
   @ApiProperty({

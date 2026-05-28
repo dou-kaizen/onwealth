@@ -4,56 +4,51 @@ import { Injectable } from '@nestjs/common'
 import type { NextFunction, Request, Response } from 'express'
 
 /**
- * ETag middleware
+ * RFC 9110 ETag middleware — emits a content-hash `ETag` on every
+ * cacheable response and honours `If-None-Match` with `304 Not Modified`.
  *
- * Spec:
- * - RFC 9110 §8.8.3 (ETag): https://httpwg.org/specs/rfc9110.html#field.etag
- * - RFC 9110 §15.4.5 (304 Not Modified): https://httpwg.org/specs/rfc9110.html#status.304
+ * **Scope:** GET and HEAD only. Mutating methods and error responses
+ * (`status >= 400`) bypass the middleware so Problem Details bodies
+ * (which carry `request_id` / `trace_id`) are never cached by browsers
+ * or CDNs.
  *
- * Features:
- * - Generates ETags (MD5 hash) for GET/HEAD responses
- * - Handles conditional requests (If-None-Match)
- * - Returns 304 Not Modified when the resource has not changed
+ * **Implementation:** intercepts `res.json` and rewrites it to inject
+ * the `ETag` header before delegating to the original. If the controller
+ * already set an `ETag` (e.g. an optimistic-lock version) it is reused
+ * verbatim instead of being overwritten.
  *
- * ETag format:
- * - Strong ETag: "33a64df551425fcc" (byte-for-byte identical content)
- * - Weak ETag: W/"33a64df551425fcc" (semantically equivalent content; this implementation uses strong ETags)
+ * **Cache-Control:** defaults to `no-store` when the handler did not set
+ * one — opt-in caching only. Any explicit `@Header('Cache-Control', …)`
+ * on the route wins.
  *
- * Use cases:
- * - Reducing bandwidth (clients use cached responses)
- * - Preventing concurrent update conflicts (optimistic locking)
- * - Improving performance (304 responses have no body)
+ * **Format:** strong ETag (`"<md5>"`). Weak ETags (`W/"…"`) are not
+ * currently produced — content hash is exact-match by construction.
  *
- * GitHub strategy:
- * > "Conditional requests that return a 304 do not count against the rate limit quota"
+ * @see {@link https://httpwg.org/specs/rfc9110.html#field.etag} — RFC 9110 §8.8.3
+ * @see {@link https://httpwg.org/specs/rfc9110.html#status.304} — RFC 9110 §15.4.5
  *
  * @example
  * // First request
  * GET /api/users/123
- * ---
- * HTTP/1.1 200 OK
- * ETag: "33a64df551425fcc"
- * { "id": "usr_123", ... }
+ * → 200 OK
+ *   ETag: "33a64df551425fcc"
+ *   { "id": "usr_123", ... }
  *
- * // Conditional request (cache validation)
+ * @example
+ * // Conditional request
  * GET /api/users/123
  * If-None-Match: "33a64df551425fcc"
- * ---
- * HTTP/1.1 304 Not Modified
- * ETag: "33a64df551425fcc"
+ * → 304 Not Modified
+ *   ETag: "33a64df551425fcc"
  */
 @Injectable()
 export class ETagMiddleware implements NestMiddleware {
   use(request: Request, res: Response, next: NextFunction) {
-    // Only process GET and HEAD requests
     if (request.method !== 'GET' && request.method !== 'HEAD') {
       return next()
     }
 
-    // Intercept the original json method
     const originalJson = res.json.bind(res) as (body: unknown) => Response
-
-    // Override the json method
     res.json = ((body: unknown) => {
       return this.handleETag(request, res, body, originalJson)
     }) as typeof res.json
@@ -62,7 +57,11 @@ export class ETagMiddleware implements NestMiddleware {
   }
 
   /**
-   * Handle ETag generation and validation
+   * Generate-or-reuse the `ETag`, set a safe default `Cache-Control`,
+   * and short-circuit to `304` on a matching `If-None-Match`.
+   *
+   * Headers already sent or error statuses (`>= 400`) bypass entirely
+   * so error bodies are never cached.
    */
   private handleETag(
     request: Request,
@@ -70,50 +69,41 @@ export class ETagMiddleware implements NestMiddleware {
     body: unknown,
     originalJson: (body: unknown) => Response,
   ): Response {
-    // Safety check: if headers have already been sent, pass through
-    if (res.headersSent) {
-      return originalJson(body)
-    }
+    if (res.headersSent) return originalJson(body)
+    if (res.statusCode >= 400) return originalJson(body)
 
-    // If the business layer has already set an ETag (e.g. optimistic lock version), reuse it;
-    // otherwise generate a content hash
     const existingETag = res.getHeader('ETag') as string | undefined
     const etag = existingETag ?? this.generateETag(body)
     if (!existingETag) {
       res.setHeader('ETag', etag)
     }
 
-    // Set Cache-Control header (adjust as needed)
     if (!res.getHeader('Cache-Control')) {
-      res.setHeader('Cache-Control', 'private, max-age=3600') // private: CDN must not cache user-specific responses
+      res.setHeader('Cache-Control', 'no-store')
     }
 
-    // Check If-None-Match header
     const ifNoneMatch = request.headers['if-none-match']
     if (ifNoneMatch) {
-      // Support multiple ETags (comma-separated)
-      const etags = new Set(ifNoneMatch.split(',').map((e) => e.trim()))
-
-      // Return 304 if any ETag matches
+      // RFC 9110 §8.8.3: strip `W/` prefix for weak comparison so proxy-rewritten
+      // ETags (`W/"<hash>"`) match the strong ETags this middleware generates.
+      const normalise = (e: string) => (e.startsWith('W/') ? e.slice(2) : e)
+      const etags = new Set(ifNoneMatch.split(',').map((e) => normalise(e.trim())))
       if (etags.has(etag) || etags.has('*')) {
         return res.status(304).end()
       }
     }
 
-    // Resource has changed, return normally
     return originalJson(body)
   }
 
   /**
-   * Generate an ETag (MD5 hash)
+   * Compute a strong `ETag` from a JSON-stringified body.
    *
-   * @param data - Response data
-   * @returns strong ETag format (quoted)
+   * @param data — payload destined for `res.json`.
+   * @returns the value `"<md5-hex>"` (quoted per RFC 9110 strong-ETag format).
    */
   private generateETag(data: unknown): string {
     const hash = crypto.createHash('md5').update(JSON.stringify(data)).digest('hex')
-
-    // Strong ETag format: wrapped in double quotes
     return `"${hash}"`
   }
 }

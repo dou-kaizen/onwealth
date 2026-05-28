@@ -1,221 +1,61 @@
 import type { CallHandler, ExecutionContext, NestInterceptor } from '@nestjs/common'
-import { Injectable } from '@nestjs/common'
+import { Inject, Injectable } from '@nestjs/common'
+import type { ConfigType } from '@nestjs/config'
 import type { Request, Response } from 'express'
 import type { Observable } from 'rxjs'
 import { tap } from 'rxjs/operators'
+import { httpConfig } from '../config/http.config.js'
+import { buildLinks, isListResponse, isOffsetListResponse } from './link-header-builder.js'
 
 /**
- * Link header interceptor
+ * Attach an RFC 8288 `Link` header (with `first`/`prev`/`self`/`next`/`last`
+ * relations) to any paginated list response, plus `X-Total-Count` and
+ * `X-Page-Count` siblings for offset pagination clients that prefer
+ * non-Link headers.
  *
- * Spec: RFC 8288 (Web Linking)
- * https://www.rfc-editor.org/rfc/rfc8288.html
+ * **Activation:** only when the body duck-types as a list envelope
+ * (`{ object: 'list', data: [...] }`). Single-resource responses pass
+ * through untouched.
  *
- * Features:
- * - Automatically adds Link headers to paginated responses
- * - Supports first, prev, self, next, last relation types
- * - Compliant with RFC 8288 format
+ * **Origin trust model:** absolute URLs are composed from
+ * `httpConfig.apiBaseUrl` + `request.path`, NOT from `request.protocol` /
+ * `request.get('host')`. Behind a reverse proxy the Host header is
+ * attacker-influenced and the protocol is unreliable (TLS terminated at
+ * the LB), so the canonical external origin must come from configuration.
  *
- * RFC 8288 format:
- * Link: &lt;https://example.com/page/2>; rel="next",
- *       &lt;https://example.com/page/1>; rel="prev"
- *
- * Use cases:
- * - Cursor-based pagination
- * - Offset-based pagination
- * - Pagination navigation for any collection resource
- *
- * @example
- * // Response example
- * HTTP/1.1 200 OK
- * Link: <https://api.example.com/users?cursor=next_xyz>; rel="next",
- *       <https://api.example.com/users?cursor=prev_abc>; rel="prev",
- *       <https://api.example.com/users>; rel="self"
- * X-Total-Count: 156
+ * @see {@link https://www.rfc-editor.org/rfc/rfc8288.html} — RFC 8288 (Web Linking)
+ * @see {@link buildLinks} — pure link-string builder (extracted for unit testing).
  */
 @Injectable()
 export class LinkHeaderInterceptor implements NestInterceptor {
+  constructor(
+    @Inject(httpConfig.KEY)
+    private readonly http: ConfigType<typeof httpConfig>,
+  ) {}
+
   intercept(context: ExecutionContext, next: CallHandler): Observable<unknown> {
     return next.handle().pipe(
       tap((data: unknown) => {
-        // Only process collection responses
-        if (!this.isListResponse(data)) {
-          return
-        }
+        if (!isListResponse(data)) return
 
         const httpContext = context.switchToHttp()
         const response = httpContext.getResponse<Response>()
         const request = httpContext.getRequest<Request>()
 
-        // Build Link header
-        const links = this.buildLinks(request, data)
+        const origin = new URL(this.http.apiBaseUrl).origin
+        const baseUrl = `${origin}${request.path}`
+
+        const links = buildLinks(baseUrl, request.query as Record<string, unknown>, data)
         if (links.length > 0) {
           response.setHeader('Link', links.join(', '))
         }
 
-        // Add total count header (offset pagination flat format)
-        if (this.isOffsetListResponse(data)) {
+        if (isOffsetListResponse(data)) {
           response.setHeader('X-Total-Count', String(data.total))
-          // Calculate total pages
           const totalPages = Math.ceil(data.total / data.pageSize)
           response.setHeader('X-Page-Count', String(totalPages))
         }
       }),
     )
-  }
-
-  /**
-   * Check whether the response is a collection response
-   *
-   * A collection response should contain:
-   * - object: 'list'
-   * - data: array
-   */
-  private isListResponse(data: unknown): data is Record<string, unknown> {
-    return (
-      typeof data === 'object' &&
-      data !== null &&
-      'object' in data &&
-      data.object === 'list' &&
-      'data' in data &&
-      Array.isArray(data.data)
-    )
-  }
-
-  /**
-   * Check whether the response is an offset pagination response (flat format)
-   */
-  private isOffsetListResponse(
-    data: unknown,
-  ): data is { total: number; page: number; pageSize: number; hasMore: boolean } {
-    return (
-      typeof data === 'object' &&
-      data !== null &&
-      'total' in data &&
-      'page' in data &&
-      'pageSize' in data &&
-      typeof (data as Record<string, unknown>).total === 'number'
-    )
-  }
-
-  /**
-   * Build the RFC 8288 Link header array
-   *
-   * @param request - Express request object
-   * @param data - Response data
-   * @returns array of Link header strings
-   */
-  private buildLinks(request: Request, data: Record<string, unknown>): string[] {
-    const baseUrl = `${request.protocol}://${request.get('host')}${request.path}`
-    const links: string[] = []
-
-    // Cursor pagination
-    if ('nextCursor' in data) {
-      // Next page
-      if (
-        'hasMore' in data &&
-        data.hasMore &&
-        'nextCursor' in data &&
-        data.nextCursor &&
-        typeof data.nextCursor === 'string'
-      ) {
-        const nextUrl = this.buildUrl(baseUrl, request.query, {
-          cursor: data.nextCursor,
-        })
-        links.push(`<${nextUrl}>; rel="next"`)
-      }
-
-      // Current page
-      const selfUrl = this.buildUrl(baseUrl, request.query)
-      links.push(`<${selfUrl}>; rel="self"`)
-
-      return links
-    }
-
-    // Offset pagination (flat format)
-    if (this.isOffsetListResponse(data)) {
-      const page = data.page
-      const pageSize = data.pageSize
-      const total = data.total
-      const totalPages = Math.ceil(total / pageSize)
-      const hasPrevious = page > 1
-      const hasNext = data.hasMore
-
-      // First page
-      if (page > 1) {
-        const firstUrl = this.buildUrl(baseUrl, request.query, {
-          page: 1,
-          pageSize,
-        })
-        links.push(`<${firstUrl}>; rel="first"`)
-      }
-
-      // Previous page
-      if (hasPrevious) {
-        const previousUrl = this.buildUrl(baseUrl, request.query, {
-          page: page - 1,
-          pageSize,
-        })
-        links.push(`<${previousUrl}>; rel="prev"`)
-      }
-
-      // Current page
-      const selfUrl = this.buildUrl(baseUrl, request.query)
-      links.push(`<${selfUrl}>; rel="self"`)
-
-      // Next page
-      if (hasNext) {
-        const nextUrl = this.buildUrl(baseUrl, request.query, {
-          page: page + 1,
-          pageSize,
-        })
-        links.push(`<${nextUrl}>; rel="next"`)
-      }
-
-      // Last page
-      if (page < totalPages) {
-        const lastUrl = this.buildUrl(baseUrl, request.query, {
-          page: totalPages,
-          pageSize,
-        })
-        links.push(`<${lastUrl}>; rel="last"`)
-      }
-    }
-
-    return links
-  }
-
-  /**
-   * Build a URL
-   *
-   * @param baseUrl - Base URL
-   * @param query - Current query parameters
-   * @param overrides - Query parameters to override
-   * @returns full URL string
-   */
-  private buildUrl(
-    baseUrl: string,
-    query: Record<string, unknown>,
-    overrides: Record<string, string | number> = {},
-  ): string {
-    const parameters = new URLSearchParams()
-
-    // Add existing query parameters; use append (not set) to preserve multi-value params
-    // e.g. ?status=active&status=pending must survive into next/prev links
-    for (const [key, value] of Object.entries(query)) {
-      if (key !== 'cursor' && key !== 'page') {
-        const values = Array.isArray(value) ? value : [value]
-        for (const v of values) {
-          parameters.append(key, String(v))
-        }
-      }
-    }
-
-    // Override specified parameters (pagination controls — always single-value)
-    for (const [key, value] of Object.entries(overrides)) {
-      parameters.set(key, String(value))
-    }
-
-    const queryString = parameters.toString()
-    return queryString ? `${baseUrl}?${queryString}` : baseUrl
   }
 }

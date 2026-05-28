@@ -1,6 +1,12 @@
 # Code Standards
 
-Conventions and rationale for non-obvious decisions in the onwealth codebase.
+> Full documentation navigation: [docs/README.md](./README.md)
+
+Conventions and rationale for non-obvious decisions in this NestJS boilerplate.
+
+> Validation conventions are implemented in `@boilerplate/nest-http`: see [Request Validation](./infrastructure/request-validation.md).
+> Error handling conventions and RFC 9457 filter chain: see [Handling Error](./infrastructure/handling-error.md).
+> Security and middleware conventions: see [Security and Middleware](./infrastructure/security-and-middleware.md).
 
 ## TypeScript Compiler Settings
 
@@ -60,8 +66,14 @@ Enforced locally by the lefthook `commit-msg` hook; CI is the hard gate.
 
 ## Modules & File Size
 
-- Keep files ≤ 200 lines where practical.
+- Keep files ≤ 200 lines where practical. Extract helpers to a sibling file when a class approaches the limit — e.g. `all-exceptions.filter.ts` (132 LOC) extracts DB-error mapping to `database-error-mapper.ts`; `link-header.interceptor.ts` (67 LOC) extracts URL building to `link-header-builder.ts`.
 - Split by logical concern (one responsibility per module).
+
+## DI Providers for Interceptors
+
+Interceptors that have constructor dependencies (config namespaces, services) **must** be registered as NestJS DI providers, not instantiated with `new`. `LocationHeaderInterceptor` and `LinkHeaderInterceptor` are concrete examples: they use `@Inject(httpConfig.KEY)` in their constructor and are registered in `AppModule.providers`. `configureHttpApp` retrieves them via `app.get(LocationHeaderInterceptor)` / `app.get(LinkHeaderInterceptor)` before passing to `app.useGlobalInterceptors()`.
+
+**Do not** use `new InterceptorName(...)` anywhere in bootstrap or module files when the interceptor depends on injected config or services.
 
 ## DDD Module Pattern
 
@@ -102,7 +114,7 @@ infrastructure ─► application (implements ports) ─► domain
 ```
 
 `domain/` imports nothing outside itself, except domain primitives from
-`@onwealth/shared-kernel` (`BaseAggregateRoot`, `DomainEvent`). Infrastructure
+`@boilerplate/shared-kernel` (`BaseAggregateRoot`, `DomainEvent`). Infrastructure
 depends on application, never the reverse — that inversion is the whole point of
 the `ports/` folder.
 
@@ -157,7 +169,7 @@ controller or repository.
 
 Register each module in `AppModule.imports`. A domain's DB schema goes in
 `packages/database/src/schemas/<domain>.schema.ts` with a matching migration.
-Domain-specific `ErrorCode` values are added to `@onwealth/shared-kernel` alongside
+Domain-specific `ErrorCode` values are added to `@boilerplate/shared-kernel` alongside
 the module that uses them — not pre-declared.
 
 ## Validation
@@ -174,7 +186,7 @@ the module that uses them — not pre-declared.
 ## Logging
 
 - `pino` via `nestjs-pino`. Production runs with the default formatter; dev uses `pino-pretty`.
-- Sensitive paths configured in `redaction.config.ts` (passwords, tokens, auth headers).
+- Sensitive paths configured in `redaction.config.ts` (passwords, tokens, auth headers, `res.headers["set-cookie"]`).
 - Access log suppression is controlled by `autoLoggingUrlPrefix` (passed to `createLoggerConfig`). Requests whose URL does not start with the prefix are suppressed — defaults to `'/api/'`. Health probe paths are excluded by passing them as `excludePaths` to the logger options.
 
 ## Database
@@ -182,14 +194,59 @@ the module that uses them — not pre-declared.
 - Drizzle ORM with `node-postgres` Pool. `postgres-js` is NOT a dependency — pick one driver, stick with it.
 - `DrizzleService` owns the pool lifecycle (`OnModuleDestroy` drains on SIGTERM).
 - Migration role has explicit `lock_timeout` set in `packages/database/sql/00-init-role-timeouts.sql`.
-- `withTimeout(db, ms, fn)` in `@onwealth/shared-kernel` wraps a Drizzle transaction with a per-transaction `statement_timeout` via `SELECT set_config('statement_timeout', $1, true)` (PgBouncer-safe bound parameter; `ms` must be `> 0`). Use only for slow analytics queries — OLTP queries rely on the role-level default.
-- DB constraint errors map to `ErrorCode` values in `AllExceptionsFilter`: SQLSTATE `23505` (unique violation) → `RESOURCE_CONFLICT`; `23503` (FK), `23502` (not-null), `23514` (check) → `CONSTRAINT_VIOLATION`.
+- `withTimeout(db, ms, fn)` in `@boilerplate/shared-kernel` wraps a Drizzle transaction with a per-transaction `statement_timeout` via `SELECT set_config('statement_timeout', $1, true)` (PgBouncer-safe bound parameter; `ms` must be `> 0`). Use only for slow analytics queries — OLTP queries rely on the role-level default.
+- DB constraint errors map to `ErrorCode` values in `AllExceptionsFilter`: SQLSTATE `23505` (unique violation) → `RESOURCE_CONFLICT`; `23503` (FK), `23502` (not-null), `23514` (check) → `CONSTRAINT_VIOLATION`; `40001` (serialization failure) + `40P01` (deadlock) → `TRANSACTION_CONFLICT` (409 Conflict).
 
 ## Health Probes
 
 - `/livez` — process responsiveness only (no I/O dependencies).
 - `/readyz` — DB + Redis with a 3 s `Promise.race` deadline; degraded state returns 503.
 - `/health` — detailed multi-component breakdown (verbose, not for orchestrator probes).
+
+## Named Constants for Time and Size
+
+Any timeout or byte-size literal in **production source** must:
+1. Use `ms('30s')` / `bytes('300mb')` (catalog deps: `ms ^2.1.3`, `bytes ^3.1.2`, `@types/ms ^2.1.0`, `@types/bytes ^3.1.5`).
+2. Be bound to a module-level `UPPER_SNAKE_CASE` constant at the top of the file.
+3. Never be inlined directly into a function call.
+
+```ts
+// correct — named constant, human-readable string
+const REQUEST_TIMEOUT_MS = ms('30s')  // packages/nest-http bootstrap/configure-http-app.ts
+
+// correct — byte size
+const LIVENESS_HEAP_LIMIT = bytes('300mb')  // packages/nest-http health/health.controller.ts
+
+// wrong — magic number
+setTimeout(fn, 30000)
+```
+
+Real examples across the codebase:
+
+| Constant | Value | File |
+|----------|-------|------|
+| `SHUTDOWN_GRACE_MS` | `ms('5s')` | `apps/api/src/main.ts` |
+| `REQUEST_TIMEOUT_MS` | `ms('30s')` | `packages/nest-http/src/bootstrap/configure-http-app.ts` |
+| `DEFAULT_TIMEOUT_MS` | `ms('30s')` | `packages/nest-http/src/interceptors/timeout.interceptor.ts` |
+| `HEALTH_TIMEOUT_MS` | `ms('3s')` | `packages/nest-http/src/health/drizzle.health.ts`, `redis.health.ts` |
+| `LIVENESS_HEAP_LIMIT` | `bytes('300mb')` | `packages/nest-http/src/health/health.controller.ts` |
+| `DEFAULT_IDLE_TIMEOUT_MS` | `ms('30s')` | `packages/shared-kernel/src/database/db.provider.ts` |
+| `QUEUE_DRAIN_TIMEOUT_MS` | `ms('5s')` | `packages/shared-kernel/src/queue/queue-processor.base.ts` |
+
+## JSDoc Conventions
+
+Public APIs exported from `@boilerplate/*` packages carry concise JSDoc explaining intent and contract — not restating the signature. Focus on the "why" and any non-obvious constraints:
+
+```ts
+/**
+ * Wraps a Drizzle transaction with a per-transaction statement_timeout.
+ * PgBouncer-safe: uses bound parameter rather than string interpolation.
+ * Use only for known slow analytics queries — OLTP relies on the role-level default.
+ */
+export function withTimeout(db: DrizzleDb, ms: number, fn: TransactionFn): Promise<void>
+```
+
+Internal helpers (not exported from the package barrel) may use the `@internal` JSDoc tag to signal they are not part of the public contract, e.g. `_evaluateJobFailure` in `queue-processor.base.internal.ts`.
 
 ---
 
@@ -216,7 +273,7 @@ All NestJS and infra deps (`@nestjs/*`, `drizzle-orm`, `nestjs-pino`, `nestjs-cl
 
 ### DI Token Identity
 
-`DB_TOKEN` and `CACHE_PORT` are defined in exactly one file each inside `@onwealth/shared-kernel`. Every consumer (including `@onwealth/nest-http` and `apps/api`) imports the tokens **only** from `@onwealth/shared-kernel` — never redeclaring them locally.
+`DB_TOKEN` and `CACHE_PORT` are defined in exactly one file each inside `@boilerplate/shared-kernel`. Every consumer (including `@boilerplate/nest-http` and `apps/api`) imports the tokens **only** from `@boilerplate/shared-kernel` — never redeclaring them locally.
 
 ### tsconfig — Auto-Generated, Never Hand-Edit
 

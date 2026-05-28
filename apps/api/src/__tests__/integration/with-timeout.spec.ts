@@ -1,5 +1,5 @@
-import type { DrizzleDb } from '@onwealth/shared-kernel'
-import { createDrizzleInstance, withTimeout } from '@onwealth/shared-kernel'
+import type { DrizzleDb } from '@boilerplate/shared-kernel'
+import { createDrizzleInstance, withTimeout } from '@boilerplate/shared-kernel'
 import { sql } from 'drizzle-orm'
 import { Pool } from 'pg'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'

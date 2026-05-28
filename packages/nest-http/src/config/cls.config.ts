@@ -1,24 +1,38 @@
 import { randomUUID } from 'node:crypto'
+import { sanitizeHeaderValue } from '@boilerplate/shared-kernel'
 import type { Request } from 'express'
 import type { ClsModuleOptions, ClsService } from 'nestjs-cls'
 import { parseTraceparent } from '../interceptors/trace-context.util.js'
 
-// Allowlist regex to block HTTP response splitting and log injection
-// via attacker-controlled X-Request-Id / X-Correlation-Id headers.
+/**
+ * Strict allowlist regex for ID-style headers (X-Request-Id / X-Correlation-Id).
+ *
+ * More restrictive than the shared header sanitizer because these IDs are
+ * used as log correlation keys — only word chars + hyphen survive, and
+ * length is capped at 128.
+ */
 const SAFE_ID_RE = /^[\w-]{1,128}$/
 
+/**
+ * Apply {@link SAFE_ID_RE} to a client-supplied ID header.
+ *
+ * @returns the value if it passes the allowlist, `undefined` otherwise.
+ *          Callers then fall back to a generated UUID.
+ */
 function sanitizeClientId(value: string | undefined): string | undefined {
   return value && SAFE_ID_RE.test(value) ? value : undefined
 }
 
 /**
- * Create CLS (Continuation-Local Storage) configuration
+ * Build the nestjs-cls module config for request-scoped context propagation.
  *
- * Used for request context management, including:
- * - Request ID generation
- * - Correlation ID tracking
- * - W3C Trace Context parsing
- * - API version management
+ * Sets up:
+ * - Request ID generation (client-provided or random UUID).
+ * - Correlation ID tracking.
+ * - W3C Trace Context parsing.
+ *
+ * Mounted globally so any provider can pull the active request context via
+ * `ClsService.get(key)` without explicit injection into the call chain.
  */
 export function createClsConfig(): ClsModuleOptions {
   return {
@@ -27,7 +41,6 @@ export function createClsConfig(): ClsModuleOptions {
       mount: true,
       generateId: true,
       idGenerator: (request: Request) => {
-        // Use the client-provided X-Request-Id if valid; otherwise generate a fresh UUID.
         return (
           sanitizeClientId(request.headers['x-request-id'] as string | undefined) ?? randomUUID()
         )
@@ -38,23 +51,28 @@ export function createClsConfig(): ClsModuleOptions {
 }
 
 /**
- * Set up the CLS context
+ * Populate the CLS store with per-request tracing metadata.
  *
- * Extracts and stores various tracing information from request headers
+ * **Sanitization rationale:** `userAgent` and `tracestate` are
+ * attacker-controlled headers; passing them through
+ * {@link sanitizeHeaderValue} blocks log injection via CR/LF/TAB/NUL/ANSI
+ * escape sequences that would otherwise corrupt log shippers downstream.
+ *
+ * **Tracestate truncation:** W3C Trace Context §3.3.2 mandates a 512-byte
+ * maximum for the header. We truncate first, then sanitize — slicing after
+ * sanitization could strip the sentinel that bounds the field.
  */
 function setupClsContext(cls: ClsService, request: Request) {
-  // Store basic request information
-  cls.set('userAgent', request.headers['user-agent'])
+  const rawUserAgent = request.headers['user-agent']
+  cls.set('userAgent', rawUserAgent ? sanitizeHeaderValue(rawUserAgent) : undefined)
   cls.set('ip', request.ip)
   cls.set('method', request.method)
   cls.set('url', request.url)
 
-  // Parse and store Correlation ID (business tracing)
   const correlationId =
     sanitizeClientId(request.headers['x-correlation-id'] as string | undefined) ?? randomUUID()
   cls.set('correlationId', correlationId)
 
-  // Parse W3C Trace Context (distributed tracing)
   const traceparent = request.headers.traceparent as string
   if (traceparent) {
     const traceContext = parseTraceparent(traceparent)
@@ -65,11 +83,8 @@ function setupClsContext(cls: ClsService, request: Request) {
     }
   }
 
-  // Store Tracestate (optional distributed tracing state)
-  // W3C Trace Context §3.3.2 mandates a 512-byte maximum for the tracestate header.
-  // Truncate at the spec limit to reject non-conformant oversized values.
   const tracestate = request.headers.tracestate as string
   if (tracestate) {
-    cls.set('tracestate', tracestate.slice(0, 512))
+    cls.set('tracestate', sanitizeHeaderValue(tracestate.slice(0, 512)))
   }
 }

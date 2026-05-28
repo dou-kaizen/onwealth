@@ -1,18 +1,18 @@
+import {
+  AllExceptionsFilter,
+  createClsConfig,
+  httpConfig,
+  ProblemDetailsFilter,
+  ThrottlerExceptionFilter,
+  throttleConfig,
+} from '@boilerplate/nest-http'
+import { appConfig } from '@boilerplate/shared-kernel'
 import { Controller, Get, Module } from '@nestjs/common'
 import { ConfigModule, type ConfigType } from '@nestjs/config'
 import { APP_FILTER, APP_GUARD } from '@nestjs/core'
 import type { NestExpressApplication } from '@nestjs/platform-express'
 import { Test } from '@nestjs/testing'
 import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler'
-import {
-  AllExceptionsFilter,
-  ProblemDetailsFilter,
-  ThrottlerExceptionFilter,
-  createClsConfig,
-  httpConfig,
-  throttleConfig,
-} from '@onwealth/nest-http'
-import { appConfig } from '@onwealth/shared-kernel'
 import { ClsModule } from 'nestjs-cls'
 import request from 'supertest'
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'

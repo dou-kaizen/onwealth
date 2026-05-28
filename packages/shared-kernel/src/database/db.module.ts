@@ -9,30 +9,32 @@ import { createDrizzleInstance } from './db.provider.js'
 import { DrizzleService } from './drizzle.service.js'
 
 /**
- * Drizzle database module
+ * Global Drizzle database module.
  *
- * Uses the Dynamic Module pattern, similar to @nestjs/typeorm.
- * - forRoot(): configure with the default ConfigService
- * - forRootAsync(): configure with a custom factory function
+ * Follows the Dynamic Module pattern (parallel to `@nestjs/typeorm`):
+ * - {@link DrizzleModule.forRoot} — wire with the default `ConfigService`.
+ * - {@link DrizzleModule.forRootAsync} — wire with a custom factory.
  *
- * Wiring strategy: a single DrizzleService factory holds both db and pool.
- * DB_TOKEN is aliased to service.db so existing @Inject(DB_TOKEN) consumers
- * remain unchanged. DrizzleService.onModuleDestroy() drains the pool on SIGTERM.
+ * **Wiring strategy:** a single {@link DrizzleService} factory owns both
+ * `db` and the underlying pg `Pool`. {@link DB_TOKEN} aliases to
+ * `service.db` so existing `@Inject(DB_TOKEN)` consumers stay unchanged.
+ * `DrizzleService.onModuleDestroy()` drains the pool on `SIGTERM`.
  */
-@Global() // @global-approved: shared DB connection — every context's repositories depend on it.
+@Global() // @global-approved: shared DB connection — every repository depends on it.
 @Module({})
 export class DrizzleModule {
   /**
-   * Create the global database connection using the default ConfigService.
-   * Should be called once in AppModule.
+   * Wire the global Drizzle instance from the default `ConfigService`.
+   *
+   * Call once in `AppModule`. Uses `ConfigModule.forFeature(databaseConfig)`
+   * so `databaseConfig.KEY` always resolves — mirrors the `QueueModule`
+   * pattern. NestJS dedupes if the host already registered the same factory
+   * globally, so this remains safe under `AppModule`.
    */
   static forRoot(): DynamicModule {
     return {
       module: DrizzleModule,
-      // ConfigModule ensures databaseConfig.KEY resolves when DrizzleModule is
-      // bootstrapped standalone (e.g. integration tests). If ConfigModule is
-      // already global in the host app, NestJS dedupes silently — no side effect.
-      imports: [ConfigModule],
+      imports: [ConfigModule.forFeature(databaseConfig)],
       providers: [
         {
           provide: DrizzleService,
@@ -50,7 +52,6 @@ export class DrizzleModule {
             return new DrizzleService(db, pool)
           },
         },
-        // DB_TOKEN aliases to DrizzleService.db so all @Inject(DB_TOKEN) consumers work unchanged.
         {
           provide: DB_TOKEN,
           inject: [DrizzleService],
@@ -62,18 +63,21 @@ export class DrizzleModule {
   }
 
   /**
-   * Create the global database connection using a custom factory function.
-   * Use this when more flexible configuration is needed.
+   * Wire the global Drizzle instance from a custom async factory.
+   *
+   * Use when the default `databaseConfig` cannot express the desired
+   * options (e.g. dynamic per-tenant `connectionString`, secrets pulled
+   * from a vault, multi-pool setups).
    *
    * @example
-   * DrizzleModule.forRootAsync({
-   *   imports: [ConfigModule],
-   *   inject: [ConfigService],
-   *   useFactory: (config: ConfigService) => ({
-   *     connectionString: config.get('DATABASE_URL'),
-   *     pool: { max: 20 },
-   *   }),
-   * })
+   *   DrizzleModule.forRootAsync({
+   *     imports: [ConfigModule],
+   *     inject: [ConfigService],
+   *     useFactory: (config: ConfigService) => ({
+   *       connectionString: config.get('DATABASE_URL'),
+   *       pool: { max: 20 },
+   *     }),
+   *   })
    */
   static forRootAsync(options: DrizzleAsyncOptions): DynamicModule {
     return {

@@ -1,30 +1,27 @@
 /**
- * Base class for domain events
+ * Base class for in-context domain events.
  *
- * All domain events must extend this class. Domain events are used to
- * propagate significant business state changes within a bounded context.
+ * Subclass for significant business state changes that should be propagated
+ * to other components WITHIN the same bounded context. Cross-context
+ * communication uses {@link IntegrationEvent} instead.
+ *
+ * Every instance is stamped with:
+ * - `occurredOn` — wall-clock timestamp at construction.
+ * - `eventId` — `crypto.randomUUID()` for idempotency / dedup downstream.
  *
  * @example
- * ```typescript
- * export class ArticlePublishedEvent extends DomainEvent {
- *   constructor(
- *     public readonly articleId: string,
- *     public readonly title: string,
- *   ) {
- *     super();
+ *   export class ArticlePublishedEvent extends DomainEvent {
+ *     constructor(
+ *       public readonly articleId: string,
+ *       public readonly title: string,
+ *     ) {
+ *       super()
+ *     }
  *   }
- * }
- * ```
  */
 export abstract class DomainEvent {
-  /**
-   * Timestamp when the event occurred
-   */
   public readonly occurredOn: Date
 
-  /**
-   * Unique event identifier (optional; used for idempotency handling)
-   */
   public readonly eventId: string
 
   constructor() {
@@ -33,8 +30,10 @@ export abstract class DomainEvent {
   }
 
   /**
-   * Get the event name (used for event bus routing).
-   * Defaults to the class name; subclasses may override.
+   * Event name used for routing on the event bus.
+   *
+   * Defaults to the constructor name; subclasses may override to decouple
+   * the wire name from the class identifier (e.g. to survive minification).
    */
   get eventName(): string {
     return this.constructor.name
