@@ -3,8 +3,8 @@ import { CACHE_MANAGER } from '@nestjs/cache-manager'
 import type { OnModuleDestroy } from '@nestjs/common'
 import { Inject, Injectable, Logger } from '@nestjs/common'
 import type { Cache } from 'cache-manager'
-import { KEYV_REDIS_TOKEN } from './cache.module.js'
 import type { CachePort } from './cache.port.js'
+import { KEYV_REDIS_TOKEN } from './cache.tokens.js'
 
 /**
  * Sentinel that represents a cached `undefined` result.

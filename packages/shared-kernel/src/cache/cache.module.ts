@@ -6,18 +6,9 @@ import { ConfigModule } from '@nestjs/config'
 import { redisConfig } from '../config/redis.config.js'
 import { CACHE_PORT } from './cache.port.js'
 import { CacheService } from './cache.service.js'
+import { KEYV_REDIS_TOKEN } from './cache.tokens.js'
 
-/**
- * Injection token for the shared {@link KeyvRedis} instance.
- *
- * One Keyv instance is constructed and shared between two consumers:
- *   1. `@nestjs/cache-manager`'s `stores` array (read/write path), and
- *   2. {@link CacheService.onModuleDestroy} (graceful shutdown path).
- *
- * Both consumers MUST receive the SAME instance so the disconnect hook
- * actually closes the ioredis connection used by `cache-manager`.
- */
-export const KEYV_REDIS_TOKEN = Symbol('KEYV_REDIS_TOKEN')
+export { KEYV_REDIS_TOKEN } from './cache.tokens.js'
 
 /**
  * Global cache module backed by Redis through the Keyv adapter.
@@ -41,12 +32,43 @@ export const KEYV_REDIS_TOKEN = Symbol('KEYV_REDIS_TOKEN')
  *   the graceful-shutdown `disconnect()` actually closes the same ioredis
  *   client that the cache-manager store uses.
  */
+/**
+ * Dedicated provider module for the shared `KeyvRedis` instance.
+ *
+ * Extracted as a Nest sub-module so the same token is visible in BOTH
+ * dynamic-module scopes that need it:
+ *   1. `NestCacheModule.registerAsync({ inject: [..., KEYV_REDIS_TOKEN] })`
+ *      — the factory runs in its own DI scope and cannot see providers
+ *      declared in the OUTER `CacheModule`; the only way to expose the
+ *      token is via an explicit `imports: [KeyvRedisModule]` on the
+ *      `registerAsync` call.
+ *   2. `CacheService` constructor `@Inject(KEYV_REDIS_TOKEN)` — resolved
+ *      through the outer `CacheModule` which imports this same module.
+ *
+ * Both consumers therefore reference the same provider instance — exactly
+ * one `KeyvRedis` client is created, used by `cache-manager`'s store, and
+ * disconnected on `CacheService.onModuleDestroy`.
+ */
+@Module({
+  imports: [ConfigModule.forFeature(redisConfig)],
+  providers: [
+    {
+      provide: KEYV_REDIS_TOKEN,
+      useFactory: (cfg: ConfigType<typeof redisConfig>) => new KeyvRedis(cfg.url),
+      inject: [redisConfig.KEY],
+    },
+  ],
+  exports: [KEYV_REDIS_TOKEN],
+})
+class KeyvRedisModule {}
+
 @Global() // @global-approved: Redis cache shared by all contexts.
 @Module({
   imports: [
     ConfigModule.forFeature(redisConfig),
+    KeyvRedisModule,
     NestCacheModule.registerAsync({
-      imports: [ConfigModule.forFeature(redisConfig)],
+      imports: [ConfigModule.forFeature(redisConfig), KeyvRedisModule],
       useFactory: (cfg: ConfigType<typeof redisConfig>, keyv: KeyvRedis<unknown>) => ({
         stores: [keyv],
         ttl: cfg.ttl * 1000,
@@ -55,11 +77,6 @@ export const KEYV_REDIS_TOKEN = Symbol('KEYV_REDIS_TOKEN')
     }),
   ],
   providers: [
-    {
-      provide: KEYV_REDIS_TOKEN,
-      useFactory: (cfg: ConfigType<typeof redisConfig>) => new KeyvRedis(cfg.url),
-      inject: [redisConfig.KEY],
-    },
     CacheService,
     {
       provide: CACHE_PORT,
