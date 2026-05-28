@@ -174,14 +174,19 @@ All return `503` with sanitized body on degraded state.
 
 ## Documentation
 
-| Doc | Description |
-|-----|-------------|
-| [docs/project-overview-pdr.md](./docs/project-overview-pdr.md) | Product context + requirements |
-| [docs/system-architecture.md](./docs/system-architecture.md) | Architecture, layers, request lifecycle |
-| [docs/codebase-summary.md](./docs/codebase-summary.md) | File map, key modules |
-| [docs/code-standards.md](./docs/code-standards.md) | Conventions, error model, TypeScript config |
-| [docs/deployment-guide.md](./docs/deployment-guide.md) | Migration runner patterns |
-| [docs/project-roadmap.md](./docs/project-roadmap.md) | Phase status + upcoming work |
+Full documentation lives in [`docs/`](./docs/README.md).
+
+| Document | Description |
+|----------|-------------|
+| [Project Overview (PDR)](./docs/project-overview-pdr.md) | Product context + requirements |
+| [System Architecture](./docs/system-architecture.md) | Architecture, layers, request lifecycle |
+| [Codebase Summary](./docs/codebase-summary.md) | Workspace map, key modules, injection tokens |
+| [Code Standards](./docs/code-standards.md) | Conventions, error model, TypeScript config |
+| [Deployment Guide](./docs/deployment-guide.md) | Migration runner patterns, production checklist |
+| [Project Roadmap](./docs/project-roadmap.md) | Phase status + upcoming work |
+| [Infrastructure Deep-Dive Docs](./docs/infrastructure/README.md) | Per-topic docs: installation, environment, configuration, project structure, database, cache, queue, logger, response, request validation, error handling, security and middleware |
+| [Features Documentation](./docs/features/README.md) | Per-feature docs — populated as features land (M2+) |
+| [Journals](./docs/journals/) | Milestone and decision journals |
 
 ## Known Issues
 
