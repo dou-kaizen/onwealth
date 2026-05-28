@@ -124,6 +124,16 @@ Ref: `plans/260527-1917-production-readiness-audit/`
 
 ---
 
+## Documentation Style Port — COMPLETE
+
+14 new markdown files (12 infra topic docs + top-level navigation index + infrastructure README +
+features placeholder) adopting ack-nestjs-boilerplate documentation pattern.
+Existing 6 root docs preserved (no rename); slimmed where duplicating per-topic content.
+Root README.md + project CLAUDE.md updated to surface new doc structure for AI agents.
+Ref: `plans/260528-1016-doc-style-port/`
+
+---
+
 ## Upcoming Milestones
 
 ### M1 — Cleanup & Reconciliation — Substantially Complete
